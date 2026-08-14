@@ -1,0 +1,22 @@
+# Personal config (contains your phone number / Apple ID)
+job_agent/config.json
+
+# Job history database
+job_agent/seen_jobs.db
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Playwright browsers (large, installed locally)
+**/ms-playwright/
