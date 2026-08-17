@@ -1,3 +1,12 @@
+# Built installer output
+dist/
+pkg-build/payload/
+
+# Runtime files (generated while the daemon is running)
+job_agent/daemon.pid
+job_agent/status.json
+job_agent/run_now.flag
+
 # Personal config (contains your phone number / Apple ID)
 job_agent/config.json
 

@@ -16,6 +16,7 @@ A personal macOS daemon that monitors Philippine job boards and sends you **Appl
 - 🔁 **Runs in the background** — macOS `launchd` keeps it alive across reboots
 - 🧠 **Smart deduplication** — SQLite database prevents duplicate notifications
 - ⚙️ **Fully configurable** — change keywords, interval, and location via iMessage
+- 📦 **pkg installer** — share a double-click installer with friends, no Terminal needed
 
 ---
 
@@ -51,44 +52,40 @@ Once installed, just text these commands to **your own phone number / Apple ID**
 
 ## 🛠 Requirements
 
-- **macOS** (tested on macOS Ventura / Sonoma)
+- **macOS 12 Monterey or later**
 - **Python 3.11+**
 - **Messages.app** signed in to iMessage
-- **Full Disk Access** granted to your Python binary (for reading `chat.db`)
+- **Full Disk Access** granted to Python (for reading `chat.db` — one-time setup)
 
 ---
 
 ## 🚀 Installation
 
-### 1. Clone the repository
+### Option A — pkg Installer *(recommended, no Terminal needed)*
+
+1. Download **`JobAlertAgent.pkg`** from the [Releases](../../releases) page
+2. Double-click it and follow the installer steps
+3. A dialog will appear asking for your phone number or Apple ID
+4. After installation, grant Full Disk Access to Python *(see below)*
+
+### Option B — Manual install from source
 
 ```bash
 git clone https://github.com/yourusername/ph-job-alert-agent.git
 cd ph-job-alert-agent
+bash install.sh
 ```
 
-### 2. Grant Full Disk Access to Python
+The installer will ask for your phone number, install all dependencies, and start the daemon automatically.
 
-The command listener reads `~/Library/Messages/chat.db` to detect your incoming `/commands`. macOS requires explicit permission for this.
+### ⚠️ Required: Grant Full Disk Access to Python
+
+The command listener reads `~/Library/Messages/chat.db` to detect your incoming `/commands`. Both installation methods require this one-time step:
 
 1. Open **System Settings → Privacy & Security → Full Disk Access**
 2. Click **+**, then press **⌘ Cmd + Shift + G** in the file picker
 3. Paste: `/Library/Frameworks/Python.framework/Versions/3.11/bin`
 4. Select **`python3`** → click **Open** → toggle **ON**
-
-### 3. Run the installer
-
-```bash
-bash install.sh
-```
-
-The installer will:
-- Install all Python dependencies
-- Download the Playwright Chromium browser (for JobStreet.ph)
-- Ask for your phone number or Apple ID
-- Write `job_agent/config.json` with default settings
-- Register and start the background daemon via `launchd`
-- Send a welcome iMessage to your iPhone
 
 ---
 
@@ -122,11 +119,30 @@ ph-job-alert-agent/
 │       ├── indeed.py    # Indeed.ph via python-jobspy
 │       ├── jobstreet.py # JobStreet.ph via Playwright
 │       └── onlinejobs.py# OnlineJobs.ph via requests + BeautifulSoup
+├── pkg-build/
+│   ├── scripts/
+│   │   ├── preinstall   # Checks Python version before install
+│   │   └── postinstall  # Installs deps, shows setup dialog, loads daemon
+│   ├── resources/
+│   │   └── welcome.html # Installer welcome screen
+│   └── Distribution.xml # Installer UI configuration
 ├── requirements.txt
-├── install.sh           # One-command setup
-├── SETUP.md             # Detailed setup guide and troubleshooting
-└── com.jobagent.plist   # macOS launchd LaunchAgent config
+├── build-pkg.sh         # Builds JobAlertAgent.pkg for distribution
+├── install.sh           # Terminal-based setup (alternative to pkg)
+└── SETUP.md             # Detailed setup guide and troubleshooting
 ```
+
+---
+
+## 📦 Building the pkg (for contributors)
+
+To build a fresh `JobAlertAgent.pkg` for distribution after making changes:
+
+```bash
+bash build-pkg.sh
+```
+
+Output: `dist/JobAlertAgent.pkg` — ready to share or attach to a GitHub Release.
 
 ---
 
@@ -143,7 +159,7 @@ tail -f ~/Library/Logs/jobagent.log
 launchctl unload ~/Library/LaunchAgents/com.jobagent.plist \
   && launchctl load ~/Library/LaunchAgents/com.jobagent.plist
 
-# Stop the daemon
+# Stop the daemon completely
 launchctl unload ~/Library/LaunchAgents/com.jobagent.plist
 
 # Dry run (scrapes and prints results, no messages sent)
@@ -172,6 +188,7 @@ python3 job_agent/main.py --dry-run
 | Command input | `~/Library/Messages/chat.db` polling |
 | Deduplication | SQLite (`sqlite3` stdlib) |
 | Scheduling | macOS `launchd` LaunchAgent |
+| Installer | `pkgbuild` + `productbuild` |
 
 ---
 

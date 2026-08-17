@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  preinstall — runs BEFORE files are copied
+#  Checks that Python 3.11+ is available.
+# =============================================================================
+set -euo pipefail
+
+CURRENT_USER=$(stat -f "%Su" /dev/console)
+
+# Find python3 as the logged-in user
+PYTHON=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || echo "")
+
+if [ -z "$PYTHON" ]; then
+    osascript -e 'display alert "Python 3 Not Found" message "PH Job Alert Agent requires Python 3.11 or later.\n\nDownload it from https://python.org then run the installer again." as critical buttons {"OK"} default button "OK"'
+    exit 1
+fi
+
+PY_VERSION=$(sudo -u "$CURRENT_USER" "$PYTHON" -c "import sys; print(sys.version_info.major * 10 + sys.version_info.minor)" 2>/dev/null || echo "0")
+if [ "$PY_VERSION" -lt 311 ]; then
+    osascript -e 'display alert "Python 3.11+ Required" message "PH Job Alert Agent requires Python 3.11 or later.\n\nPlease update Python from https://python.org" as critical buttons {"OK"} default button "OK"'
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  postinstall — runs AFTER files are copied to /usr/local/share/jobagent/
+#
+#  Steps:
+#    1. Install Python dependencies (includes rumps for menu bar)
+#    2. Install Playwright Chromium browser
+#    3. Show a native dialog asking for the iMessage recipient
+#    4. Write config.json
+#    5. Create and load the daemon LaunchAgent
+#    6. Create and load the menu bar LaunchAgent
+#    7. Send a welcome iMessage
+# =============================================================================
+set -euo pipefail
+
+INSTALL_DIR="/usr/local/share/jobagent"
+CURRENT_USER=$(stat -f "%Su" /dev/console)
+CURRENT_USER_HOME=$(sudo -u "$CURRENT_USER" sh -c 'echo $HOME')
+LOG_FILE="$CURRENT_USER_HOME/Library/Logs/jobagent.log"
+MENUBAR_LOG_FILE="$CURRENT_USER_HOME/Library/Logs/jobagent-menubar.log"
+PLIST_DEST="$CURRENT_USER_HOME/Library/LaunchAgents/com.jobagent.plist"
+MENUBAR_PLIST_DEST="$CURRENT_USER_HOME/Library/LaunchAgents/com.jobagent.menubar.plist"
+
+# Find Python
+PYTHON=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || echo "/usr/bin/python3")
+
+# ── Step 1: Install Python dependencies (includes rumps) ─────────────────────
+sudo -u "$CURRENT_USER" "$PYTHON" -m pip install \
+    -r "$INSTALL_DIR/requirements.txt" \
+    --quiet \
+    --user \
+    2>&1 || {
+    osascript -e 'display alert "Dependency Install Failed" message "Could not install required Python packages.\n\nPlease open Terminal and run:\n  pip3 install -r /usr/local/share/jobagent/requirements.txt" as critical buttons {"OK"}'
+    exit 1
+}
+
+# ── Step 2: Install Playwright Chromium ─────────────────────────────────────
+sudo -u "$CURRENT_USER" "$PYTHON" -m playwright install chromium 2>&1 || {
+    echo "Warning: Playwright Chromium install failed. JobStreet.ph scraping will be unavailable."
+}
+
+# ── Step 3: Ask for recipient via native macOS dialog ────────────────────────
+RECIPIENT=$(sudo -u "$CURRENT_USER" osascript <<'APPLESCRIPT'
+set theResult to display dialog "Enter your phone number or Apple ID email to receive iMessage job alerts." & return & return & "Example:  +639171234567  or  you@icloud.com" & return & return & "Messages will be sent to this address from your Mac." default answer "+639" with title "PH Job Alert Agent" buttons {"Cancel", "Set Up"} default button "Set Up" with icon note
+return text returned of theResult
+APPLESCRIPT
+) || {
+    echo "User cancelled setup."
+    exit 0
+}
+
+if [ -z "$RECIPIENT" ]; then
+    echo "No recipient entered. Skipping setup."
+    exit 0
+fi
+
+# ── Step 4: Write config.json ────────────────────────────────────────────────
+mkdir -p "$INSTALL_DIR/job_agent"
+cat > "$INSTALL_DIR/job_agent/config.json" <<CONFIG
+{
+  "recipient": "$RECIPIENT",
+  "keywords": [
+    "software engineer",
+    "frontend engineer",
+    "web developer",
+    "ai engineer",
+    "full stack developer",
+    "react developer"
+  ],
+  "location": "Philippines",
+  "check_interval_minutes": 60,
+  "max_results_per_keyword": 10,
+  "paused": false
+}
+CONFIG
+
+chown "$CURRENT_USER" "$INSTALL_DIR/job_agent/config.json"
+
+# ── Step 5: Create and load the daemon LaunchAgent ───────────────────────────
+mkdir -p "$CURRENT_USER_HOME/Library/LaunchAgents"
+mkdir -p "$CURRENT_USER_HOME/Library/Logs"
+
+cat > "$PLIST_DEST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobagent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PYTHON</string>
+        <string>$INSTALL_DIR/job_agent/main.py</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>WorkingDirectory</key>
+    <string>$INSTALL_DIR/job_agent</string>
+    <key>StandardOutPath</key>
+    <string>$LOG_FILE</string>
+    <key>StandardErrorPath</key>
+    <string>$LOG_FILE</string>
+</dict>
+</plist>
+PLIST
+
+chown "$CURRENT_USER" "$PLIST_DEST"
+sudo -u "$CURRENT_USER" launchctl unload "$PLIST_DEST" 2>/dev/null || true
+sudo -u "$CURRENT_USER" launchctl load "$PLIST_DEST"
+
+# ── Step 6: Create and load the menu bar LaunchAgent ─────────────────────────
+cat > "$MENUBAR_PLIST_DEST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobagent.menubar</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PYTHON</string>
+        <string>$INSTALL_DIR/job_agent/menu_bar.py</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>WorkingDirectory</key>
+    <string>$INSTALL_DIR/job_agent</string>
+    <key>StandardOutPath</key>
+    <string>$MENUBAR_LOG_FILE</string>
+    <key>StandardErrorPath</key>
+    <string>$MENUBAR_LOG_FILE</string>
+</dict>
+</plist>
+PLIST
+
+chown "$CURRENT_USER" "$MENUBAR_PLIST_DEST"
+sudo -u "$CURRENT_USER" launchctl unload "$MENUBAR_PLIST_DEST" 2>/dev/null || true
+sudo -u "$CURRENT_USER" launchctl load "$MENUBAR_PLIST_DEST"
+
+# ── Step 7: Send welcome iMessage ────────────────────────────────────────────
+sleep 3
+sudo -u "$CURRENT_USER" osascript <<APPLESCRIPT
+tell application "Messages"
+    set targetService to 1st account whose service type = iMessage
+    set targetBuddy to participant "$RECIPIENT" of targetService
+    send "👋 PH Job Alert Agent is running!
+
+Text /help to see all commands, or click the 🤖 icon in your menu bar." to targetBuddy
+end tell
+APPLESCRIPT
+
+# ── Done ─────────────────────────────────────────────────────────────────────
+sudo -u "$CURRENT_USER" osascript <<DONE
+display alert "PH Job Alert Agent Installed!" message "The job alert agent and menu bar app are now running.
+
+📱 Check your iPhone — a welcome iMessage should arrive shortly.
+🤖 Look for the 🤖 icon in your Mac menu bar.
+
+⚠️  IMPORTANT: Go to System Settings → Privacy & Security → Full Disk Access and add Python to enable iMessage commands." buttons {"Done"} default button "Done" with icon note
+DONE
+
+exit 0

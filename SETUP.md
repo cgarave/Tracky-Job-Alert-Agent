@@ -1,60 +1,68 @@
-# Job Agent — Setup Guide
+# PH Job Alert Agent — Setup Guide
 
 > Text commands to your own number from your iPhone to control the agent.
 
 ---
 
-## Quick Start
+## Installation
 
-```bash
-cd /Users/ravforejinoeflores/Documents/antigravity/joyful-bose
-bash install.sh
-```
-
-That's it for the Mac side. But first, you need to complete **Step 1** below.
+There are two ways to install. Choose whichever suits you.
 
 ---
 
-## Step 1 — Grant Full Disk Access to Terminal
+### Option A — pkg Installer *(recommended)*
 
-The agent reads your Mac's local Messages database (`~/Library/Messages/chat.db`) to detect incoming commands. macOS requires **Full Disk Access** for this.
+No Terminal required. Works for sharing with friends too.
 
-1. Open **System Settings** → **Privacy & Security** → **Full Disk Access**
+1. Download **`JobAlertAgent.pkg`** from the [Releases](../../releases) page
+2. Double-click it — the standard macOS installer opens
+3. Click through **Introduction → Installation**
+4. A dialog appears asking for your **phone number or Apple ID** — enter the one registered in your Messages.app (e.g. `+639171234567` or `you@icloud.com`)
+5. Click **Set Up** — the installer handles everything silently
+6. A completion alert reminds you about the Full Disk Access step (see below)
+7. Check your iPhone — you should receive a welcome iMessage shortly
+
+---
+
+### Option B — Terminal Installer
+
+If you cloned the repo and prefer the command line:
+
+```bash
+bash install.sh
+```
+
+This does the same thing as the pkg — installs dependencies, asks for your phone number, and starts the daemon.
+
+---
+
+## Required: Grant Full Disk Access to Python
+
+The command listener reads `~/Library/Messages/chat.db` to detect your `/commands` from iPhone. macOS requires Full Disk Access for this — **both installation methods need this one-time step**.
+
+1. Open **System Settings → Privacy & Security → Full Disk Access**
 2. Click the **+** button
-3. Navigate to `/Applications/Utilities/Terminal.app` and add it
-4. Toggle it **ON**
+3. In the file picker, press **⌘ Cmd + Shift + G**
+4. Paste this path and press Enter:
+   ```
+   /Library/Frameworks/Python.framework/Versions/3.11/bin
+   ```
+5. Select **`python3`** → click **Open** → toggle **ON**
+6. Restart the daemon (or reboot) for the change to take effect
 
-> **Do this before running `install.sh`**, otherwise the command listener won't work and you'll see an error in the logs.
-
----
-
-## Step 2 — Run the Installer
-
-Open Terminal, navigate to the project folder, and run:
-
-```bash
-bash install.sh
-```
-
-The installer will:
-- Install all Python dependencies (`python-jobspy`, `playwright`, `beautifulsoup4`, etc.)
-- Download the Playwright Chromium browser (used for JobStreet.ph)
-- Ask for your phone number or Apple ID (e.g. `+639171234567` or `you@icloud.com`)
-- Write `job_agent/config.json` with your settings and default keywords
-- Create and load the macOS LaunchAgent (runs automatically at login)
-- Send you a welcome iMessage on your iPhone: *"👋 Job Agent is online!"*
+> **Why Python, not Terminal?** The daemon runs as an independent `python3` process launched by macOS `launchd` — it has no connection to Terminal and needs its own permission grant.
 
 ---
 
-## Step 3 — Verify It's Working
+## Verify It's Working
 
-Check your iPhone for the welcome message, then test from your iPhone:
+Check your iPhone for the welcome iMessage, then test from your iPhone:
 
 | You text | Agent replies |
 |----------|---------------|
 | `/help` | Command list |
 | `/status` | Current settings |
-| `/run` | Immediate job scan |
+| `/run` | Triggers an immediate job scan |
 
 Check the logs on your Mac anytime:
 ```bash
@@ -65,7 +73,7 @@ tail -f ~/Library/Logs/jobagent.log
 
 ## Controlling the Agent from iPhone
 
-Just text commands to **your own phone number / Apple ID** in Messages. They'll appear in your own conversation thread on your iPhone.
+Text commands to **your own phone number / Apple ID** in Messages. They appear in your own conversation thread on your iPhone.
 
 ### Full Command Reference
 
@@ -86,7 +94,7 @@ Just text commands to **your own phone number / Apple ID** in Messages. They'll 
 
 ## Job Alert Format
 
-When a new job is found, you'll receive an iMessage like this:
+Each new job gets its own iMessage:
 
 ```
 🆕 New Job Alert!
@@ -97,82 +105,112 @@ When a new job is found, you'll receive an iMessage like this:
 🔗 https://ph.indeed.com/viewjob?jk=abc123
 ```
 
-If 6 or more new jobs are found in a single scan, you'll get a digest summary instead of individual messages (to avoid notification spam).
+Up to 30 individual messages are sent per scan. If more than 30 new jobs are found in one run, a note is added suggesting you narrow your keywords.
 
 ---
 
 ## Managing the Daemon
 
 ```bash
-# Check the daemon is registered and running
+# Check the daemon is registered and running (should show a PID)
 launchctl list | grep jobagent
 
 # View live logs
 tail -f ~/Library/Logs/jobagent.log
 
-# Stop the daemon
+# Restart the daemon (e.g. after a code update)
+launchctl unload ~/Library/LaunchAgents/com.jobagent.plist \
+  && launchctl load ~/Library/LaunchAgents/com.jobagent.plist
+
+# Stop the daemon completely
 launchctl unload ~/Library/LaunchAgents/com.jobagent.plist
 
 # Start it again
 launchctl load ~/Library/LaunchAgents/com.jobagent.plist
 
-# Dry run (scrapes + prints results, no messages sent)
-python3 job_agent/main.py --dry-run
+# Dry run — scrapes and prints results, no messages sent
+python3 /usr/local/share/jobagent/job_agent/main.py --dry-run
 ```
 
 ---
 
 ## Troubleshooting
 
-### "No new jobs" every run
-The agent tracks all previously seen jobs to avoid duplicates. On first run it may see many jobs and mark them all as seen. Text `/run` after the first run to get a fresh scan.
+### Commands not working / no reply to `/help`
 
-### Commands not being received
-- Make sure you granted **Full Disk Access** to Terminal (Step 1)
-- Make sure you're texting **your own number / Apple ID** — the same one in `config.json`
-- Check the logs: `tail -50 ~/Library/Logs/jobagent.log`
+1. Check the logs for the exact error:
+   ```bash
+   tail -50 ~/Library/Logs/jobagent.log
+   ```
+2. If you see **"Full Disk Access not granted"** — follow the Full Disk Access step above. Make sure you added **`python3`** (not Terminal).
+3. Make sure you're texting **your own number / Apple ID** — the same one you entered during setup.
+4. Verify the daemon is running: `launchctl list | grep jobagent`
 
 ### iMessages not sending
+
 - Make sure **Messages.app is open** on your Mac
-- Make sure your Mac is **logged in to iMessage** (Messages → Preferences → iMessage tab)
-- Test manually: open Terminal and run:
+- Make sure your Mac is **signed in to iMessage** (Messages → Settings → iMessage)
+- Test manually in Terminal:
   ```bash
   osascript -e 'tell application "Messages" to send "test" to participant "+639XXXXXXXXX" of 1st account whose service type = iMessage'
   ```
 
-### JobStreet.ph returns no results
-JobStreet uses heavy JavaScript rendering. If Playwright fails, check:
+### "No new jobs" on every run
+
+The agent tracks all previously seen jobs to avoid duplicates. On first run it marks everything as seen. Text `/run` — if it finds jobs the second time, deduplication is working correctly.
+
+### JobStreet.ph returns 0 results
+
+JobStreet uses heavy JavaScript rendering. Re-install Playwright:
 ```bash
-python3 -c "from playwright.sync_api import sync_playwright; print('OK')"
-python3 -m playwright install chromium  # Re-run if needed
+python3 -m playwright install chromium
 ```
 
-### Daemon not starting after reboot
+### Daemon not auto-starting after reboot
+
 ```bash
-launchctl list | grep jobagent
-# If not listed, reload:
 launchctl load ~/Library/LaunchAgents/com.jobagent.plist
 ```
+
+---
+
+## Building the pkg (for contributors)
+
+After making changes to the agent code, rebuild the installer:
+
+```bash
+bash build-pkg.sh
+```
+
+Output: `dist/JobAlertAgent.pkg` — attach this to a GitHub Release so others can download it.
 
 ---
 
 ## File Structure
 
 ```
-joyful-bose/
+ph-job-alert-agent/
 ├── job_agent/
 │   ├── main.py          ← Daemon entry point
-│   ├── config.json      ← Your settings (edited by the bot)
+│   ├── config.json      ← Your settings (edited by the bot, not manually)
 │   ├── seen_jobs.db     ← SQLite job history (auto-created)
 │   ├── commander.py     ← Command parser
-│   ├── listener.py      ← chat.db poller
-│   ├── notifier.py      ← iMessage sender
+│   ├── listener.py      ← chat.db poller (reads incoming iMessages)
+│   ├── notifier.py      ← iMessage sender via AppleScript
 │   ├── db.py            ← Deduplication logic
 │   └── scrapers/
 │       ├── indeed.py
 │       ├── jobstreet.py
 │       └── onlinejobs.py
+├── pkg-build/
+│   ├── scripts/
+│   │   ├── preinstall   ← Python version check
+│   │   └── postinstall  ← Deps, dialog, config, launchd setup
+│   ├── resources/
+│   │   └── welcome.html ← Installer welcome screen
+│   └── Distribution.xml ← Installer UI config
 ├── requirements.txt
-├── install.sh
+├── build-pkg.sh         ← Run this to produce JobAlertAgent.pkg
+├── install.sh           ← Terminal-based alternative to pkg
 └── SETUP.md             ← This file
 ```

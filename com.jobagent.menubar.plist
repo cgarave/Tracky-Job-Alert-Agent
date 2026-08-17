@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobagent.menubar</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>PYTHON_PATH</string>
+        <string>INSTALL_DIR/job_agent/menu_bar.py</string>
+    </array>
+
+    <!-- Keep the menu bar app alive; launchd restarts it if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Run immediately when the user logs in -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>WorkingDirectory</key>
+    <string>INSTALL_DIR/job_agent</string>
+
+    <key>StandardOutPath</key>
+    <string>LOG_DIR/jobagent-menubar.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>LOG_DIR/jobagent-menubar.log</string>
+</dict>
+</plist>

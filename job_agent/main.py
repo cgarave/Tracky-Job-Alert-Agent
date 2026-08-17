@@ -7,12 +7,19 @@ Runs two concurrent threads:
   • Listener thread — polls ~/Library/Messages/chat.db every 10 s for incoming
                       commands from the user and dispatches them to commander.py.
 
+Also supports cross-process communication with the menu bar app via:
+  • daemon.pid    — PID file read by the menu bar to send SIGUSR1
+  • run_now.flag  — flag file written by the menu bar to request an immediate scan
+  • status.json   — written after every scan so the menu bar can show live stats
+
 Usage:
     python3 main.py            # Normal daemon mode
     python3 main.py --dry-run  # One-shot scrape, prints results, no messages sent
 """
 import json
 import logging
+import os
+import signal
 import sys
 import threading
 import time
@@ -44,12 +51,59 @@ logger = logging.getLogger("job_agent")
 # Paths
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).parent
-CONFIG_PATH = BASE_DIR / "config.json"
+CONFIG_PATH  = BASE_DIR / "config.json"
+STATUS_PATH  = BASE_DIR / "status.json"   # Read by menu bar app
+PID_PATH     = BASE_DIR / "daemon.pid"    # Read by menu bar app
+RUN_NOW_FLAG = BASE_DIR / "run_now.flag"  # Written by menu bar app
 
 # ---------------------------------------------------------------------------
-# Shared event — set by the /run command to trigger an immediate scrape
+# Shared event — set by the /run iMessage command OR by SIGUSR1 from the
+# menu bar app to trigger an immediate scrape without waiting for the interval.
 # ---------------------------------------------------------------------------
 run_now_event = threading.Event()
+
+
+# ---------------------------------------------------------------------------
+# Signal handler (SIGUSR1 sent by the menu bar "Run Now" button)
+# ---------------------------------------------------------------------------
+
+def _handle_sigusr1(signum, frame) -> None:
+    logger.info("SIGUSR1 received — triggering immediate scan.")
+    run_now_event.set()
+
+signal.signal(signal.SIGUSR1, _handle_sigusr1)
+
+
+# ---------------------------------------------------------------------------
+# PID file — written on startup, deleted on exit
+# ---------------------------------------------------------------------------
+
+def _write_pid() -> None:
+    PID_PATH.write_text(str(os.getpid()))
+    logger.debug(f"PID {os.getpid()} written to {PID_PATH}")
+
+
+def _delete_pid() -> None:
+    PID_PATH.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Status file — written after every scan for the menu bar to display
+# ---------------------------------------------------------------------------
+
+def _write_status(jobs_tracked: int) -> None:
+    try:
+        STATUS_PATH.write_text(
+            json.dumps(
+                {
+                    "last_scan_time": datetime.now().isoformat(timespec="seconds"),
+                    "jobs_tracked": jobs_tracked,
+                },
+                indent=2,
+            )
+        )
+    except Exception as exc:
+        logger.warning(f"Could not write status.json: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +168,11 @@ def scraper_loop(dry_run: bool = False) -> None:
         config = load_config()
         recipient = config.get("recipient", "")
 
+        # Check for flag file written by menu bar "Run Now" button
+        if RUN_NOW_FLAG.exists():
+            RUN_NOW_FLAG.unlink(missing_ok=True)
+            run_now_event.set()
+
         if config.get("paused", False):
             logger.info("Scraper is paused. Sleeping 60 s...")
             if dry_run:
@@ -125,6 +184,10 @@ def scraper_loop(dry_run: bool = False) -> None:
         logger.info("=== Job scan starting ===")
         new_jobs = _run_scrape(config, db_conn, dry_run=dry_run)
         logger.info(f"=== Scan complete — {len(new_jobs)} new job(s) found ===")
+
+        # Update status.json for the menu bar
+        if not dry_run:
+            _write_status(db_module.total_seen(db_conn))
 
         if dry_run:
             if new_jobs:
@@ -144,7 +207,7 @@ def scraper_loop(dry_run: bool = False) -> None:
         interval_minutes = config.get("check_interval_minutes", 60)
         logger.info(f"Next scan in {interval_minutes} minute(s).")
 
-        # Sleep for the interval, but wake early if /run command fires
+        # Sleep for the interval, but wake early if /run command or SIGUSR1 fires
         run_now_event.wait(timeout=interval_minutes * 60)
         run_now_event.clear()
 
@@ -157,6 +220,7 @@ def listener_loop() -> None:
     """
     Polls chat.db every 10 s for incoming messages from the configured recipient.
     Passes any recognised commands to commander.execute().
+    Also checks for run_now.flag written by the menu bar app.
     """
     from listener import get_messages_since
     import commander
@@ -177,6 +241,12 @@ def listener_loop() -> None:
     while True:
         time.sleep(10)
         try:
+            # Check for menu bar "Run Now" flag file
+            if RUN_NOW_FLAG.exists():
+                RUN_NOW_FLAG.unlink(missing_ok=True)
+                logger.info("run_now.flag detected — triggering immediate scan.")
+                run_now_event.set()
+
             messages = get_messages_since(recipient, last_check)
             last_check = time.time()
 
@@ -219,19 +289,25 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # Start listener in a background daemon thread
-    listener_thread = threading.Thread(
-        target=listener_loop,
-        name="listener",
-        daemon=True,  # Dies automatically when main thread exits
-    )
-    listener_thread.start()
+    # Write PID file so the menu bar app can send SIGUSR1
+    _write_pid()
 
-    # Run the scraper in the main thread (keeps the process alive)
     try:
+        # Start listener in a background daemon thread
+        listener_thread = threading.Thread(
+            target=listener_loop,
+            name="listener",
+            daemon=True,
+        )
+        listener_thread.start()
+
+        # Run the scraper in the main thread (keeps the process alive)
         scraper_loop(dry_run=False)
     except KeyboardInterrupt:
         logger.info("Job Agent stopped by user.")
+    finally:
+        _delete_pid()
+        logger.info("Job Agent exited.")
 
 
 if __name__ == "__main__":

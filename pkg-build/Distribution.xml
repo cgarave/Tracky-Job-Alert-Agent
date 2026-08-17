@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+
+    <!-- Package identity -->
+    <title>PH Job Alert Agent</title>
+    <organization>com.jobagent</organization>
+
+    <!-- Welcome screen -->
+    <welcome file="welcome.html" mime-type="text/html"/>
+
+    <!-- Require the user to be an admin -->
+    <allowed-os-versions>
+        <os-version min="12.0"/>
+    </allowed-os-versions>
+
+    <!-- Volume check: installation goes to / -->
+    <volume-check>
+        <allowed-volumes>
+            <volume-type>hfs+</volume-type>
+            <volume-type>apfs</volume-type>
+        </allowed-volumes>
+    </volume-check>
+
+    <!-- Options -->
+    <options customize="never" require-scripts="true" rootVolumeOnly="true"/>
+
+    <!-- Component packages -->
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+
+    <choice id="default" title="PH Job Alert Agent" description="Installs the job alert agent and background daemon.">
+        <pkg-ref id="com.jobagent.pkg"/>
+    </choice>
+
+    <pkg-ref id="com.jobagent.pkg" version="1.0" onConclusion="none">JobAgent.pkg</pkg-ref>
+
+</installer-gui-script>
