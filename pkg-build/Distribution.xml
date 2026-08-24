@@ -2,7 +2,7 @@
 <installer-gui-script minSpecVersion="2">
 
     <!-- Package identity -->
-    <title>PH Job Alert Agent</title>
+    <title>Tracky — PH Job Alert Agent</title>
     <organization>com.jobagent</organization>
 
     <!-- Welcome screen -->
@@ -29,7 +29,7 @@
         <line choice="default"/>
     </choices-outline>
 
-    <choice id="default" title="PH Job Alert Agent" description="Installs the job alert agent and background daemon.">
+    <choice id="default" title="Tracky — PH Job Alert Agent" description="Installs the Tracky job alert agent and background daemon.">
         <pkg-ref id="com.jobagent.pkg"/>
     </choice>
 

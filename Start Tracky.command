@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  start.sh / Start Job Agent.command
+#  start.sh / Start Tracky.command
 #  Double-clickable script to start both the scraper daemon & menu bar app.
 # =============================================================================
 set -euo pipefail
@@ -20,6 +20,6 @@ if [ -f "$MENUBAR_PLIST" ]; then
 fi
 
 # Send macOS notification
-osascript -e 'display notification "Job Agent scraper and menu bar are now active." with title "Job Agent Started" subtitle "🤖 Online"' 2>/dev/null || true
+osascript -e 'display notification "Tracky scraper and menu bar are now active." with title "Tracky Started" subtitle "🐶 Online"' 2>/dev/null || true
 
-echo "Job Agent started successfully."
+echo "Tracky started successfully."

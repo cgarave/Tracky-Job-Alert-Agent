@@ -1,7 +1,7 @@
 """
-PH Job Alert Agent — macOS Menu Bar App
+Tracky — macOS Menu Bar App
 
-Lives as a 🤖 icon in the menu bar. Provides a GUI for:
+Lives as a 🐶 icon in the menu bar. Provides a GUI for:
   • Viewing live status (active/paused/stopped, jobs tracked, next scan time)
   • Running an immediate scan
   • Pausing / resuming / starting the scraper daemon
@@ -118,10 +118,10 @@ def _build_kw_items(kw_menu: rumps.MenuItem, keywords: list[str],
 # Menu Bar App
 # ---------------------------------------------------------------------------
 
-class JobAgentApp(rumps.App):
+class TrackyApp(rumps.App):
 
     def __init__(self):
-        super().__init__("🤖", quit_button=None)
+        super().__init__("🐶", quit_button=None)
 
         config   = _load_config()
         keywords = config.get("keywords", [])
@@ -210,19 +210,19 @@ class JobAgentApp(rumps.App):
         jobs = status.get("jobs_tracked", 0)
 
         if not daemon_running:
-            self.title = "🔴🤖"
+            self.title = "🔴🐶"
             self._status_item.title = "🔴 Daemon Stopped"
             self._next_scan_item.title = "Background scraper is not running"
             self._pause_item.title = "▶  Start Agent"
             return
 
         if paused:
-            self.title = "⏸🤖"
+            self.title = "⏸🐶"
             self._status_item.title = f"⏸ Paused  ·  {jobs} jobs tracked"
             self._next_scan_item.title = "Scraper paused"
             self._pause_item.title = "▶  Resume Scraper"
         else:
-            self.title = "🤖"
+            self.title = "🐶"
             self._status_item.title = f"🟢 Active  ·  {jobs} jobs tracked"
             self._pause_item.title = "⏸  Pause Scraper"
 
@@ -271,7 +271,7 @@ class JobAgentApp(rumps.App):
 
         _trigger_run_now()
         rumps.notification(
-            title="Job Agent",
+            title="Tracky",
             subtitle="",
             message="Scan triggered — new jobs will arrive as iMessages.",
             sound=False,
@@ -282,7 +282,7 @@ class JobAgentApp(rumps.App):
             # Start daemon via launchctl
             if PLIST_DAEMON.exists():
                 subprocess.run(["launchctl", "load", str(PLIST_DAEMON)], check=False)
-                rumps.notification("Job Agent", "", "Starting background daemon…", sound=False)
+                rumps.notification("Tracky", "", "Starting background daemon…", sound=False)
             self._refresh_status()
             return
 
@@ -315,7 +315,7 @@ class JobAgentApp(rumps.App):
         kws.append(kw)
         _save_config(config)
         self._rebuild_keywords()
-        rumps.notification("Job Agent", "", f'Added: "{kw}"', sound=False)
+        rumps.notification("Tracky", "", f'Added: "{kw}"', sound=False)
 
     def _on_remove_keyword(self, _):
         config   = _load_config()
@@ -348,7 +348,7 @@ class JobAgentApp(rumps.App):
         config["keywords"] = updated
         _save_config(config)
         self._rebuild_keywords()
-        rumps.notification("Job Agent", "", f'Removed: "{term}"', sound=False)
+        rumps.notification("Tracky", "", f'Removed: "{term}"', sound=False)
 
     def _on_set_interval(self, _):
         config  = _load_config()
@@ -375,7 +375,7 @@ class JobAgentApp(rumps.App):
         config["check_interval_minutes"] = mins
         _save_config(config)
         self._refresh_status()
-        rumps.notification("Job Agent", "", f"Interval: every {mins} min.", sound=False)
+        rumps.notification("Tracky", "", f"Interval: every {mins} min.", sound=False)
 
     def _on_set_location(self, _):
         config  = _load_config()
@@ -411,7 +411,7 @@ class JobAgentApp(rumps.App):
             return
         config["recipient"] = r.text.strip()
         _save_config(config)
-        rumps.notification("Job Agent", "", "Recipient updated.", sound=False)
+        rumps.notification("Tracky", "", "Recipient updated.", sound=False)
 
     def _on_view_logs(self, _):
         if LOG_PATH.exists():
@@ -426,7 +426,7 @@ class JobAgentApp(rumps.App):
     def _on_stop_all(self, _):
         """Prompt user, stop the background daemon, and quit the menu bar app."""
         response = rumps.alert(
-            title="Stop Job Agent?",
+            title="Stop Tracky?",
             message=(
                 "This will stop the background job scanner and close the menu bar app.\n\n"
                 "You will not receive any new job alerts until you start the agent again."
@@ -455,4 +455,4 @@ class JobAgentApp(rumps.App):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    JobAgentApp().run()
+    TrackyApp().run()

@@ -41,7 +41,7 @@ sudo -u "$CURRENT_USER" "$PYTHON" -m playwright install chromium 2>&1 || {
 
 # ── Step 3: Ask for recipient via native macOS dialog ────────────────────────
 RECIPIENT=$(sudo -u "$CURRENT_USER" osascript <<'APPLESCRIPT'
-set theResult to display dialog "Enter your phone number or Apple ID email to receive iMessage job alerts." & return & return & "Example:  +639171234567  or  you@icloud.com" & return & return & "Messages will be sent to this address from your Mac." default answer "+639" with title "PH Job Alert Agent" buttons {"Cancel", "Set Up"} default button "Set Up" with icon note
+set theResult to display dialog "Enter your phone number or Apple ID email to receive iMessage job alerts." & return & return & "Example:  +639171234567  or  you@icloud.com" & return & return & "Messages will be sent to this address from your Mac." default answer "+639" with title "Tracky" buttons {"Cancel", "Set Up"} default button "Set Up" with icon note
 return text returned of theResult
 APPLESCRIPT
 ) || {
@@ -142,16 +142,23 @@ sudo -u "$CURRENT_USER" launchctl load "$MENUBAR_PLIST_DEST"
 
 # ── Step 7: Create 1-click launcher in ~/Applications ────────────────────────
 mkdir -p "$CURRENT_USER_HOME/Applications"
-sudo -u "$CURRENT_USER" osacompile -o "$CURRENT_USER_HOME/Applications/Job Agent.app" -e '
+sudo -u "$CURRENT_USER" osacompile -o "$CURRENT_USER_HOME/Applications/Tracky.app" -e '
 set homePath to POSIX path of (path to home folder)
 set daemonPlist to homePath & "Library/LaunchAgents/com.jobagent.plist"
 set menubarPlist to homePath & "Library/LaunchAgents/com.jobagent.menubar.plist"
 
 do shell script "launchctl load " & quoted form of daemonPlist & " 2>/dev/null || true; launchctl load " & quoted form of menubarPlist & " 2>/dev/null || true; launchctl start com.jobagent.menubar 2>/dev/null || true"
 
-display notification "Job Agent scraper and menu bar are active." with title "Job Agent Started" subtitle "🤖 Online"
+display notification "Tracky scraper and menu bar are active." with title "Tracky Started" subtitle "🐶 Online"
 ' 2>/dev/null || true
-chown -R "$CURRENT_USER" "$CURRENT_USER_HOME/Applications/Job Agent.app" 2>/dev/null || true
+if [ -f "$INSTALL_DIR/Tracky.icns" ]; then
+    rm -f "$CURRENT_USER_HOME/Applications/Tracky.app/Contents/Resources/Assets.car" 2>/dev/null || true
+    cp "$INSTALL_DIR/Tracky.icns" "$CURRENT_USER_HOME/Applications/Tracky.app/Contents/Resources/applet.icns" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$CURRENT_USER_HOME/Applications/Tracky.app/Contents/Info.plist" 2>/dev/null || true
+    touch "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
+    sudo -u "$CURRENT_USER" /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -r "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
+fi
+chown -R "$CURRENT_USER" "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
 
 # ── Step 8: Send welcome iMessage ────────────────────────────────────────────
 sleep 3
@@ -159,18 +166,18 @@ sudo -u "$CURRENT_USER" osascript <<APPLESCRIPT
 tell application "Messages"
     set targetService to 1st account whose service type = iMessage
     set targetBuddy to participant "$RECIPIENT" of targetService
-    send "👋 PH Job Alert Agent is running!
+    send "👋 Tracky is running!
 
-Text /help to see all commands, or click the 🤖 icon in your menu bar." to targetBuddy
+Text /help to see all commands, or click the 🐶 icon in your menu bar." to targetBuddy
 end tell
 APPLESCRIPT
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 sudo -u "$CURRENT_USER" osascript <<DONE
-display alert "PH Job Alert Agent Installed!" message "The job alert agent and menu bar app are now running.
+display alert "Tracky Installed!" message "The job alert agent and menu bar app are now running.
 
 📱 Check your iPhone — a welcome iMessage should arrive shortly.
-🤖 Look for the 🤖 icon in your Mac menu bar.
+🐶 Look for the 🐶 icon in your Mac menu bar.
 
 ⚠️  IMPORTANT: Go to System Settings → Privacy & Security → Full Disk Access and add Python to enable iMessage commands." buttons {"Done"} default button "Done" with icon note
 DONE

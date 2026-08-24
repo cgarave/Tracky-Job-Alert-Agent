@@ -1,6 +1,10 @@
-# 🤖 PH Job Alert Agent
+# 🐶 Tracky (PH Job Alert Agent)
 
-A personal macOS daemon that monitors Philippine job boards and sends you **Apple iMessage alerts on your iPhone** whenever new listings match your keywords — controlled entirely by texting commands to yourself.
+<p align="center">
+  <img src="logos/Tracky.png" alt="Tracky Logo" width="160" style="border-radius: 20%;" />
+</p>
+
+A personal macOS daemon that monitors Philippine job boards and sends you **Apple iMessage alerts on your iPhone** whenever new listings match your keywords — controlled entirely by texting commands to yourself or using the menu bar app.
 
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python)
@@ -107,9 +111,13 @@ Default location: **Philippines** · Default interval: **60 minutes**
 ## 📁 Project Structure
 
 ```
-ph-job-alert-agent/
+tracky/
+├── Tracky.app           # macOS launcher applet with custom icon
+├── Start Tracky.command # Double-clickable shell launcher
+├── logos/               # App icon & IP candidate assets (ICNS, PNG, JPG)
 ├── job_agent/
 │   ├── main.py          # Daemon entry point — two-thread architecture
+│   ├── menu_bar.py      # macOS menu bar app with 🐶 icon
 │   ├── config.json      # Your settings (managed by the bot)
 │   ├── commander.py     # Parses and executes iMessage commands
 │   ├── listener.py      # Polls chat.db for incoming commands
@@ -122,12 +130,12 @@ ph-job-alert-agent/
 ├── pkg-build/
 │   ├── scripts/
 │   │   ├── preinstall   # Checks Python version before install
-│   │   └── postinstall  # Installs deps, shows setup dialog, loads daemon
+│   │   └── postinstall  # Installs deps, sets up Tracky.app, loads daemon
 │   ├── resources/
 │   │   └── welcome.html # Installer welcome screen
 │   └── Distribution.xml # Installer UI configuration
 ├── requirements.txt
-├── build-pkg.sh         # Builds JobAlertAgent.pkg for distribution
+├── build-pkg.sh         # Builds installer for distribution
 ├── install.sh           # Terminal-based setup (alternative to pkg)
 └── SETUP.md             # Detailed setup guide and troubleshooting
 ```

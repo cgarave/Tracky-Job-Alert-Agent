@@ -12,17 +12,17 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
 HELP_TEXT = (
-    "\U0001f916 Job Agent Commands\n\n"
-    "/status \u2014 current settings\n"
-    "/keywords \u2014 list active keywords\n"
-    "/add <keyword> \u2014 add a search keyword\n"
-    "/remove <keyword> \u2014 remove a keyword\n"
-    "/interval <minutes> \u2014 set check frequency\n"
-    "/location <place> \u2014 set location filter\n"
-    "/run \u2014 trigger an immediate scan\n"
-    "/pause \u2014 pause the scraper\n"
-    "/resume \u2014 resume the scraper\n"
-    "/help \u2014 show this message"
+    "🐶 Tracky Commands\n\n"
+    "/status — current settings\n"
+    "/keywords — list active keywords\n"
+    "/add <keyword> — add a search keyword\n"
+    "/remove <keyword> — remove a keyword\n"
+    "/interval <minutes> — set check frequency\n"
+    "/location <place> — set location filter\n"
+    "/run — trigger an immediate scan\n"
+    "/pause — pause the scraper\n"
+    "/resume — resume the scraper\n"
+    "/help — show this message"
 )
 
 
@@ -94,12 +94,12 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
         location = config.get("location", "Philippines")
         total = _db_total()
         send_fn(
-            f"\U0001f4ca Job Agent Status\n\n"
+            f"📊 Tracky Status\n\n"
             f"{state}\n"
-            f"\u23f1 Interval: every {interval} min\n"
-            f"\U0001f4cd Location: {location}\n"
-            f"\U0001f50d Keywords ({len(keywords)}):\n{kw_list}\n"
-            f"\U0001f4e6 Jobs tracked: {total}"
+            f"⏱ Interval: every {interval} min\n"
+            f"📍 Location: {location}\n"
+            f"🔍 Keywords ({len(keywords)}):\n{kw_list}\n"
+            f"📦 Jobs tracked: {total}"
         )
 
     # ── /keywords ─────────────────────────────────────────────────────────────

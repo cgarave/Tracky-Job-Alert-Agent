@@ -1,6 +1,6 @@
-# PH Job Alert Agent — Setup Guide
+# 🐶 Tracky — Setup Guide
 
-> Text commands to your own number from your iPhone to control the agent.
+> Personal macOS job alert daemon sending iMessage notifications to your iPhone.
 
 ---
 

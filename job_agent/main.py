@@ -1,5 +1,5 @@
 """
-Job Agent — main daemon entry point.
+Tracky — main daemon entry point.
 
 Runs two concurrent threads:
   • Scraper thread  — sleeps for the configured interval, scrapes all job boards,
@@ -273,14 +273,14 @@ def main() -> None:
     dry_run = "--dry-run" in sys.argv
 
     if dry_run:
-        logger.info("=== Job Agent — DRY RUN ===")
+        logger.info("=== Tracky — DRY RUN ===")
         scraper_loop(dry_run=True)
         return
 
     config = load_config()
     recipient = config.get("recipient", "")
 
-    logger.info("=== Job Agent starting ===")
+    logger.info("=== Tracky starting ===")
 
     if not recipient:
         logger.error(
@@ -304,10 +304,10 @@ def main() -> None:
         # Run the scraper in the main thread (keeps the process alive)
         scraper_loop(dry_run=False)
     except KeyboardInterrupt:
-        logger.info("Job Agent stopped by user.")
+        logger.info("Tracky stopped by user.")
     finally:
         _delete_pid()
-        logger.info("Job Agent exited.")
+        logger.info("Tracky exited.")
 
 
 if __name__ == "__main__":

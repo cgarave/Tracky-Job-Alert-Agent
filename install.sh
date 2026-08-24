@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Job Agent — One-Command Installer
+#  Tracky — One-Command Installer
 #  Run this once from the project root:  bash install.sh
 # =============================================================================
 set -euo pipefail
@@ -27,7 +27,7 @@ section() { echo -e "\n${GREEN}▸${NC}  $*"; }
 
 echo ""
 echo "  ╔══════════════════════════════════╗"
-echo "  ║   🤖  PH Job Alert Agent Setup   ║"
+echo "  ║      🐶  Tracky Setup            ║"
 echo "  ╚══════════════════════════════════╝"
 echo ""
 
@@ -169,18 +169,25 @@ launchctl load "$MENUBAR_PLIST_DEST"
 info "Menu bar app loaded."
 
 # ── 9. Create 1-click launcher in ~/Applications ─────────────────────────────
-section "Creating 1-click launcher in ~/Applications/Job Agent.app..."
+section "Creating 1-click launcher in ~/Applications/Tracky.app..."
 mkdir -p "$HOME/Applications"
-osacompile -o "$HOME/Applications/Job Agent.app" -e '
+osacompile -o "$HOME/Applications/Tracky.app" -e '
 set homePath to POSIX path of (path to home folder)
 set daemonPlist to homePath & "Library/LaunchAgents/com.jobagent.plist"
 set menubarPlist to homePath & "Library/LaunchAgents/com.jobagent.menubar.plist"
 
 do shell script "launchctl load " & quoted form of daemonPlist & " 2>/dev/null || true; launchctl load " & quoted form of menubarPlist & " 2>/dev/null || true; launchctl start com.jobagent.menubar 2>/dev/null || true"
 
-display notification "Job Agent scraper and menu bar are active." with title "Job Agent Started" subtitle "🤖 Online"
+display notification "Tracky scraper and menu bar are active." with title "Tracky Started" subtitle "🐶 Online"
 ' 2>/dev/null || true
-info "Job Agent.app created in ~/Applications"
+if [ -f "$SCRIPT_DIR/logos/Tracky.icns" ]; then
+    rm -f "$HOME/Applications/Tracky.app/Contents/Resources/Assets.car" 2>/dev/null || true
+    cp "$SCRIPT_DIR/logos/Tracky.icns" "$HOME/Applications/Tracky.app/Contents/Resources/applet.icns" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$HOME/Applications/Tracky.app/Contents/Info.plist" 2>/dev/null || true
+    touch "$HOME/Applications/Tracky.app" 2>/dev/null || true
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -r "$HOME/Applications/Tracky.app" 2>/dev/null || true
+fi
+info "Tracky.app created in ~/Applications"
 
 # ── 9. Send welcome iMessage ─────────────────────────────────────────────────
 section "Sending test iMessage to $RECIPIENT..."
@@ -191,7 +198,7 @@ sys.path.insert(0, "$AGENT_DIR")
 from notifier import send_imessage
 ok = send_imessage(
     "$RECIPIENT",
-    "\U0001f44b Job Agent is online!\n\nText /help to see all commands, or click the \U0001f916 icon in your menu bar."
+    "👋 Tracky is online!\n\nText /help to see all commands, or click the 🐶 icon in your menu bar."
 )
 if not ok:
     print("  Warning: Test message may not have sent. Make sure Messages.app is open.")
@@ -204,7 +211,7 @@ echo "  ║  ✅  Setup complete!                             ║"
 echo "  ╚══════════════════════════════════════════════════╝"
 echo ""
 echo "  📱  Check your iPhone — you should have a welcome iMessage."
-echo "  🤖  Look for the 🤖 icon in your Mac menu bar."
+echo "  🐶  Look for the 🐶 icon in your Mac menu bar."
 echo "  📄  Daemon logs:   tail -f $LOG_FILE"
 echo "  📄  Menu bar logs: tail -f $MENUBAR_LOG_FILE"
 echo ""
@@ -213,5 +220,5 @@ echo "      System Settings → Privacy & Security → Full Disk Access"
 echo "      Click + → Cmd+Shift+G → paste: /Library/Frameworks/Python.framework/Versions/3.11/bin"
 echo "      Select python3 → Open → toggle ON"
 echo ""
-echo "  Text /help to yourself or click the 🤖 menu bar icon to get started!"
+echo "  Text /help to yourself or click the 🐶 menu bar icon to get started!"
 echo ""

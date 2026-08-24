@@ -24,7 +24,7 @@ info() { echo -e "${GREEN}▸${NC}  $*"; }
 
 echo ""
 echo "  ┌─────────────────────────────────────┐"
-echo "  │   Building PH Job Alert Agent .pkg  │"
+echo "  │        Building Tracky .pkg         │"
 echo "  └─────────────────────────────────────┘"
 echo ""
 
@@ -51,8 +51,11 @@ cp "$SCRIPT_DIR/job_agent/scrapers/indeed.py"     "$INSTALL_DIR/job_agent/scrape
 cp "$SCRIPT_DIR/job_agent/scrapers/jobstreet.py"  "$INSTALL_DIR/job_agent/scrapers/"
 cp "$SCRIPT_DIR/job_agent/scrapers/onlinejobs.py" "$INSTALL_DIR/job_agent/scrapers/"
 
-# Requirements
+# Requirements & Icon
 cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
+if [ -f "$SCRIPT_DIR/logos/Tracky.icns" ]; then
+    cp "$SCRIPT_DIR/logos/Tracky.icns" "$INSTALL_DIR/Tracky.icns"
+fi
 
 # NOTE: config.json is NOT included — postinstall creates it per-user
 
