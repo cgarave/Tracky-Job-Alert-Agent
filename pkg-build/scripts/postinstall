@@ -124,9 +124,6 @@ cat > "$MENUBAR_PLIST_DEST" <<PLIST
     <array>
         <string>$PYTHON</string>
         <string>$INSTALL_DIR/job_agent/menu_bar.py</string>
-    </array>
-    <key>KeepAlive</key>
-    <true/>
     <key>RunAtLoad</key>
     <true/>
     <key>WorkingDirectory</key>
@@ -143,7 +140,20 @@ chown "$CURRENT_USER" "$MENUBAR_PLIST_DEST"
 sudo -u "$CURRENT_USER" launchctl unload "$MENUBAR_PLIST_DEST" 2>/dev/null || true
 sudo -u "$CURRENT_USER" launchctl load "$MENUBAR_PLIST_DEST"
 
-# ── Step 7: Send welcome iMessage ────────────────────────────────────────────
+# ── Step 7: Create 1-click launcher in ~/Applications ────────────────────────
+mkdir -p "$CURRENT_USER_HOME/Applications"
+sudo -u "$CURRENT_USER" osacompile -o "$CURRENT_USER_HOME/Applications/Job Agent.app" -e '
+set homePath to POSIX path of (path to home folder)
+set daemonPlist to homePath & "Library/LaunchAgents/com.jobagent.plist"
+set menubarPlist to homePath & "Library/LaunchAgents/com.jobagent.menubar.plist"
+
+do shell script "launchctl load " & quoted form of daemonPlist & " 2>/dev/null || true; launchctl load " & quoted form of menubarPlist & " 2>/dev/null || true; launchctl start com.jobagent.menubar 2>/dev/null || true"
+
+display notification "Job Agent scraper and menu bar are active." with title "Job Agent Started" subtitle "🤖 Online"
+' 2>/dev/null || true
+chown -R "$CURRENT_USER" "$CURRENT_USER_HOME/Applications/Job Agent.app" 2>/dev/null || true
+
+# ── Step 8: Send welcome iMessage ────────────────────────────────────────────
 sleep 3
 sudo -u "$CURRENT_USER" osascript <<APPLESCRIPT
 tell application "Messages"

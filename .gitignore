@@ -1,6 +1,7 @@
-# Built installer output
+# Built installer & app bundle output
 dist/
 pkg-build/payload/
+*.app/
 
 # Runtime files (generated while the daemon is running)
 job_agent/daemon.pid

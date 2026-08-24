@@ -2,12 +2,13 @@
 PH Job Alert Agent — macOS Menu Bar App
 
 Lives as a 🤖 icon in the menu bar. Provides a GUI for:
-  • Viewing live status (active/paused, jobs tracked, next scan time)
+  • Viewing live status (active/paused/stopped, jobs tracked, next scan time)
   • Running an immediate scan
-  • Pausing / resuming the scraper
+  • Pausing / resuming / starting the scraper daemon
   • Adding and removing job keywords
   • Changing interval, location, and iMessage recipient
   • Viewing logs
+  • Quitting the menu bar app or stopping everything cleanly
 
 Communicates with the background daemon (main.py) via shared files in the
 same job_agent/ directory:
@@ -29,12 +30,13 @@ import rumps
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-BASE_DIR     = Path(__file__).parent
-CONFIG_PATH  = BASE_DIR / "config.json"
-STATUS_PATH  = BASE_DIR / "status.json"
-PID_PATH     = BASE_DIR / "daemon.pid"
-RUN_NOW_FLAG = BASE_DIR / "run_now.flag"
-LOG_PATH     = Path.home() / "Library" / "Logs" / "jobagent.log"
+BASE_DIR      = Path(__file__).parent
+CONFIG_PATH   = BASE_DIR / "config.json"
+STATUS_PATH   = BASE_DIR / "status.json"
+PID_PATH      = BASE_DIR / "daemon.pid"
+RUN_NOW_FLAG  = BASE_DIR / "run_now.flag"
+LOG_PATH      = Path.home() / "Library" / "Logs" / "jobagent.log"
+PLIST_DAEMON  = Path.home() / "Library" / "LaunchAgents" / "com.jobagent.plist"
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -69,6 +71,17 @@ def _daemon_pid() -> int | None:
         return int(PID_PATH.read_text().strip())
     except Exception:
         return None
+
+
+def _is_daemon_running() -> bool:
+    pid = _daemon_pid()
+    if pid is not None:
+        try:
+            os.kill(pid, 0)
+            return True
+        except (ProcessLookupError, PermissionError):
+            return False
+    return False
 
 
 def _trigger_run_now() -> None:
@@ -112,7 +125,6 @@ class JobAgentApp(rumps.App):
 
         config   = _load_config()
         keywords = config.get("keywords", [])
-        paused   = config.get("paused", False)
         interval = config.get("check_interval_minutes", 60)
         location = config.get("location", "Philippines")
 
@@ -123,11 +135,8 @@ class JobAgentApp(rumps.App):
         self._next_scan_item.set_callback(None)
 
         # ── Action items ─────────────────────────────────────────────────────
-        self._run_item   = rumps.MenuItem("▶  Run Now",       callback=self._on_run_now)
-        self._pause_item = rumps.MenuItem(
-            "▶  Resume Scraper" if paused else "⏸  Pause Scraper",
-            callback=self._on_toggle_pause,
-        )
+        self._run_item   = rumps.MenuItem("▶  Run Now", callback=self._on_run_now)
+        self._pause_item = rumps.MenuItem("⏸  Pause Scraper", callback=self._on_toggle_pause)
 
         # ── Keywords submenu — built inline (no .clear() safe at this stage) ─
         self._kw_menu = rumps.MenuItem(f"🔍  Keywords ({len(keywords)})")
@@ -165,7 +174,8 @@ class JobAgentApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("📄  View Logs", callback=self._on_view_logs),
             rumps.separator,
-            rumps.MenuItem("Quit", callback=self._on_quit),
+            rumps.MenuItem("Quit Menu Bar", callback=self._on_quit_menubar),
+            rumps.MenuItem("🛑  Stop Agent & Quit All…", callback=self._on_stop_all),
         ]
 
         # First status refresh (only updates titles, safe before run loop)
@@ -187,25 +197,35 @@ class JobAgentApp(rumps.App):
     # ------------------------------------------------------------------
 
     def _refresh_status(self):
-        config = _load_config()
-        status = _load_status()
-        paused = config.get("paused", False)
-
-        self.title = "⏸🤖" if paused else "🤖"
-
-        jobs  = status.get("jobs_tracked", 0)
-        state = "⏸ Paused" if paused else "🟢 Active"
-        self._status_item.title = f"{state}  ·  {jobs} jobs tracked"
-        self._pause_item.title  = "▶  Resume Scraper" if paused else "⏸  Pause Scraper"
+        config         = _load_config()
+        status         = _load_status()
+        daemon_running = _is_daemon_running()
+        paused         = config.get("paused", False)
 
         interval = config.get("check_interval_minutes", 60)
         location = config.get("location", "Philippines")
         self._interval_item.title = f"⏱  Interval: {interval} min…"
         self._location_item.title = f"📍  Location: {location}…"
 
+        jobs = status.get("jobs_tracked", 0)
+
+        if not daemon_running:
+            self.title = "🔴🤖"
+            self._status_item.title = "🔴 Daemon Stopped"
+            self._next_scan_item.title = "Background scraper is not running"
+            self._pause_item.title = "▶  Start Agent"
+            return
+
         if paused:
+            self.title = "⏸🤖"
+            self._status_item.title = f"⏸ Paused  ·  {jobs} jobs tracked"
             self._next_scan_item.title = "Scraper paused"
+            self._pause_item.title = "▶  Resume Scraper"
         else:
+            self.title = "🤖"
+            self._status_item.title = f"🟢 Active  ·  {jobs} jobs tracked"
+            self._pause_item.title = "⏸  Pause Scraper"
+
             last = status.get("last_scan_time")
             if last:
                 try:
@@ -245,6 +265,10 @@ class JobAgentApp(rumps.App):
     # ------------------------------------------------------------------
 
     def _on_run_now(self, _):
+        if not _is_daemon_running():
+            rumps.alert("The background agent is stopped. Start it first before running a scan.")
+            return
+
         _trigger_run_now()
         rumps.notification(
             title="Job Agent",
@@ -254,6 +278,14 @@ class JobAgentApp(rumps.App):
         )
 
     def _on_toggle_pause(self, _):
+        if not _is_daemon_running():
+            # Start daemon via launchctl
+            if PLIST_DAEMON.exists():
+                subprocess.run(["launchctl", "load", str(PLIST_DAEMON)], check=False)
+                rumps.notification("Job Agent", "", "Starting background daemon…", sound=False)
+            self._refresh_status()
+            return
+
         config = _load_config()
         config["paused"] = not config.get("paused", False)
         _save_config(config)
@@ -387,7 +419,34 @@ class JobAgentApp(rumps.App):
         else:
             rumps.alert("No log file found yet.")
 
-    def _on_quit(self, _):
+    def _on_quit_menubar(self, _):
+        """Quit just the menu bar app. The background daemon continues running."""
+        rumps.quit_application()
+
+    def _on_stop_all(self, _):
+        """Prompt user, stop the background daemon, and quit the menu bar app."""
+        response = rumps.alert(
+            title="Stop Job Agent?",
+            message=(
+                "This will stop the background job scanner and close the menu bar app.\n\n"
+                "You will not receive any new job alerts until you start the agent again."
+            ),
+            ok="Stop & Quit",
+            cancel="Cancel",
+        )
+        if response != 1:  # 1 is OK button in rumps
+            return
+
+        if PLIST_DAEMON.exists():
+            subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], check=False)
+        else:
+            pid = _daemon_pid()
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except Exception:
+                    pass
+
         rumps.quit_application()
 
 

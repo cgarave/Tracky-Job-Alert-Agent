@@ -145,9 +145,6 @@ cat > "$MENUBAR_PLIST_DEST" <<PLISTEOF
     <array>
         <string>$PYTHON</string>
         <string>$AGENT_DIR/menu_bar.py</string>
-    </array>
-    <key>KeepAlive</key>
-    <true/>
     <key>RunAtLoad</key>
     <true/>
     <key>WorkingDirectory</key>
@@ -170,6 +167,20 @@ info "Daemon loaded."
 launchctl unload "$MENUBAR_PLIST_DEST" 2>/dev/null || true
 launchctl load "$MENUBAR_PLIST_DEST"
 info "Menu bar app loaded."
+
+# ── 9. Create 1-click launcher in ~/Applications ─────────────────────────────
+section "Creating 1-click launcher in ~/Applications/Job Agent.app..."
+mkdir -p "$HOME/Applications"
+osacompile -o "$HOME/Applications/Job Agent.app" -e '
+set homePath to POSIX path of (path to home folder)
+set daemonPlist to homePath & "Library/LaunchAgents/com.jobagent.plist"
+set menubarPlist to homePath & "Library/LaunchAgents/com.jobagent.menubar.plist"
+
+do shell script "launchctl load " & quoted form of daemonPlist & " 2>/dev/null || true; launchctl load " & quoted form of menubarPlist & " 2>/dev/null || true; launchctl start com.jobagent.menubar 2>/dev/null || true"
+
+display notification "Job Agent scraper and menu bar are active." with title "Job Agent Started" subtitle "🤖 Online"
+' 2>/dev/null || true
+info "Job Agent.app created in ~/Applications"
 
 # ── 9. Send welcome iMessage ─────────────────────────────────────────────────
 section "Sending test iMessage to $RECIPIENT..."
