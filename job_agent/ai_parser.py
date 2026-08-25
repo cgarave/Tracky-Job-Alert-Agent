@@ -1,6 +1,6 @@
 """
 Gemini AI Resume Parser & Profile Auto-Fill Engine.
-Uses Google Gemini API to analyze PDF resumes and auto-populate profile & screening Q&A fields.
+Uses Google Gemini API ("gemini-3.1-flash-lite") to analyze PDF resumes and auto-populate profile & screening Q&A fields.
 """
 import json
 import logging
@@ -11,15 +11,8 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Production Gemini Models in priority order
-MODELS_TO_TRY = [
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-]
-
+# Single primary model specified by reference: https://aistudio.google.com/docs/models
+MODEL_NAME = "gemini-3.1-flash-lite"
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -28,7 +21,7 @@ def extract_pdf_text(pdf_path: Path) -> str:
         import pypdf
         reader = pypdf.PdfReader(str(pdf_path))
         text_parts = []
-        for i, page in enumerate(reader.pages):
+        for page in reader.pages:
             t = page.extract_text()
             if t:
                 text_parts.append(t)
@@ -96,20 +89,18 @@ Rules:
 - Infer years_of_experience accurately from career work history date ranges.
 - Extract all primary technical and professional skills into the 'skills' list.
 - Create a compelling, professional 'why_hire_me' pitch derived directly from candidate achievements.
-- Return ONLY the JSON object. Do not include extra conversational text.
+- Return ONLY the valid JSON object. Do not include markdown headers or extra text.
 """
 
 
 def _clean_json_response(raw_text: str) -> dict:
     """Extract and parse valid JSON from Gemini output text."""
     text = raw_text.strip()
-    # Strip markdown fenced code blocks if present
     if "```" in text:
         text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
         text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
         text = text.strip()
 
-    # Extract JSON object substring boundaries if surrounded by conversational prose
     match = re.search(r"(\{[\s\S]*\})", text)
     if match:
         text = match.group(1)
@@ -118,54 +109,45 @@ def _clean_json_response(raw_text: str) -> dict:
 
 
 def analyze_resume_with_gemini(pdf_path: Path, api_key: str) -> dict:
-    """Analyze PDF resume text using Google Gemini API with fallback models."""
+    """Analyze PDF resume text using single model: gemini-3.1-flash-lite."""
     resume_text = extract_pdf_text(pdf_path)
-    if not resume_text or len(resume_text) < 20:
+    if not resume_text or len(resume_text) < 10:
         raise ValueError("Could not extract readable text from PDF. Please ensure the PDF contains selectable text.")
 
-    logger.info(f"Analyzing resume text ({len(resume_text)} chars) with Gemini AI...")
-    last_err = None
+    logger.info(f"Analyzing resume text ({len(resume_text)} chars) with {MODEL_NAME}...")
 
-    # Try SDK first across available models
-    for model_name in MODELS_TO_TRY:
-        try:
-            logger.info(f"Attempting Gemini model: {model_name} via SDK...")
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[SYSTEM_PROMPT, f"Resume Text:\n\n{resume_text}"],
-            )
-            if response and response.text:
-                return _clean_json_response(response.text)
-        except Exception as e:
-            logger.warning(f"Gemini SDK failed for model {model_name}: {e}")
-            last_err = e
+    # Method 1: Try google.genai SDK
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[SYSTEM_PROMPT, f"Resume Text:\n\n{resume_text}"],
+        )
+        if response and response.text:
+            return _clean_json_response(response.text)
+    except Exception as exc_sdk:
+        logger.warning(f"SDK call failed for {MODEL_NAME}: {exc_sdk}, trying REST endpoint...")
 
-    # Fallback to direct REST API across available models
+    # Method 2: Direct REST API Endpoint
     import requests
-    for model_name in MODELS_TO_TRY:
-        try:
-            logger.info(f"Attempting Gemini REST API for model: {model_name}...")
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-            payload = {
-                "contents": [{
-                    "parts": [{"text": f"{SYSTEM_PROMPT}\n\nResume Text:\n\n{resume_text}"}]
-                }]
-            }
-            resp = requests.post(url, json=payload, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return _clean_json_response(raw_text)
-            else:
-                logger.warning(f"REST API status {resp.status_code} for {model_name}: {resp.text}")
-                last_err = Exception(f"HTTP {resp.status_code}: {resp.text}")
-        except Exception as e:
-            logger.warning(f"Gemini REST API failed for model {model_name}: {e}")
-            last_err = e
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={api_key}"
+    payload = {
+        "contents": [{
+            "parts": [{"text": f"{SYSTEM_PROMPT}\n\nResume Text:\n\n{resume_text}"}]
+        }]
+    }
 
-    raise RuntimeError(f"All Gemini models failed. Last error: {last_err}")
+    resp = requests.post(url, json=payload, timeout=45)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gemini API returned HTTP {resp.status_code}: {resp.text}")
+
+    data = resp.json()
+    try:
+        raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return _clean_json_response(raw_text)
+    except (KeyError, IndexError) as e:
+        raise RuntimeError(f"Could not parse Gemini API output structure: {data}") from e
 
 
 def autofill_profile_from_resume(pdf_path: Path, config_path: Optional[Path] = None) -> Tuple[dict, bool, str]:
@@ -175,9 +157,13 @@ def autofill_profile_from_resume(pdf_path: Path, config_path: Optional[Path] = N
     
     Returns: (updated_profile, success: bool, message: str)
     """
-    import profile_manager
+    try:
+        import profile_manager
+    except ImportError:
+        from job_agent import profile_manager
 
     api_key = get_gemini_api_key(config_path)
+
     if not api_key:
         return (
             profile_manager.get_profile(),
