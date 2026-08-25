@@ -9,10 +9,15 @@ import re
 from pathlib import Path
 from typing import Optional, Tuple
 
-logger = logging.getLogger(__name__)
+try:
+    import profile_manager
+except ImportError:
+    from job_agent import profile_manager
+
 
 # Single primary model specified by reference: https://aistudio.google.com/docs/models
 MODEL_NAME = "gemini-3.1-flash-lite"
+
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -157,12 +162,8 @@ def autofill_profile_from_resume(pdf_path: Path, config_path: Optional[Path] = N
     
     Returns: (updated_profile, success: bool, message: str)
     """
-    try:
-        import profile_manager
-    except ImportError:
-        from job_agent import profile_manager
-
     api_key = get_gemini_api_key(config_path)
+
 
     if not api_key:
         return (

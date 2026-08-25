@@ -15,10 +15,12 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Optional
 
+import ai_parser
 import db
 import profile_manager
 from applier.engine import apply_to_job, check_platform_sessions, SCREENSHOTS_DIR
 from applier.session_manager import launch_interactive_login
+
 
 logger = logging.getLogger("dashboard_server")
 
@@ -223,7 +225,6 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
 
                 if saved_path:
                     # Trigger Gemini AI Resume Analysis & Profile Auto-Fill
-                    import ai_parser
                     updated_profile, ai_success, ai_msg = ai_parser.autofill_profile_from_resume(
                         Path(saved_path), CONFIG_PATH
                     )
@@ -242,10 +243,8 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 self._send_json({"error": f"Upload failed: {str(exc)}"}, 500)
 
         elif path == "/api/resume/analyze":
-            import profile_manager
-            import ai_parser
-
             resume_path = profile_manager.get_resume_path()
+
             if not resume_path or not resume_path.exists():
                 self._send_json({"error": "No uploaded resume found to analyze."}, 400)
                 return
