@@ -13,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 # Production Gemini Models in priority order
 MODELS_TO_TRY = [
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
     "gemini-1.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-pro",
-    "gemini-2.0-flash-exp",
 ]
+
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
