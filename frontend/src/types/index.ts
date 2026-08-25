@@ -87,8 +87,10 @@ export interface DaemonSettings {
   location: string;
   check_interval_minutes: number;
   recipient: string;
+  gemini_api_key?: string;
   paused?: boolean;
 }
+
 
 export interface SystemStatus {
   status: string;

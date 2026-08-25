@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,13 @@ export function ScreeningTab({ profile, onSaveProfile, isSaving }: ScreeningTabP
   const [workPrefs, setWorkPrefs] = useState(profile.work_preferences);
   const [screeningQA, setScreeningQA] = useState(profile.screening_answers);
   const [skillsStr, setSkillsStr] = useState((profile.work_preferences.skills || []).join(", "));
+
+  useEffect(() => {
+    setWorkPrefs(profile.work_preferences);
+    setScreeningQA(profile.screening_answers);
+    setSkillsStr((profile.work_preferences.skills || []).join(", "));
+  }, [profile]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

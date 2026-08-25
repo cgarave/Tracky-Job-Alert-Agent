@@ -46,6 +46,8 @@ cp "$SCRIPT_DIR/job_agent/notifier.py"         "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/db.py"               "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/profile_manager.py"  "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/dashboard_server.py" "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/ai_parser.py"       "$INSTALL_DIR/job_agent/"
+
 
 # Applier module
 mkdir -p "$INSTALL_DIR/job_agent/applier"

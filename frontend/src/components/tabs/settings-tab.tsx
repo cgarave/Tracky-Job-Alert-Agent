@@ -20,6 +20,7 @@ export function SettingsTab({ settings, onSaveSettings, isSaving }: SettingsTabP
   const [location, setLocation] = useState(settings.location || "Philippines");
   const [interval, setIntervalVal] = useState(settings.check_interval_minutes || 60);
   const [recipient, setRecipient] = useState(settings.recipient || "");
+  const [geminiApiKey, setGeminiApiKey] = useState(settings.gemini_api_key || "");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +35,7 @@ export function SettingsTab({ settings, onSaveSettings, isSaving }: SettingsTabP
       location,
       check_interval_minutes: interval,
       recipient,
+      gemini_api_key: geminiApiKey.trim(),
     };
 
     await onSaveSettings(updated);
@@ -44,12 +46,26 @@ export function SettingsTab({ settings, onSaveSettings, isSaving }: SettingsTabP
       <CardHeader>
         <CardTitle className="text-base">⚙️ Search & Daemon Configuration</CardTitle>
         <CardDescription className="text-xs">
-          Configure search queries, background scraping interval, and your iPhone iMessage recipient.
+          Configure search queries, background scraping interval, Gemini AI API key, and your iMessage recipient.
         </CardDescription>
       </CardHeader>
 
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gemini_key">Google Gemini API Key (GEMINI_API_KEY)</Label>
+            <Input
+              id="gemini_key"
+              type="password"
+              placeholder="AIzaSy..."
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+            />
+            <span className="text-[11px] text-slate-500">
+              Used to automatically analyze uploaded PDF resumes and populate profile & screening Q&A fields. You can also export <code className="font-mono text-indigo-400">GEMINI_API_KEY</code> in your environment.
+            </span>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="keywords">Job Search Keywords (One per line)</Label>
             <Textarea
@@ -63,6 +79,7 @@ export function SettingsTab({ settings, onSaveSettings, isSaving }: SettingsTabP
               Each keyword is queried against Indeed.ph, JobStreet.ph, and OnlineJobs.ph.
             </span>
           </div>
+
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">

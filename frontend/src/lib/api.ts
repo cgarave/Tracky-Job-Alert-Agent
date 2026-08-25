@@ -37,15 +37,45 @@ export async function saveProfile(profile: UserProfile): Promise<{ status: strin
   return handleResponse<{ status: string; profile: UserProfile }>(res);
 }
 
-export async function uploadResume(file: File): Promise<{ status: string; message: string; path: string }> {
+export async function uploadResume(file: File): Promise<{
+  status: string;
+  message: string;
+  path: string;
+  ai_analyzed?: boolean;
+  profile?: UserProfile;
+}> {
   const formData = new FormData();
   formData.append("resume", file);
   const res = await fetch(`${API_BASE}/api/resume/upload`, {
     method: "POST",
     body: formData,
   });
-  return handleResponse<{ status: string; message: string; path: string }>(res);
+  return handleResponse<{
+    status: string;
+    message: string;
+    path: string;
+    ai_analyzed?: boolean;
+    profile?: UserProfile;
+  }>(res);
 }
+
+export async function analyzeResume(): Promise<{
+  status: string;
+  message: string;
+  ai_analyzed?: boolean;
+  profile?: UserProfile;
+}> {
+  const res = await fetch(`${API_BASE}/api/resume/analyze`, {
+    method: "POST",
+  });
+  return handleResponse<{
+    status: string;
+    message: string;
+    ai_analyzed?: boolean;
+    profile?: UserProfile;
+  }>(res);
+}
+
 
 export async function fetchSessions(): Promise<{ sessions: Record<string, PlatformSession> }> {
   const res = await fetch(`${API_BASE}/api/sessions`);
