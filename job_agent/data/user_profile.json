@@ -33,7 +33,7 @@
     "file_size_bytes": 10179
   },
   "auto_apply": {
-    "enabled": true,
+    "enabled": false,
     "daily_cap": 10,
     "match_threshold": 75,
     "blacklisted_companies": [],

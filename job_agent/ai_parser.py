@@ -5,10 +5,19 @@ Uses Google Gemini API to analyze PDF resumes and auto-populate profile & screen
 import json
 import logging
 import os
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Production Gemini Models in priority order
+MODELS_TO_TRY = [
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash-exp",
+]
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -17,20 +26,23 @@ def extract_pdf_text(pdf_path: Path) -> str:
         import pypdf
         reader = pypdf.PdfReader(str(pdf_path))
         text_parts = []
-        for page in reader.pages:
+        for i, page in enumerate(reader.pages):
             t = page.extract_text()
             if t:
                 text_parts.append(t)
-        return "\n".join(text_parts).strip()
+        full_text = "\n".join(text_parts).strip()
+        if full_text:
+            return full_text
     except Exception as exc:
-        logger.error(f"pypdf extraction error: {exc}")
-        return ""
+        logger.warning(f"pypdf extraction failed for {pdf_path}: {exc}")
+
+    return ""
 
 
 def get_gemini_api_key(config_path: Optional[Path] = None) -> Optional[str]:
     """Retrieve Gemini API key from environment variable GEMINI_API_KEY or config.json."""
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if api_key:
+    if api_key and api_key.strip():
         return api_key.strip()
 
     if config_path and config_path.exists():
@@ -45,11 +57,10 @@ def get_gemini_api_key(config_path: Optional[Path] = None) -> Optional[str]:
     return None
 
 
-SYSTEM_PROMPT = """
-You are an expert AI Resume Analyst and Career Assistant.
-Your task is to analyze the provided resume text and extract structured candidate profile details and tailored screening question responses into valid JSON matching the exact schema below.
+SYSTEM_PROMPT = """You are an expert AI Resume Analyst and Career Coach.
+Analyze the candidate's resume below and extract all personal contact info, career experience, skills, and tailored screening responses into a single valid JSON object.
 
-Required Output JSON Schema:
+Required JSON Structure:
 {
   "personal": {
     "first_name": "Candidate First Name",
@@ -63,9 +74,9 @@ Required Output JSON Schema:
     "portfolio_url": "https://..."
   },
   "work_preferences": {
-    "years_of_experience": 5,
-    "current_title": "Current or Recent Job Title",
-    "expected_salary_php": "120000",
+    "years_of_experience": 3,
+    "current_title": "Job Title",
+    "expected_salary_php": "100000",
     "notice_period_weeks": 4,
     "work_authorization": "Filipino Citizen / Authorized to work in Philippines",
     "remote_preference": "Remote / Hybrid",
@@ -73,66 +84,89 @@ Required Output JSON Schema:
   },
   "screening_answers": {
     "why_hire_me": "Concise 3-sentence professional value proposition pitch highlighting top skills and achievements from the resume.",
-    "salary_expectation": "Target monthly compensation note based on senior level.",
+    "salary_expectation": "Target monthly compensation note.",
     "notice_period": "Notice period details.",
     "relocation": "Workplace and location preference note."
   }
 }
 
 Rules:
-- Infer years_of_experience accurately from work history date ranges in the resume.
-- Extract all primary technical and professional skills into the 'skills' array.
+- Infer years_of_experience accurately from career work history date ranges.
+- Extract all primary technical and professional skills into the 'skills' list.
 - Create a compelling, professional 'why_hire_me' pitch derived directly from candidate achievements.
-- Return ONLY valid JSON, with no markdown codeblocks or extra text.
+- Return ONLY the JSON object. Do not include extra conversational text.
 """
 
 
+def _clean_json_response(raw_text: str) -> dict:
+    """Extract and parse valid JSON from Gemini output text."""
+    text = raw_text.strip()
+    # Strip markdown fenced code blocks if present
+    if "```" in text:
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
+        text = re.sub(r"\s*```$", "", text, flags=re.MULTILINE)
+        text = text.strip()
+
+    # Extract JSON object substring boundaries if surrounded by conversational prose
+    match = re.search(r"(\{[\s\S]*\})", text)
+    if match:
+        text = match.group(1)
+
+    return json.loads(text)
+
+
 def analyze_resume_with_gemini(pdf_path: Path, api_key: str) -> dict:
-    """Analyze PDF resume text using Google Gemini API."""
+    """Analyze PDF resume text using Google Gemini API with fallback models."""
     resume_text = extract_pdf_text(pdf_path)
-    if not resume_text:
-        raise ValueError("Could not extract readable text from PDF file.")
+    if not resume_text or len(resume_text) < 20:
+        raise ValueError("Could not extract readable text from PDF. Please ensure the PDF contains selectable text.")
 
     logger.info(f"Analyzing resume text ({len(resume_text)} chars) with Gemini AI...")
+    last_err = None
 
-    # Method 1: Try google.genai SDK
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[SYSTEM_PROMPT, f"Resume Text:\n\n{resume_text}"],
-        )
-        raw_text = response.text.strip()
-    except Exception as e1:
-        logger.warning(f"google.genai SDK failed ({e1}), falling back to direct REST API...")
-        # Method 2: Direct REST API via requests
-        import requests
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        payload = {
-            "contents": [{
-                "parts": [{"text": f"{SYSTEM_PROMPT}\n\nResume Text:\n\n{resume_text}"}]
-            }]
-        }
-        resp = requests.post(url, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    # Try SDK first across available models
+    for model_name in MODELS_TO_TRY:
+        try:
+            logger.info(f"Attempting Gemini model: {model_name} via SDK...")
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[SYSTEM_PROMPT, f"Resume Text:\n\n{resume_text}"],
+            )
+            if response and response.text:
+                return _clean_json_response(response.text)
+        except Exception as e:
+            logger.warning(f"Gemini SDK failed for model {model_name}: {e}")
+            last_err = e
 
-    # Clean markdown backticks if present
-    if raw_text.startswith("```"):
-        lines = raw_text.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        raw_text = "\n".join(lines).strip()
+    # Fallback to direct REST API across available models
+    import requests
+    for model_name in MODELS_TO_TRY:
+        try:
+            logger.info(f"Attempting Gemini REST API for model: {model_name}...")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            payload = {
+                "contents": [{
+                    "parts": [{"text": f"{SYSTEM_PROMPT}\n\nResume Text:\n\n{resume_text}"}]
+                }]
+            }
+            resp = requests.post(url, json=payload, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return _clean_json_response(raw_text)
+            else:
+                logger.warning(f"REST API status {resp.status_code} for {model_name}: {resp.text}")
+                last_err = Exception(f"HTTP {resp.status_code}: {resp.text}")
+        except Exception as e:
+            logger.warning(f"Gemini REST API failed for model {model_name}: {e}")
+            last_err = e
 
-    extracted = json.loads(raw_text)
-    return extracted
+    raise RuntimeError(f"All Gemini models failed. Last error: {last_err}")
 
 
-def autofill_profile_from_resume(pdf_path: Path, config_path: Optional[Path] = None) -> tuple[dict, bool, str]:
+def autofill_profile_from_resume(pdf_path: Path, config_path: Optional[Path] = None) -> Tuple[dict, bool, str]:
     """
     Main function: Checks API key, analyzes PDF resume via Gemini AI,
     and updates user_profile.json.
@@ -146,29 +180,28 @@ def autofill_profile_from_resume(pdf_path: Path, config_path: Optional[Path] = N
         return (
             profile_manager.get_profile(),
             False,
-            "GEMINI_API_KEY environment variable is not set. Please add GEMINI_API_KEY to your environment or settings to enable AI auto-fill.",
+            "GEMINI_API_KEY is missing. Please set GEMINI_API_KEY environment variable or enter your key in Search Settings.",
         )
 
     try:
         extracted = analyze_resume_with_gemini(pdf_path, api_key)
         profile = profile_manager.get_profile()
 
-        # Update profile sections with AI extracted values
-        if "personal" in extracted:
-            p_ai = extracted["personal"]
-            for k, v in p_ai.items():
+        # Update personal section
+        if "personal" in extracted and isinstance(extracted["personal"], dict):
+            for k, v in extracted["personal"].items():
                 if v and isinstance(v, str):
                     profile["personal"][k] = v
 
-        if "work_preferences" in extracted:
-            w_ai = extracted["work_preferences"]
-            for k, v in w_ai.items():
+        # Update work preferences
+        if "work_preferences" in extracted and isinstance(extracted["work_preferences"], dict):
+            for k, v in extracted["work_preferences"].items():
                 if v is not None and v != "":
                     profile["work_preferences"][k] = v
 
-        if "screening_answers" in extracted:
-            s_ai = extracted["screening_answers"]
-            for k, v in s_ai.items():
+        # Update screening Q&A
+        if "screening_answers" in extracted and isinstance(extracted["screening_answers"], dict):
+            for k, v in extracted["screening_answers"].items():
                 if v and isinstance(v, str):
                     profile["screening_answers"][k] = v
 

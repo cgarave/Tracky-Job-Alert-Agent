@@ -327,6 +327,14 @@ def main() -> None:
 
     logger.info("=== Tracky starting ===")
 
+    # Disable auto-apply by default on app launch
+    try:
+        import profile_manager
+        profile_manager.disable_auto_apply()
+    except Exception as exc:
+        logger.warning(f"Could not disable auto apply on main startup: {exc}")
+
+
     if not recipient:
         logger.error(
             "No recipient configured in config.json. "

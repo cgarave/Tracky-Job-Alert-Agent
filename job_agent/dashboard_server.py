@@ -315,8 +315,15 @@ def start_dashboard_server(port: int = PORT, background: bool = True) -> Optiona
     """Start the Tracky GUI Dashboard server."""
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     server_address = ("127.0.0.1", port)
-    
+
+    # Disable auto-apply mode by default when app starts up
     try:
+        profile_manager.disable_auto_apply()
+    except Exception as e:
+        logger.warning(f"Could not disable auto apply on startup: {e}")
+
+    try:
+
         httpd = ThreadingHTTPServer(server_address, DashboardAPIHandler)
         logger.info(f"🐶 Tracky Dashboard running at http://127.0.0.1:{port}")
         
