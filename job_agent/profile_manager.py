@@ -86,6 +86,18 @@ def get_profile() -> dict:
         return DEFAULT_PROFILE.copy()
 
 
+def disable_auto_apply() -> dict:
+    """Explicitly disable auto-apply mode in the user profile."""
+    profile = get_profile()
+    if "auto_apply" not in profile:
+        profile["auto_apply"] = DEFAULT_PROFILE["auto_apply"].copy()
+    profile["auto_apply"]["enabled"] = False
+    save_profile(profile)
+    logger.info("Auto-apply explicitly disabled.")
+    return profile
+
+
+
 def save_profile(profile_data: dict) -> dict:
     """Save user profile to disk safely."""
     try:

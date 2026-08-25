@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { UserProfile } from "@/types";
-import { UploadCloud, FileText, CheckCircle2, Eye, ShieldCheck, Save, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, CheckCircle2, Eye, ShieldCheck, Save, Loader2, Sparkles } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,19 +14,28 @@ interface ProfileTabProps {
   profile: UserProfile;
   onSaveProfile: (p: UserProfile) => Promise<void>;
   onUploadResume: (file: File) => Promise<void>;
+  onAnalyzeResume?: () => Promise<void>;
   isSaving: boolean;
+  isAnalyzing?: boolean;
 }
 
 export function ProfileTab({
   profile,
   onSaveProfile,
   onUploadResume,
+  onAnalyzeResume,
   isSaving,
+  isAnalyzing = false,
 }: ProfileTabProps) {
   const [formData, setFormData] = useState(profile.personal);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setFormData(profile.personal);
+  }, [profile.personal]);
+
 
   const handleInputChange = (field: keyof typeof formData, val: string) => {
     setFormData((prev) => ({ ...prev, [field]: val }));
@@ -129,32 +138,51 @@ export function ProfileTab({
 
             {/* Active Resume Card */}
             {hasResume && (
-              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5" />
+              <div className="flex flex-col gap-2.5">
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="text-xs font-semibold text-white truncate">{resume.filename}</h5>
+                      <p className="text-[11px] text-slate-400">
+                        {fileSizeKb} KB · Uploaded {resume.uploaded_at?.split("T")[0] || "recently"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h5 className="text-xs font-semibold text-white truncate">{resume.filename}</h5>
-                    <p className="text-[11px] text-slate-400">
-                      {fileSizeKb} KB · Uploaded {resume.uploaded_at?.split("T")[0] || "recently"}
-                    </p>
-                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    asChild
+                    className="gap-1 text-xs shrink-0"
+                  >
+                    <a href="/api/resume/view" target="_blank" rel="noopener noreferrer">
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View PDF</span>
+                    </a>
+                  </Button>
                 </div>
 
                 <Button
-                  variant="secondary"
+                  type="button"
+                  variant="default"
                   size="sm"
-                  asChild
-                  className="gap-1 text-xs shrink-0"
+                  onClick={onAnalyzeResume}
+                  disabled={isAnalyzing}
+                  className="w-full gap-2 text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-500/20"
                 >
-                  <a href="/api/resume/view" target="_blank" rel="noopener noreferrer">
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View PDF</span>
-                  </a>
+                  {isAnalyzing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  )}
+                  <span>{isAnalyzing ? "Gemini AI Analyzing Resume..." : "✨ Auto-Fill Profile with Gemini AI"}</span>
                 </Button>
               </div>
             )}
+
           </CardContent>
         </Card>
       </div>

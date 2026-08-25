@@ -198,6 +198,25 @@ class TestTrackyModules(unittest.TestCase):
         finally:
             httpd.shutdown()
 
+    def test_ai_parser_mock(self):
+
+        import ai_parser
+        # Verify get_gemini_api_key behavior when key is absent vs present
+        old_env = os.environ.get("GEMINI_API_KEY")
+        try:
+            if "GEMINI_API_KEY" in os.environ:
+                del os.environ["GEMINI_API_KEY"]
+            self.assertIsNone(ai_parser.get_gemini_api_key(Path(self.test_dir) / "nonexistent.json"))
+
+            os.environ["GEMINI_API_KEY"] = "test_key_12345"
+            self.assertEqual(ai_parser.get_gemini_api_key(), "test_key_12345")
+        finally:
+            if old_env:
+                os.environ["GEMINI_API_KEY"] = old_env
+            else:
+                os.environ.pop("GEMINI_API_KEY", None)
+
 
 if __name__ == "__main__":
     unittest.main()
+

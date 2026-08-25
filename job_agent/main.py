@@ -126,7 +126,7 @@ def _run_scrape(config: dict, db_conn, dry_run: bool = False) -> list[dict]:
     Returns a list of NEW job dicts (not yet seen in the DB).
     Marks new jobs as seen in the DB unless dry_run is True.
     """
-    from scrapers import indeed, jobstreet, onlinejobs
+    from scrapers import indeed, jobstreet, onlinejobs, linkedin
     import db as db_module
 
     keywords = config.get("keywords", [])
@@ -137,7 +137,8 @@ def _run_scrape(config: dict, db_conn, dry_run: bool = False) -> list[dict]:
     seen_ids: set[str] = set()  # deduplicate within a single run
 
     for keyword in keywords:
-        for scraper in (indeed, jobstreet, onlinejobs):
+        for scraper in (indeed, jobstreet, onlinejobs, linkedin):
+
             try:
                 jobs = scraper.scrape(keyword, location, max_results)
                 for job in jobs:
@@ -326,6 +327,14 @@ def main() -> None:
     recipient = config.get("recipient", "")
 
     logger.info("=== Tracky starting ===")
+
+    # Disable auto-apply by default on app launch
+    try:
+        import profile_manager
+        profile_manager.disable_auto_apply()
+    except Exception as exc:
+        logger.warning(f"Could not disable auto apply on main startup: {exc}")
+
 
     if not recipient:
         logger.error(

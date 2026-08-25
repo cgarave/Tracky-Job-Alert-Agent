@@ -21,7 +21,9 @@ const badgeVariants = cva(
         indeed: "bg-blue-500/15 text-blue-400 border border-blue-500/30",
         jobstreet: "bg-pink-500/15 text-pink-400 border border-pink-500/30",
         onlinejobs: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+        linkedin: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
       },
+
     },
     defaultVariants: {
       variant: "default",

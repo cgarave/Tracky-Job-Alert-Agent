@@ -222,16 +222,44 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                             break
 
                 if saved_path:
+                    # Trigger Gemini AI Resume Analysis & Profile Auto-Fill
+                    import ai_parser
+                    updated_profile, ai_success, ai_msg = ai_parser.autofill_profile_from_resume(
+                        Path(saved_path), CONFIG_PATH
+                    )
+
                     self._send_json({
                         "status": "success",
-                        "message": f"Authentic PDF resume '{saved_name}' saved successfully!",
+                        "message": ai_msg,
                         "path": saved_path,
+                        "ai_analyzed": ai_success,
+                        "profile": updated_profile,
                     })
                 else:
                     self._send_json({"error": "Could not parse uploaded PDF file."}, 400)
             except Exception as exc:
                 logger.error(f"Upload error: {exc}")
                 self._send_json({"error": f"Upload failed: {str(exc)}"}, 500)
+
+        elif path == "/api/resume/analyze":
+            import profile_manager
+            import ai_parser
+
+            resume_path = profile_manager.get_resume_path()
+            if not resume_path or not resume_path.exists():
+                self._send_json({"error": "No uploaded resume found to analyze."}, 400)
+                return
+
+            updated_profile, ai_success, ai_msg = ai_parser.autofill_profile_from_resume(
+                resume_path, CONFIG_PATH
+            )
+            self._send_json({
+                "status": "success" if ai_success else "error",
+                "message": ai_msg,
+                "ai_analyzed": ai_success,
+                "profile": updated_profile,
+            })
+
 
         elif path == "/api/sessions/login":
             body = self._read_body_json()
@@ -287,8 +315,15 @@ def start_dashboard_server(port: int = PORT, background: bool = True) -> Optiona
     """Start the Tracky GUI Dashboard server."""
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     server_address = ("127.0.0.1", port)
-    
+
+    # Disable auto-apply mode by default when app starts up
     try:
+        profile_manager.disable_auto_apply()
+    except Exception as e:
+        logger.warning(f"Could not disable auto apply on startup: {e}")
+
+    try:
+
         httpd = ThreadingHTTPServer(server_address, DashboardAPIHandler)
         logger.info(f"🐶 Tracky Dashboard running at http://127.0.0.1:{port}")
         

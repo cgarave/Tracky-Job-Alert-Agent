@@ -90,8 +90,10 @@ export default function DashboardPage() {
   const [platformFilter, setPlatformFilter] = useState("");
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isAnalyzingResume, setIsAnalyzingResume] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -181,6 +183,7 @@ export default function DashboardPage() {
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleSaveProfile = async (updated: UserProfile) => {
+
     setIsSavingProfile(true);
     try {
       const res = await api.saveProfile(updated);
@@ -194,14 +197,46 @@ export default function DashboardPage() {
   };
 
   const handleUploadResume = async (file: File) => {
+    setIsAnalyzingResume(true);
     try {
       const res = await api.uploadResume(file);
-      toast.success(res.message || "Authentic PDF resume uploaded!");
-      await loadProfile();
+      if (res.profile) {
+        setProfile(res.profile);
+      } else {
+        await loadProfile();
+      }
+      if (res.ai_analyzed) {
+        toast.success(res.message || "✨ Resume uploaded and auto-filled with Gemini AI!");
+      } else {
+        toast.info(res.message || "Resume uploaded successfully!");
+      }
     } catch (e: any) {
       toast.error(`Upload error: ${e.message}`);
+    } finally {
+      setIsAnalyzingResume(false);
     }
   };
+
+  const handleAnalyzeResume = async () => {
+    setIsAnalyzingResume(true);
+    toast.info("✨ Analyzing resume with Gemini AI...");
+    try {
+      const res = await api.analyzeResume();
+      if (res.profile) {
+        setProfile(res.profile);
+      }
+      if (res.ai_analyzed) {
+        toast.success(res.message || "✨ Profile auto-filled with Gemini AI!");
+      } else {
+        toast.error(res.message || "AI Analysis could not complete.");
+      }
+    } catch (e: any) {
+      toast.error(`AI Analysis error: ${e.message}`);
+    } finally {
+      setIsAnalyzingResume(false);
+    }
+  };
+
 
   const handleSaveSettings = async (updated: DaemonSettings) => {
     setIsSavingSettings(true);
@@ -320,9 +355,12 @@ export default function DashboardPage() {
               profile={profile}
               onSaveProfile={handleSaveProfile}
               onUploadResume={handleUploadResume}
+              onAnalyzeResume={handleAnalyzeResume}
               isSaving={isSavingProfile}
+              isAnalyzing={isAnalyzingResume}
             />
           )}
+
 
           {activeTab === "screening" && (
             <ScreeningTab

@@ -51,6 +51,7 @@ export function JobsTab({
             <option value="">All Platforms</option>
             <option value="Indeed.ph">Indeed.ph</option>
             <option value="JobStreet.ph">JobStreet.ph</option>
+            <option value="LinkedIn">LinkedIn</option>
             <option value="OnlineJobs.ph">OnlineJobs.ph</option>
           </select>
 
@@ -80,9 +81,15 @@ export function JobsTab({
       ) : (
         <div className="flex flex-col gap-3">
           {jobs.map((job) => {
-            const isIndeed = job.source.toLowerCase().includes("indeed");
-            const isJobStreet = job.source.toLowerCase().includes("jobstreet");
-            const badgeVariant = isIndeed ? "indeed" : isJobStreet ? "jobstreet" : "onlinejobs";
+            const srcLower = job.source.toLowerCase();
+            const badgeVariant = srcLower.includes("indeed")
+              ? "indeed"
+              : srcLower.includes("jobstreet")
+              ? "jobstreet"
+              : srcLower.includes("linkedin")
+              ? "linkedin"
+              : "onlinejobs";
+
 
             const hasApplied = job.application_status === "submitted";
             const isFailed = job.application_status === "failed";
