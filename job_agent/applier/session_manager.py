@@ -25,12 +25,18 @@ PLATFORM_URLS = {
         "home_url": "https://www.jobstreet.com.ph",
         "name": "JobStreet.ph",
     },
+    "linkedin": {
+        "login_url": "https://www.linkedin.com/login",
+        "home_url": "https://www.linkedin.com/jobs",
+        "name": "LinkedIn.com",
+    },
     "onlinejobs": {
         "login_url": "https://www.onlinejobs.ph/jobseekers/login",
         "home_url": "https://www.onlinejobs.ph",
         "name": "OnlineJobs.ph",
     },
 }
+
 
 
 def get_session_path(platform: str) -> Path:

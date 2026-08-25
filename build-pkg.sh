@@ -62,6 +62,8 @@ cp "$SCRIPT_DIR/job_agent/scrapers/__init__.py"   "$INSTALL_DIR/job_agent/scrape
 cp "$SCRIPT_DIR/job_agent/scrapers/indeed.py"     "$INSTALL_DIR/job_agent/scrapers/"
 cp "$SCRIPT_DIR/job_agent/scrapers/jobstreet.py"  "$INSTALL_DIR/job_agent/scrapers/"
 cp "$SCRIPT_DIR/job_agent/scrapers/onlinejobs.py" "$INSTALL_DIR/job_agent/scrapers/"
+cp "$SCRIPT_DIR/job_agent/scrapers/linkedin.py"   "$INSTALL_DIR/job_agent/scrapers/"
+
 
 # Requirements & Icon
 cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"

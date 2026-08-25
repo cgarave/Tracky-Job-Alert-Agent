@@ -47,6 +47,13 @@ export function SessionsTab({
       desc: "Authenticates for JobStreet Quick Apply single-click applications.",
     },
     {
+      key: "linkedin",
+      name: "LinkedIn.com",
+      icon: Globe,
+      color: "text-sky-400 bg-sky-500/15 border-sky-500/30",
+      desc: "Authenticates for LinkedIn Easy Apply and candidate submissions.",
+    },
+    {
       key: "onlinejobs",
       name: "OnlineJobs.ph",
       icon: Laptop,
@@ -54,6 +61,7 @@ export function SessionsTab({
       desc: "Authenticates for OnlineJobs.ph direct jobseeker messaging and employer pitches.",
     },
   ];
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,7 +79,8 @@ export function SessionsTab({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+
         {platforms.map((p) => {
           const sess = sessions[p.key] || { connected: false, updated_at: "" };
           const Icon = p.icon;

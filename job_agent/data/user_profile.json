@@ -14,8 +14,8 @@
     "years_of_experience": 4,
     "current_title": "Frontend Designer & Developer",
     "expected_salary_php": "Negotiable",
-    "notice_period_weeks": 2,
-    "work_authorization": "Filipino Citizen",
+    "notice_period_weeks": 4,
+    "work_authorization": "Filipino Citizen / Authorized to work in Philippines",
     "remote_preference": "Remote / Hybrid",
     "willing_to_relocate": false,
     "skills": [
@@ -26,18 +26,20 @@
       "PostgreSQL",
       "Prisma ORM",
       "Node.js",
+      "Express.js",
       "TailwindCSS",
       "Figma",
       "UI/UX Design",
       "Automation Tools",
+      "Supabase",
       "Git"
     ]
   },
   "screening_answers": {
-    "why_hire_me": "I am a high-impact Full-Stack Engineer with a proven track record of building automation tools that have reduced manual workflows by up to 70% and saved over 50 hours of development time per month. My expertise lies in bridging the gap between design and functionality, using Next.js and AI integration to deliver scalable, user-centric web applications. I combine technical precision with a product-mindset to drive efficiency, improve UX metrics, and accelerate campaign delivery.",
-    "notice_period": "Standard notice period of 2-4 weeks.",
-    "salary_expectation": "Open to discussion based on the total compensation package and role responsibilities.",
-    "relocation": "Currently based in the Philippines and open to remote, hybrid, or on-site roles in the Metro Manila area."
+    "why_hire_me": "I am a high-impact Full-Stack Engineer with 4+ years of experience in delivering scalable web applications and sophisticated internal automation tools that drastically improve operational efficiency. I have a proven track record of reducing manual workflows by up to 70% and enhancing user task completion rates through expert-level frontend development and UX design. My blend of technical proficiency in Next.js/TypeScript and a product-focused mindset ensures that I build high-quality software that solves real business problems.",
+    "notice_period": "Available to start within 4 weeks.",
+    "salary_expectation": "Competitive and open to negotiation based on the total compensation package and project requirements.",
+    "relocation": "Currently based in Taguig, Philippines, and open to both remote and hybrid work opportunities."
   },
   "resume": {
     "filename": "Real - Ravfore Jinoe Flores-resume.pdf",
