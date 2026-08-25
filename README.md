@@ -14,42 +14,63 @@ A personal macOS daemon that monitors Philippine job boards and sends you **Appl
 
 ## ✨ Features
 
+- 🖥️ **Full Web GUI Dashboard** — Modern dark-mode control center at `http://127.0.0.1:5050` with real-time job exploration, live metrics, and application audit logs
+- 📄 **Authentic PDF Resume Upload** — Upload your own real PDF resume; Tracky strictly attaches your actual file and never invents or synthesizes fake resumes
+- 🚀 **Manual & Assisted 1-Click Apply** — Apply to listings directly from the GUI modal or via iMessage (`/apply <id>`) with pre-filled details & screening answers
+- 🤖 **Autonomous Auto-Apply Guardrails** — Auto-submit applications to high-matching Easy Apply jobs with daily safety caps & blacklist protection
+- 🔐 **1-Click Platform Authentication** — Interactive browser login helper to persist session cookies for Indeed, JobStreet, and OnlineJobs.ph
 - 🔍 **Scrapes 3 Philippine job boards** — Indeed.ph, JobStreet.ph, OnlineJobs.ph
-- 📱 **iMessage alerts to your iPhone** — no third-party apps needed
-- 💬 **Two-way iMessage bot** — control everything by texting commands to yourself
-- 🔁 **Runs in the background** — macOS `launchd` keeps it alive across reboots
-- 🧠 **Smart deduplication** — SQLite database prevents duplicate notifications
-- ⚙️ **Fully configurable** — change keywords, interval, and location via iMessage
-- 📦 **pkg installer** — share a double-click installer with friends, no Terminal needed
+- 📱 **iMessage alerts to your iPhone** — Actionable notifications with 1-click apply instructions
+- 💬 **Two-way iMessage bot** — Control searches, trigger applications, and toggle auto-apply via text
+- 🔁 **Runs in the background** — macOS `launchd` keeps daemon & dashboard server alive across reboots
+- 🧠 **Smart deduplication & audit log** — SQLite database records all seen jobs and application history with proof screenshots
+
+---
+
+## 🖥️ Web GUI Control Center
+
+Open `http://127.0.0.1:5050` in any browser or click **🖥️ Open Dashboard…** in the macOS menu bar:
+- **Scraped Jobs**: Browse, search, filter, and 1-click apply to tracked listings.
+- **Profile & Resume**: Drag-and-drop your authentic PDF resume and manage contact details.
+- **Screening Q&A**: Pre-configure standard answers for years of experience, salary, notice period, and pitch notes.
+- **Auto-Apply Rules**: Set daily application quotas, minimum match scores, and employer blacklists.
+- **Platform Accounts**: Connect Indeed, JobStreet, and OnlineJobs sessions.
+- **Application History**: View submission timestamps, statuses, and confirmation screenshots.
 
 ---
 
 ## 📲 iMessage Command Interface
 
-Once installed, just text these commands to **your own phone number / Apple ID** from your iPhone:
+Once installed, text these commands to **your own phone number / Apple ID** from your iPhone:
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `/help` | Show all available commands |
-| `/status` | Current settings, keywords, last run info |
+| `/status` | Current settings, auto-apply state, resume status, and stats |
+| `/apply <job_id>` | Apply to a job listing with your authentic PDF resume |
+| `/autoapply on\|off` | Enable or disable autonomous auto-apply mode |
+| `/dailycap <number>` | Set maximum automated applications per day (e.g. `/dailycap 5`) |
+| `/applications` | List recent job applications and their outcomes |
+| `/dashboard` | Get direct link to the web control center (`http://127.0.0.1:5050`) |
 | `/keywords` | List active search keywords |
 | `/add <keyword>` | Add a keyword (e.g. `/add python developer`) |
 | `/remove <keyword>` | Remove a keyword |
 | `/interval <minutes>` | Change check frequency (e.g. `/interval 30`) |
 | `/location <place>` | Change location filter (e.g. `/location Remote`) |
 | `/run` | Trigger an immediate job scan |
-| `/pause` | Pause the scraper |
-| `/resume` | Resume the scraper |
+| `/pause` \| `/resume` | Pause or resume background scraping |
 
 ### Example alert on your iPhone
 
-```
-🆕 New Job Alert!
+```text
+🆕 New Job Alert! [#a1b2c3]
 
-📋 Senior Frontend Engineer
-🏢 Accenture Philippines
+📋 Senior Python Engineer
+🏢 TechCorp Philippines
 🌐 Indeed.ph
 🔗 https://ph.indeed.com/viewjob?jk=abc123
+
+💡 Reply /apply a1b2c3 to submit your authentic resume.
 ```
 
 ---

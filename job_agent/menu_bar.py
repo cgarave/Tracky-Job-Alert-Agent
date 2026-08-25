@@ -118,6 +118,9 @@ def _build_kw_items(kw_menu: rumps.MenuItem, keywords: list[str],
 # Menu Bar App
 # ---------------------------------------------------------------------------
 
+import webbrowser
+import profile_manager
+
 class TrackyApp(rumps.App):
 
     def __init__(self):
@@ -133,6 +136,10 @@ class TrackyApp(rumps.App):
         self._next_scan_item = rumps.MenuItem("")
         self._status_item.set_callback(None)
         self._next_scan_item.set_callback(None)
+
+        # ── Dashboard & Auto-Apply ───────────────────────────────────────────
+        self._dashboard_item = rumps.MenuItem("🖥️  Open Dashboard…", callback=self._on_open_dashboard)
+        self._autoapply_item = rumps.MenuItem("🤖  Auto-Apply: Disabled", callback=self._on_toggle_autoapply)
 
         # ── Action items ─────────────────────────────────────────────────────
         self._run_item   = rumps.MenuItem("▶  Run Now", callback=self._on_run_now)
@@ -165,6 +172,9 @@ class TrackyApp(rumps.App):
             self._status_item,
             self._next_scan_item,
             rumps.separator,
+            self._dashboard_item,
+            self._autoapply_item,
+            rumps.separator,
             self._run_item,
             self._pause_item,
             rumps.separator,
@@ -177,6 +187,7 @@ class TrackyApp(rumps.App):
             rumps.MenuItem("Quit Menu Bar", callback=self._on_quit_menubar),
             rumps.MenuItem("🛑  Stop Agent & Quit All…", callback=self._on_stop_all),
         ]
+
 
         # First status refresh (only updates titles, safe before run loop)
         self._refresh_status()
@@ -208,6 +219,14 @@ class TrackyApp(rumps.App):
         self._location_item.title = f"📍  Location: {location}…"
 
         jobs = status.get("jobs_tracked", 0)
+
+        # Update Auto-Apply status title
+        try:
+            prof = profile_manager.get_profile()
+            is_auto = prof.get("auto_apply", {}).get("enabled", False)
+            self._autoapply_item.title = f"🤖  Auto-Apply: {'Enabled' if is_auto else 'Disabled'}"
+        except Exception:
+            pass
 
         if not daemon_running:
             self.title = "🔴🐶"
@@ -263,6 +282,25 @@ class TrackyApp(rumps.App):
     # ------------------------------------------------------------------
     # Callbacks
     # ------------------------------------------------------------------
+
+    def _on_open_dashboard(self, _):
+        """Open Tracky Web GUI Control Center in browser or app mode."""
+        url = "http://127.0.0.1:5050"
+        webbrowser.open(url)
+
+    def _on_toggle_autoapply(self, _):
+        """Toggle autonomous auto-apply mode."""
+        try:
+            prof = profile_manager.get_profile()
+            current = prof.get("auto_apply", {}).get("enabled", False)
+            prof.setdefault("auto_apply", {})["enabled"] = not current
+            profile_manager.save_profile(prof)
+            new_state = "Enabled" if not current else "Disabled"
+            self._autoapply_item.title = f"🤖  Auto-Apply: {new_state}"
+            rumps.notification("Tracky", "", f"Auto-Apply is now {new_state}.", sound=False)
+        except Exception as exc:
+            rumps.alert(f"Error toggling auto-apply: {exc}")
+
 
     def _on_run_now(self, _):
         if not _is_daemon_running():

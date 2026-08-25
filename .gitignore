@@ -25,8 +25,22 @@ __pycache__/
 venv/
 *.egg-info/
 
+# Node & Next.js
+**/node_modules/
+**/.next/
+frontend/out/
+
+# User data & credentials
+job_agent/data/resumes/*
+!job_agent/data/resumes/.gitkeep
+job_agent/data/sessions/*
+!job_agent/data/sessions/.gitkeep
+job_agent/data/screenshots/*
+!job_agent/data/screenshots/.gitkeep
+
 # macOS
 .DS_Store
 
 # Playwright browsers (large, installed locally)
 **/ms-playwright/
+

@@ -38,12 +38,22 @@ mkdir -p "$DIST_DIR"
 info "Copying project files..."
 
 # Core agent files
-cp "$SCRIPT_DIR/job_agent/main.py"       "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/menu_bar.py"   "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/commander.py"  "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/listener.py"   "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/notifier.py"   "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/db.py"         "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/main.py"             "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/menu_bar.py"         "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/commander.py"        "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/listener.py"         "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/notifier.py"         "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/db.py"               "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/profile_manager.py"  "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/dashboard_server.py" "$INSTALL_DIR/job_agent/"
+
+# Applier module
+mkdir -p "$INSTALL_DIR/job_agent/applier"
+cp -r "$SCRIPT_DIR/job_agent/applier/"* "$INSTALL_DIR/job_agent/applier/"
+
+# Static Web GUI bundle (compiled Next.js + shadcn UI)
+mkdir -p "$INSTALL_DIR/job_agent/static"
+cp -r "$SCRIPT_DIR/job_agent/static/"* "$INSTALL_DIR/job_agent/static/"
 
 # Scrapers
 cp "$SCRIPT_DIR/job_agent/scrapers/__init__.py"   "$INSTALL_DIR/job_agent/scrapers/"
@@ -56,6 +66,7 @@ cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
 if [ -f "$SCRIPT_DIR/logos/Tracky.icns" ]; then
     cp "$SCRIPT_DIR/logos/Tracky.icns" "$INSTALL_DIR/Tracky.icns"
 fi
+
 
 # NOTE: config.json is NOT included — postinstall creates it per-user
 

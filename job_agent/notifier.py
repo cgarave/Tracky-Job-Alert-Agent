@@ -48,14 +48,18 @@ def send_imessage(recipient: str, message: str) -> bool:
 
 
 def format_job_alert(job: dict) -> str:
-    """Format a single job dict into a readable iMessage string."""
+    """Format a single job dict into a readable actionable iMessage string."""
+    job_id = job.get("job_id", "")
+    short_id = job_id[:6] if job_id else "job"
     return (
-        f"\U0001f195 New Job Alert!\n\n"
-        f"\U0001f4cb {job['title']}\n"
-        f"\U0001f3e2 {job['company']}\n"
-        f"\U0001f310 {job['source']}\n"
-        f"\U0001f517 {job['url']}"
+        f"🆕 New Job Alert! [#{short_id}]\n\n"
+        f"📋 {job.get('title', 'Unknown')}\n"
+        f"🏢 {job.get('company', 'Unknown')}\n"
+        f"🌐 {job.get('source', 'Job Board')}\n"
+        f"🔗 {job.get('url', '')}\n\n"
+        f"💡 Reply /apply {job_id} to submit your authentic resume."
     )
+
 
 
 def format_digest(jobs: list) -> str:

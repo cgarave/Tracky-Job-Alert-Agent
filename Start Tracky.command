@@ -22,4 +22,8 @@ fi
 # Send macOS notification
 osascript -e 'display notification "Tracky scraper and menu bar are now active." with title "Tracky Started" subtitle "🐶 Online"' 2>/dev/null || true
 
-echo "Tracky started successfully."
+# Open Dashboard in default browser
+open "http://127.0.0.1:5050" 2>/dev/null || true
+
+echo "Tracky started successfully. Dashboard: http://127.0.0.1:5050"
+
