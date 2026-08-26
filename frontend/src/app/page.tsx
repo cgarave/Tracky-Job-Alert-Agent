@@ -12,6 +12,7 @@ import { HistoryTab } from "@/components/tabs/history-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
 import { ApplyModal } from "@/components/modals/apply-modal";
 import { ScreenshotModal } from "@/components/modals/screenshot-modal";
+import { ConnectPlatformModal } from "@/components/modals/connect-platform-modal";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import {
@@ -104,6 +105,7 @@ export default function DashboardPage() {
   const [selectedJobForApply, setSelectedJobForApply] = useState<Job | null>(null);
   const [isSubmittingApply, setIsSubmittingApply] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
+  const [selectedPlatformForConnect, setSelectedPlatformForConnect] = useState<string | null>(null);
 
   // ── Load Data ────────────────────────────────────────────────────────────
   const loadStatus = useCallback(async () => {
@@ -285,10 +287,37 @@ export default function DashboardPage() {
     const browserToUse = customBrowserId || preferredBrowser;
     try {
       const res = await api.launchLogin(platform, browserToUse);
-      toast.success(res.message || `Browser window launched with ${browserToUse}! Please log in.`);
-      setTimeout(loadSessions, 8000);
+      toast.info(res.message || `Browser window launched with ${browserToUse}! Please log in.`);
+      loadSessions();
     } catch (e: any) {
       toast.error(`Login error: ${e.message}`);
+    }
+  };
+
+  const handleVerifySession = async (platform: string): Promise<boolean> => {
+    try {
+      const res = await api.verifySession(platform);
+      if (res.connected) {
+        toast.success(`🎉 ${platform.toUpperCase()} session connected and verified!`);
+        await loadSessions();
+        return true;
+      } else {
+        toast.warning(res.message || "No active session cookies detected yet. Please make sure you are logged in.");
+        return false;
+      }
+    } catch (e: any) {
+      toast.error(`Verification failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  const handleCancelHelper = async (platform: string) => {
+    try {
+      await api.cancelSessionLogin(platform);
+      toast.info("Browser helper window closed.");
+      loadSessions();
+    } catch (e: any) {
+      console.error("Cancel helper error:", e);
     }
   };
 
@@ -416,6 +445,7 @@ export default function DashboardPage() {
               preferredBrowser={preferredBrowser}
               onSelectBrowser={handleSelectBrowser}
               onLaunchLogin={handleLaunchLogin}
+              onOpenConnectModal={(p) => setSelectedPlatformForConnect(p)}
               onRefresh={loadSessions}
               isLoading={isLoadingSessions}
             />
@@ -442,6 +472,19 @@ export default function DashboardPage() {
       </main>
 
       {/* Modals */}
+      <ConnectPlatformModal
+        platformKey={selectedPlatformForConnect}
+        isOpen={!!selectedPlatformForConnect}
+        onClose={() => setSelectedPlatformForConnect(null)}
+        session={selectedPlatformForConnect ? sessions[selectedPlatformForConnect] : undefined}
+        browsers={browsers}
+        preferredBrowser={preferredBrowser}
+        onLaunchLogin={handleLaunchLogin}
+        onVerifySession={handleVerifySession}
+        onCancelHelper={handleCancelHelper}
+        onRefreshSessions={loadSessions}
+      />
+
       <ApplyModal
         job={selectedJobForApply}
         isOpen={!!selectedJobForApply}

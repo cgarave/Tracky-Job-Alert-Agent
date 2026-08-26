@@ -20,7 +20,13 @@ import db
 import profile_manager
 from applier import browser_manager
 from applier.engine import apply_to_job, check_platform_sessions, SCREENSHOTS_DIR
-from applier.session_manager import launch_interactive_login
+from applier.session_manager import (
+    launch_interactive_login,
+    verify_and_save_active_session,
+    cancel_active_login,
+    get_all_session_statuses,
+    get_session_details,
+)
 
 
 logger = logging.getLogger("dashboard_server")
@@ -300,8 +306,27 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "status": "launched",
                 "browser": chosen,
-                "message": f"Interactive {chosen.capitalize()} browser launched for {platform}. Log in and close browser when done.",
+                "platform": platform,
+                "message": f"Interactive {chosen.capitalize()} browser launched for {platform}. Log in and click 'Verify & Save' when done.",
             })
+
+        elif path == "/api/sessions/verify":
+            body = self._read_body_json()
+            platform = body.get("platform", "")
+            if not platform:
+                self._send_json({"error": "platform required"}, 400)
+                return
+            result = verify_and_save_active_session(platform)
+            self._send_json(result)
+
+        elif path == "/api/sessions/cancel":
+            body = self._read_body_json()
+            platform = body.get("platform", "")
+            if not platform:
+                self._send_json({"error": "platform required"}, 400)
+                return
+            result = cancel_active_login(platform)
+            self._send_json(result)
 
         elif path == "/api/apply":
             body = self._read_body_json()

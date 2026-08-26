@@ -18,6 +18,8 @@ import {
   ChevronDown,
   Check,
   Layers,
+  ExternalLink,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ interface SessionsTabProps {
   preferredBrowser?: string;
   onSelectBrowser?: (browserId: string) => Promise<void>;
   onLaunchLogin: (platform: string, browserId?: string) => Promise<void>;
+  onOpenConnectModal: (platformKey: string) => void;
   onRefresh: () => void;
   isLoading: boolean;
 }
@@ -39,17 +42,19 @@ export function SessionsTab({
   preferredBrowser = "brave",
   onSelectBrowser,
   onLaunchLogin,
+  onOpenConnectModal,
   onRefresh,
   isLoading,
 }: SessionsTabProps) {
   const [loggingInPlatform, setLoggingInPlatform] = useState<string | null>(null);
   const [openDropdownPlatform, setOpenDropdownPlatform] = useState<string | null>(null);
 
-  const handleLogin = async (platformKey: string, customBrowserId?: string) => {
+  const handleQuickLogin = async (platformKey: string, customBrowserId?: string) => {
     setLoggingInPlatform(platformKey);
     setOpenDropdownPlatform(null);
     try {
       await onLaunchLogin(platformKey, customBrowserId || preferredBrowser);
+      onOpenConnectModal(platformKey);
     } finally {
       setLoggingInPlatform(null);
     }
@@ -77,6 +82,7 @@ export function SessionsTab({
     {
       key: "indeed",
       name: "Indeed.ph",
+      loginUrl: "https://secure.indeed.com/account/login",
       icon: Globe,
       color: "text-blue-400 bg-blue-500/15 border-blue-500/30",
       desc: "Authenticates for Indeed Easy Apply multi-step application submissions.",
@@ -84,6 +90,7 @@ export function SessionsTab({
     {
       key: "jobstreet",
       name: "JobStreet.ph",
+      loginUrl: "https://www.jobstreet.com.ph/login",
       icon: Briefcase,
       color: "text-pink-400 bg-pink-500/15 border-pink-500/30",
       desc: "Authenticates for JobStreet Quick Apply single-click applications.",
@@ -91,6 +98,7 @@ export function SessionsTab({
     {
       key: "linkedin",
       name: "LinkedIn.com",
+      loginUrl: "https://www.linkedin.com/login",
       icon: Globe,
       color: "text-sky-400 bg-sky-500/15 border-sky-500/30",
       desc: "Authenticates for LinkedIn Easy Apply and candidate submissions.",
@@ -98,6 +106,7 @@ export function SessionsTab({
     {
       key: "onlinejobs",
       name: "OnlineJobs.ph",
+      loginUrl: "https://www.onlinejobs.ph/jobseekers/login",
       icon: Laptop,
       color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/30",
       desc: "Authenticates for OnlineJobs.ph direct jobseeker messaging and employer pitches.",
@@ -119,7 +128,7 @@ export function SessionsTab({
             <span>Platform Account Sessions</span>
           </h2>
           <p className="text-xs text-slate-400">
-            Log in once with your preferred browser (Safari, Brave, Chrome, etc.) to persist cookies. Tracky reuses these sessions so you never get challenged by 2FA during automated runs.
+            Connect your job board accounts via <strong>New Tab</strong> or the <strong>1-Click Cookie Sync Helper</strong>. Tracky reuses these authenticated sessions so you never get challenged by 2FA during automated runs.
           </p>
         </div>
 
@@ -208,72 +217,102 @@ export function SessionsTab({
 
               <CardContent className="pt-0">
                 <div className="pt-3 border-t border-white/5 flex flex-col gap-3">
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between">
                     {sess.updated_at ? (
                       <span>
-                        Session saved: <strong className="text-slate-300 font-mono">{sess.updated_at}</strong>
+                        Saved: <strong className="text-slate-300 font-mono">{sess.updated_at}</strong>
                       </span>
                     ) : (
                       <span>Never logged in</span>
                     )}
+                    {sess.cookie_count ? (
+                      <span className="text-emerald-400 font-mono text-[10px]">{sess.cookie_count} cookies</span>
+                    ) : null}
                   </div>
 
-                  {/* Split Button: Primary Click launches Preferred Browser, Arrow opens options */}
-                  <div className="relative flex items-center w-full">
+                  {/* Primary Connection Actions */}
+                  <div className="flex flex-col gap-2">
+                    {/* Interactive Setup & Sync Modal Launcher */}
                     <Button
-                      variant="outline"
+                      variant="default"
                       size="sm"
-                      onClick={() => handleLogin(p.key)}
-                      disabled={isLoggingIn}
-                      className="flex-1 gap-2 text-xs rounded-r-none border-r-0"
+                      onClick={() => onOpenConnectModal(p.key)}
+                      className="w-full gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-md shadow-indigo-500/20"
                     >
                       <KeyRound className="w-3.5 h-3.5" />
-                      <span>
-                        {isLoggingIn ? "Browser Opened..." : `Log In (${currentBrowserObj.name.split(" ")[0]})`}
-                      </span>
+                      <span>{sess.connected ? "⚙️ Manage & Re-sync" : "🔑 Connect Account"}</span>
                     </Button>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setOpenDropdownPlatform(isDropdownOpen ? null : p.key)}
-                      disabled={isLoggingIn}
-                      className="px-2 text-xs rounded-l-none border-l border-slate-700/80 hover:bg-slate-800"
-                      title="Choose browser for this platform"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    </Button>
+                    {/* Quick Secondary Actions: Open New Tab / Quick Helper */}
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(p.loginUrl, "_blank", "noopener,noreferrer")}
+                        className="flex-1 text-[11px] h-7 gap-1 text-slate-300 border-slate-800 hover:bg-slate-800"
+                        title="Open official login page in new browser tab"
+                      >
+                        <ExternalLink className="w-3 h-3 text-indigo-400" />
+                        <span>New Tab ↗</span>
+                      </Button>
 
-                    {/* Popover Dropdown for Alternative Browsers */}
-                    {isDropdownOpen && (
-                      <div className="absolute right-0 bottom-full mb-2 w-56 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100">
-                        <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                          Log in using:
-                        </div>
-                        {browsers.map((b) => (
-                          <button
-                            key={b.id}
-                            disabled={!b.installed || isLoggingIn}
-                            onClick={() => handleLogin(p.key, b.id)}
-                            className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                              !b.installed
-                                ? "opacity-40 cursor-not-allowed text-slate-500"
-                                : "text-slate-200 hover:bg-indigo-600/30 hover:text-white"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {getBrowserIcon(b.id)}
-                              <span>{b.name}</span>
+                      {/* Split button for Quick Helper Launch */}
+                      <div className="relative flex items-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleQuickLogin(p.key)}
+                          disabled={isLoggingIn}
+                          className="text-[11px] h-7 px-2 gap-1 rounded-r-none border-r-0 border-slate-800 hover:bg-slate-800 text-slate-300"
+                          title="Launch 1-Click Cookie Sync Helper Window"
+                        >
+                          {getBrowserIcon(preferredBrowser)}
+                          <span>Sync ({currentBrowserObj.name.split(" ")[0]})</span>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setOpenDropdownPlatform(isDropdownOpen ? null : p.key)}
+                          disabled={isLoggingIn}
+                          className="px-1.5 h-7 text-xs rounded-l-none border-l border-slate-700/80 border-slate-800 hover:bg-slate-800 text-slate-400"
+                          title="Choose browser for sync"
+                        >
+                          <ChevronDown className="w-3 h-3 text-slate-400" />
+                        </Button>
+
+                        {/* Popover Dropdown for Alternative Browsers */}
+                        {isDropdownOpen && (
+                          <div className="absolute right-0 bottom-full mb-2 w-56 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100">
+                            <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                              Launch Sync using:
                             </div>
-                            {b.id === preferredBrowser && (
-                              <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
-                                Default
-                              </Badge>
-                            )}
-                          </button>
-                        ))}
+                            {browsers.map((b) => (
+                              <button
+                                key={b.id}
+                                disabled={!b.installed || isLoggingIn}
+                                onClick={() => handleQuickLogin(p.key, b.id)}
+                                className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                                  !b.installed
+                                    ? "opacity-40 cursor-not-allowed text-slate-500"
+                                    : "text-slate-200 hover:bg-indigo-600/30 hover:text-white"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {getBrowserIcon(b.id)}
+                                  <span>{b.name}</span>
+                                </div>
+                                {b.id === preferredBrowser && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                    Default
+                                  </Badge>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

@@ -60,9 +60,14 @@ export interface UserProfile {
 }
 
 export interface PlatformSession {
+  platform?: string;
   name: string;
+  login_url?: string;
+  home_url?: string;
   connected: boolean;
+  cookie_count?: number;
   updated_at: string;
+  is_helper_open?: boolean;
   session_file: string;
 }
 

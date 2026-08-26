@@ -96,13 +96,31 @@ export async function setPreferredBrowser(browser: string): Promise<{ status: st
   return handleResponse<{ status: string; preferred: string }>(res);
 }
 
-export async function launchLogin(platform: string, browser?: string): Promise<{ status: string; message: string; browser?: string }> {
+export async function launchLogin(platform: string, browser?: string): Promise<{ status: string; message: string; browser?: string; platform?: string }> {
   const res = await fetch(`${API_BASE}/api/sessions/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ platform, browser }),
   });
-  return handleResponse<{ status: string; message: string; browser?: string }>(res);
+  return handleResponse<{ status: string; message: string; browser?: string; platform?: string }>(res);
+}
+
+export async function verifySession(platform: string): Promise<{ status: string; connected: boolean; message: string; details?: PlatformSession }> {
+  const res = await fetch(`${API_BASE}/api/sessions/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platform }),
+  });
+  return handleResponse<{ status: string; connected: boolean; message: string; details?: PlatformSession }>(res);
+}
+
+export async function cancelSessionLogin(platform: string): Promise<{ status: string; platform: string }> {
+  const res = await fetch(`${API_BASE}/api/sessions/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platform }),
+  });
+  return handleResponse<{ status: string; platform: string }>(res);
 }
 
 export async function fetchApplications(): Promise<{ applications: ApplicationRecord[] }> {
