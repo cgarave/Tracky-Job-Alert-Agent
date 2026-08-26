@@ -117,12 +117,17 @@ def launch_interactive_login(platform: str, browser_id: Optional[str] = None) ->
 
         logger.info(f"Waiting for user to log in to {info['name']}. Please close the browser window when finished.")
 
-        try:
-            # Wait for user to interact and close the page/window naturally
-            # Zero polling / zero CDP queries while open, preventing tab flicker or reloads
-            page.wait_for_close(timeout=0)
-        except Exception:
-            pass
+        # Wait for user to interact and close the page/window naturally
+        # is_closed() and is_connected() are pure in-memory properties with zero CDP queries
+        while True:
+            try:
+                if not browser.is_connected():
+                    break
+                if not context.pages or all(p.is_closed() for p in context.pages):
+                    break
+                time.sleep(0.5)
+            except Exception:
+                break
 
         # Capture and save authenticated session cookies & storage state
         try:
