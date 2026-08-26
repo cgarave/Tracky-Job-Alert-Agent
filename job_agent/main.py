@@ -216,6 +216,9 @@ def scraper_loop(dry_run: bool = False) -> None:
                 if auto_cfg.get("enabled", False):
                     resume_path = profile_manager.get_resume_path()
                     if resume_path and resume_path.exists():
+                        from applier.session_manager import is_session_active
+                        from applier.engine import apply_to_job
+
                         daily_cap = auto_cfg.get("daily_cap", 5)
                         today_applied = db_module.count_today_applications(db_conn)
                         remaining_quota = max(0, daily_cap - today_applied)
@@ -231,15 +234,21 @@ def scraper_loop(dry_run: bool = False) -> None:
 
                             comp = job.get("company", "").lower()
                             title = job.get("title", "").lower()
+                            src = job.get("source", "").lower()
 
                             if any(b in comp for b in blacklist_companies):
                                 continue
                             if any(b in title for b in blacklist_kw):
                                 continue
 
+                            # Skip if platform requires session and it is not connected
+                            if "onlinejobs" in src and not is_session_active("onlinejobs"):
+                                logger.info(f"Skipping auto-apply for '{job.get('title')}' — OnlineJobs session not connected.")
+                                continue
+
                             logger.info(f"🤖 Auto-applying to: {job.get('title')} @ {job.get('company')}")
                             res = apply_to_job(job_id=job["job_id"], mode="auto")
-                            if res.get("success"):
+                            if res.get("success") and not res.get("external"):
                                 applied_in_this_scan += 1
                                 if recipient:
                                     send_imessage(

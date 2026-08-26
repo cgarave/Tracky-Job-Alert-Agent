@@ -1,6 +1,6 @@
 """
 Central Application Orchestration Engine.
-Coordinates authentic PDF resume injection, platform routing, and audit logging.
+Coordinates authentic PDF resume injection, platform routing, session enforcement, and audit logging.
 """
 import logging
 from pathlib import Path
@@ -36,7 +36,7 @@ def apply_to_job(
         custom_note: Optional custom message or pitch.
 
     Returns:
-        Dict summarizing outcome: {success, message, screenshot_url, external_portal}
+        Dict summarizing outcome: {success, message, screenshot, external, portal_url}
     """
     conn = get_connection()
     job = get_job_by_id(conn, job_id)
@@ -90,16 +90,24 @@ def apply_to_job(
                 mode=mode,
             )
         elif "onlinejobs" in source:
-            session = get_session_path("onlinejobs")
-            result = onlinejobs_applier.apply(
-                url=url,
-                resume_path=resume_path,
-                profile_data=profile,
-                session_path=session if session.exists() else None,
-                screenshot_dir=SCREENSHOTS_DIR,
-                mode=mode,
-                custom_pitch=custom_note,
-            )
+            if not is_session_active("onlinejobs"):
+                result = {
+                    "success": False,
+                    "external": False,
+                    "requires_session": True,
+                    "message": "OnlineJobs.ph session is not connected. Please log in under Platform Accounts tab first.",
+                }
+            else:
+                session = get_session_path("onlinejobs")
+                result = onlinejobs_applier.apply(
+                    url=url,
+                    resume_path=resume_path,
+                    profile_data=profile,
+                    session_path=session,
+                    screenshot_dir=SCREENSHOTS_DIR,
+                    mode=mode,
+                    custom_pitch=custom_note,
+                )
         else:
             result = {
                 "success": False,
@@ -109,7 +117,14 @@ def apply_to_job(
             }
 
         # 2. Record application in DB audit log
-        status = "submitted" if result.get("success") else ("external_link" if result.get("external") else "failed")
+        # Strict validation: ONLY mark 'submitted' if result['success'] is True AND not external
+        if result.get("success") and not result.get("external"):
+            status = "submitted"
+        elif result.get("external"):
+            status = "external_link"
+        else:
+            status = "failed"
+
         screenshot_rel = ""
         if result.get("screenshot"):
             screenshot_rel = Path(result["screenshot"]).name
@@ -121,7 +136,7 @@ def apply_to_job(
             mode=mode,
             notes=custom_note or result.get("message", ""),
             screenshot_path=screenshot_rel,
-            error_message="" if result.get("success") else result.get("message", ""),
+            error_message="" if (result.get("success") and not result.get("external")) else result.get("message", ""),
         )
 
     except Exception as exc:

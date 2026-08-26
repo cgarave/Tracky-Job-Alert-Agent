@@ -1,17 +1,19 @@
 """
 OnlineJobs.ph Direct Application / Message Automator using Playwright.
-Submits employer pitch using authentic user profile context.
+Submits employer pitch using authentic user profile context only when verified session is present.
 """
 import logging
 import time
 from pathlib import Path
 from typing import Optional
 
+from . import browser_manager
+
 logger = logging.getLogger(__name__)
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 
 
@@ -26,20 +28,32 @@ def apply(
 ) -> dict:
     """
     Automate OnlineJobs.ph application messaging.
+    Strictly verifies that an authenticated session is active and that submission was confirmed.
     Returns dict: {success: bool, message: str, screenshot: Optional[str], external: bool}
     """
     from playwright.sync_api import sync_playwright
+
+    # 1. Require session file
+    if not session_path or not session_path.exists():
+        return {
+            "success": False,
+            "external": False,
+            "requires_session": True,
+            "message": "OnlineJobs.ph account is not connected. Please connect your account under 'Platform Accounts' first.",
+        }
 
     personal = profile_data.get("personal", {})
     work = profile_data.get("work_preferences", {})
     qa = profile_data.get("screening_answers", {})
 
-    full_name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}".strip() or "Applicant"
+    first_name = personal.get("first_name", "")
+    last_name = personal.get("last_name", "")
+    full_name = f"{first_name} {last_name}".strip() or "Applicant"
     email = personal.get("email", "")
     headline = personal.get("headline", "Software Engineer")
     skills = ", ".join(work.get("skills", []))
 
-    # Draft cover pitch if custom not provided
+    # Draft pitch
     pitch = custom_pitch.strip()
     if not pitch:
         pitch = (
@@ -59,50 +73,88 @@ def apply(
 
     with sync_playwright() as pw:
         headless = mode != "interactive"
-        browser = pw.chromium.launch(
+        browser = browser_manager.launch_browser(
+            pw,
             headless=headless,
-            args=["--disable-blink-features=AutomationControlled"],
         )
 
-        context_kwargs = {"user_agent": USER_AGENT}
-        if session_path and session_path.exists():
-            try:
-                context_kwargs["storage_state"] = str(session_path)
-            except Exception as e:
-                logger.warning(f"Could not load session state: {e}")
+        context_kwargs = {
+            "user_agent": USER_AGENT,
+            "viewport": {"width": 1280, "height": 800},
+            "storage_state": str(session_path),
+        }
 
         context = browser.new_context(**context_kwargs)
         page = context.new_page()
 
         try:
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        except Exception:
+            pass
+
+        try:
             logger.info(f"[OnlineJobs Applier] Navigating to {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(2500)
 
-            # Check if logged in / apply button exists
+            # Check if user is logged in
+            login_prompt = page.query_selector("a:has-text('Login to Apply'), a:has-text('Sign In to Apply')")
+            if login_prompt:
+                if screenshot_file:
+                    try:
+                        page.screenshot(path=str(screenshot_file))
+                    except Exception:
+                        pass
+                return {
+                    "success": False,
+                    "external": False,
+                    "requires_session": True,
+                    "message": "OnlineJobs.ph session is expired or not authenticated. Please re-connect your account in Platform Accounts tab.",
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
+
+            # Find Apply button if on job overview
             apply_btn = page.query_selector(
                 "a:has-text('Apply to this Job'), button:has-text('Apply to this Job'), button:has-text('Apply for this Job'), a[href*='apply']"
             )
-
-            if not apply_btn:
-                # Check if login prompt is visible
-                login_prompt = page.query_selector("a:has-text('Login to Apply'), a:has-text('Sign In')")
-                if login_prompt:
-                    return {
-                        "success": False,
-                        "external": False,
-                        "message": "OnlineJobs.ph session expired or not logged in. Please connect your account in the dashboard.",
-                    }
-
             if apply_btn:
                 apply_btn.click()
                 page.wait_for_timeout(2000)
 
+            # Find message textarea
+            message_box = page.query_selector(
+                "textarea[name*='message'], textarea[name*='cover_letter'], textarea[id*='message'], textarea"
+            )
+            if not message_box:
+                # Check if already applied
+                already_applied = page.query_selector(":has-text('You have already applied'), :has-text('Applied on')")
+                if already_applied:
+                    if screenshot_file:
+                        try:
+                            page.screenshot(path=str(screenshot_file))
+                        except Exception:
+                            pass
+                    return {
+                        "success": True,
+                        "message": "You have already applied to this OnlineJobs.ph listing.",
+                        "screenshot": str(screenshot_file) if screenshot_file else None,
+                    }
+
+                if screenshot_file:
+                    try:
+                        page.screenshot(path=str(screenshot_file))
+                    except Exception:
+                        pass
+                return {
+                    "success": False,
+                    "external": False,
+                    "message": "Could not find application message box on OnlineJobs.ph listing.",
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
+
             # Fill message textarea
-            message_box = page.query_selector("textarea[name*='message'], textarea[name*='cover_letter'], textarea[id*='message']")
-            if message_box:
-                message_box.fill(pitch)
-                logger.info("Filled application pitch on OnlineJobs.ph")
+            message_box.fill(pitch)
+            logger.info("Filled application pitch on OnlineJobs.ph")
 
             # Check subject field if available
             subject_box = page.query_selector("input[name*='subject'], input[id*='subject']")
@@ -110,37 +162,69 @@ def apply(
                 subject_box.fill(f"Application: {headline} - {full_name}")
 
             # Check for submit button
-            send_btn = page.query_selector("button:has-text('Send Application'), input[type='submit'][value*='Send'], button:has-text('Apply')")
+            send_btn = page.query_selector(
+                "button:has-text('Send Application'), input[type='submit'][value*='Send'], button:has-text('Submit'), button:has-text('Apply')"
+            )
 
-            if send_btn:
-                if mode == "assisted_review":
-                    if screenshot_file:
+            if not send_btn:
+                if screenshot_file:
+                    try:
                         page.screenshot(path=str(screenshot_file))
-                    return {
-                        "success": True,
-                        "ready_to_submit": True,
-                        "message": "OnlineJobs pitch prepared for review.",
-                        "screenshot": str(screenshot_file),
-                    }
+                    except Exception:
+                        pass
+                return {
+                    "success": False,
+                    "external": False,
+                    "message": "Could not locate 'Send Application' button on OnlineJobs.ph.",
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
 
-                send_btn.click()
-                page.wait_for_timeout(3500)
+            if mode == "assisted_review":
                 if screenshot_file:
                     page.screenshot(path=str(screenshot_file))
                 return {
                     "success": True,
-                    "message": "Application message sent on OnlineJobs.ph!",
-                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                    "ready_to_submit": True,
+                    "message": "OnlineJobs pitch prepared for review.",
+                    "screenshot": str(screenshot_file),
                 }
 
-            if screenshot_file:
-                page.screenshot(path=str(screenshot_file))
+            # Submit the form
+            send_btn.click()
+            page.wait_for_timeout(4000)
 
-            return {
-                "success": True,
-                "message": "Navigated OnlineJobs application form.",
-                "screenshot": str(screenshot_file) if screenshot_file else None,
-            }
+            # Strictly verify post-submission confirmation
+            page_text = page.inner_text("body").lower() if page.query_selector("body") else ""
+            confirmed = any(
+                phrase in page_text
+                for phrase in [
+                    "sent successfully",
+                    "your message has been sent",
+                    "application sent",
+                    "applied successfully",
+                    "you have already applied",
+                    "success",
+                ]
+            )
+
+            if screenshot_file:
+                try:
+                    page.screenshot(path=str(screenshot_file))
+                except Exception:
+                    pass
+
+            if confirmed:
+                return {
+                    "success": True,
+                    "message": "Application message sent successfully on OnlineJobs.ph!",
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Form was submitted but OnlineJobs confirmation message could not be verified.",
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
 
         except Exception as exc:
             logger.error(f"[OnlineJobs Applier] Error: {exc}")
@@ -155,4 +239,7 @@ def apply(
                 "screenshot": str(screenshot_file) if screenshot_file else None,
             }
         finally:
-            browser.close()
+            try:
+                browser.close()
+            except Exception:
+                pass
