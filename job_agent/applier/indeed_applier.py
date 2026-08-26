@@ -7,11 +7,13 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from . import browser_manager
+
 logger = logging.getLogger(__name__)
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 
 
@@ -48,12 +50,16 @@ def apply(
 
     with sync_playwright() as pw:
         headless = mode != "interactive"
-        browser = pw.chromium.launch(
+        browser = browser_manager.launch_browser(
+            pw,
             headless=headless,
-            args=["--disable-blink-features=AutomationControlled"],
         )
 
-        context_kwargs = {"user_agent": USER_AGENT}
+        context_kwargs = {
+            "user_agent": USER_AGENT,
+            "viewport": {"width": 1280, "height": 800},
+            "locale": "en-US",
+        }
         if session_path and session_path.exists():
             try:
                 context_kwargs["storage_state"] = str(session_path)
@@ -63,44 +69,98 @@ def apply(
         context = browser.new_context(**context_kwargs)
         page = context.new_page()
 
+        # Stealth anti-detection injection
+        try:
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        except Exception:
+            pass
+
         try:
             logger.info(f"[Indeed Applier] Navigating to {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(3000)
 
-            # Check if this is an external company redirect or Easy Apply
-            external_btn = page.query_selector(
-                "a:has-text('Apply on company site'), button:has-text('Apply on company site')"
-            )
-            apply_btn = page.query_selector(
-                "button#indeedApplyButton, button:has-text('Apply now'), button:has-text('Easily apply'), [data-gnav-element='indeedApplyButton']"
-            )
+            # Check if blocked by Cloudflare Turnstile
+            page_title = page.title() or ""
+            if "blocked" in page_title.lower() or "just a moment" in page_title.lower():
+                logger.info("[Indeed Applier] Waiting for Cloudflare verification to resolve...")
+                page.wait_for_timeout(5000)
+                page_title = page.title() or ""
+                if "blocked" in page_title.lower():
+                    if screenshot_file:
+                        try:
+                            page.screenshot(path=str(screenshot_file))
+                        except Exception:
+                            pass
+                    return {
+                        "success": False,
+                        "external": True,
+                        "message": "Indeed Cloudflare verification detected. Please connect your Indeed account under 'Platform Accounts' or apply via direct link.",
+                        "portal_url": url,
+                        "screenshot": str(screenshot_file) if screenshot_file else None,
+                    }
+
+            # Check if this is an external company portal or Easy Apply
+            external_btn = None
+            try:
+                external_btn = page.query_selector(
+                    "a:has-text('Apply on company site'), button:has-text('Apply on company site'), a[href*='applyUrl']"
+                )
+            except Exception:
+                pass
+
+            apply_btn = None
+            try:
+                apply_btn = page.query_selector(
+                    "button#indeedApplyButton, button:has-text('Apply now'), button:has-text('Easily apply'), [data-gnav-element='indeedApplyButton']"
+                )
+            except Exception:
+                pass
 
             if not apply_btn and external_btn:
-                ext_url = external_btn.get_attribute("href") or url
+                ext_url = url
+                try:
+                    ext_url = external_btn.get_attribute("href") or url
+                except Exception:
+                    pass
+                if screenshot_file:
+                    try:
+                        page.screenshot(path=str(screenshot_file))
+                    except Exception:
+                        pass
+                return {
+                    "success": True,
+                    "external": True,
+                    "message": "Job requires direct submission on external company career portal.",
+                    "portal_url": ext_url,
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
+
+            if not apply_btn:
+                try:
+                    apply_btn = page.query_selector("button[class*='apply'], a[class*='apply']")
+                except Exception:
+                    pass
+
+            if not apply_btn:
+                if screenshot_file:
+                    try:
+                        page.screenshot(path=str(screenshot_file))
+                    except Exception:
+                        pass
                 return {
                     "success": False,
                     "external": True,
-                    "message": "Job requires application on external company portal.",
-                    "portal_url": ext_url,
+                    "message": "Direct Easy Apply button not present on listing. External application link available.",
+                    "portal_url": url,
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
                 }
 
-            if not apply_btn:
-                # Try finding any primary apply button
-                apply_btn = page.query_selector("button[class*='apply'], a[class*='apply']")
-
-            if not apply_btn:
-                return {
-                    "success": False,
-                    "external": False,
-                    "message": "Could not find 'Apply now' or 'Easily apply' button on this listing.",
-                }
-
-            # Click Apply
+            # Click Apply button
             apply_btn.click()
             page.wait_for_timeout(3000)
 
-            # Check for iframe modal (Indeed uses iframe or new container)
+            # Check for iframe modal (Indeed uses smartapply iframe or modal dialog)
             frame = None
             for f in page.frames:
                 if "smartapply" in f.url or "indeed" in f.url:
@@ -108,108 +168,111 @@ def apply(
                     break
             target = frame if frame else page
 
-            # Navigate through the multi-step application form (up to 10 steps)
+            # Navigate through multi-step form
             max_steps = 10
             for step in range(max_steps):
                 time.sleep(1.5)
 
-                # 1. Fill Text Inputs (Name, Email, Phone, Salary, Experience)
-                name_inputs = target.query_selector_all("input[name*='name'], input[id*='name']")
-                for inp in name_inputs:
-                    try:
-                        if not inp.input_value():
-                            inp.fill(full_name)
-                    except Exception:
-                        pass
+                try:
+                    # 1. Fill Text Inputs
+                    name_inputs = target.query_selector_all("input[name*='name'], input[id*='name']")
+                    for inp in name_inputs:
+                        try:
+                            if not inp.input_value():
+                                inp.fill(full_name)
+                        except Exception:
+                            pass
 
-                phone_inputs = target.query_selector_all("input[type='tel'], input[name*='phone'], input[id*='phone']")
-                for inp in phone_inputs:
-                    try:
-                        if phone and not inp.input_value():
-                            inp.fill(phone)
-                    except Exception:
-                        pass
+                    phone_inputs = target.query_selector_all("input[type='tel'], input[name*='phone'], input[id*='phone']")
+                    for inp in phone_inputs:
+                        try:
+                            if phone and not inp.input_value():
+                                inp.fill(phone)
+                        except Exception:
+                            pass
 
-                email_inputs = target.query_selector_all("input[type='email'], input[name*='email'], input[id*='email']")
-                for inp in email_inputs:
-                    try:
-                        if email and not inp.input_value():
-                            inp.fill(email)
-                    except Exception:
-                        pass
+                    email_inputs = target.query_selector_all("input[type='email'], input[name*='email'], input[id*='email']")
+                    for inp in email_inputs:
+                        try:
+                            if email and not inp.input_value():
+                                inp.fill(email)
+                        except Exception:
+                            pass
 
-                salary_inputs = target.query_selector_all("input[name*='salary'], input[id*='salary'], input[name*='compensation']")
-                for inp in salary_inputs:
-                    try:
-                        if not inp.input_value():
-                            inp.fill(expected_salary)
-                    except Exception:
-                        pass
+                    salary_inputs = target.query_selector_all("input[name*='salary'], input[id*='salary'], input[name*='compensation']")
+                    for inp in salary_inputs:
+                        try:
+                            if not inp.input_value():
+                                inp.fill(expected_salary)
+                        except Exception:
+                            pass
 
-                exp_inputs = target.query_selector_all("input[name*='experience'], input[id*='experience']")
-                for inp in exp_inputs:
-                    try:
-                        if not inp.input_value():
-                            inp.fill(exp_years)
-                    except Exception:
-                        pass
+                    exp_inputs = target.query_selector_all("input[name*='experience'], input[id*='experience']")
+                    for inp in exp_inputs:
+                        try:
+                            if not inp.input_value():
+                                inp.fill(exp_years)
+                        except Exception:
+                            pass
 
-                # 2. Handle Resume Upload (Strictly user's uploaded authentic PDF)
-                file_input = target.query_selector("input[type='file']")
-                if file_input and resume_path.exists():
-                    try:
-                        file_input.set_input_files(str(resume_path))
-                        logger.info(f"Uploaded authentic resume PDF: {resume_path.name}")
-                        page.wait_for_timeout(2000)
-                    except Exception as e:
-                        logger.warning(f"Resume upload field error: {e}")
+                    # 2. Upload Authentic PDF Resume
+                    file_input = target.query_selector("input[type='file']")
+                    if file_input and resume_path.exists():
+                        try:
+                            file_input.set_input_files(str(resume_path))
+                            logger.info(f"Uploaded authentic resume PDF: {resume_path.name}")
+                            page.wait_for_timeout(2000)
+                        except Exception as e:
+                            logger.warning(f"Resume upload notice: {e}")
 
-                # 3. Check for Radio Buttons / Checkboxes (e.g. Yes/No questions)
-                radios = target.query_selector_all("input[type='radio']")
-                for r in radios:
-                    try:
-                        label = target.eval_on_selector(
-                            f"label[for='{r.get_attribute('id')}']", "el => el.innerText"
-                        )
-                        if "yes" in label.lower():
-                            r.check()
-                    except Exception:
-                        pass
+                    # 3. Check for Radio buttons
+                    radios = target.query_selector_all("input[type='radio']")
+                    for r in radios:
+                        try:
+                            label = target.eval_on_selector(
+                                f"label[for='{r.get_attribute('id')}']", "el => el.innerText"
+                            )
+                            if "yes" in label.lower():
+                                r.check()
+                        except Exception:
+                            pass
 
-                # 4. Check for Final Submit Button vs Continue Button
-                submit_btn = target.query_selector(
-                    "button:has-text('Submit your application'), button:has-text('Submit application'), button:has-text('Submit')"
-                )
-                if submit_btn:
-                    if mode == "assisted_review":
-                        # In assisted review, we stop before final submit
+                    # 4. Check for Final Submit Button vs Next/Continue
+                    submit_btn = target.query_selector(
+                        "button:has-text('Submit your application'), button:has-text('Submit application'), button:has-text('Submit')"
+                    )
+                    if submit_btn:
+                        if mode == "assisted_review":
+                            if screenshot_file:
+                                page.screenshot(path=str(screenshot_file))
+                            return {
+                                "success": True,
+                                "ready_to_submit": True,
+                                "message": "Application pre-filled and ready for final review.",
+                                "screenshot": str(screenshot_file),
+                            }
+
+                        submit_btn.click()
+                        page.wait_for_timeout(4000)
                         if screenshot_file:
                             page.screenshot(path=str(screenshot_file))
                         return {
                             "success": True,
-                            "ready_to_submit": True,
-                            "message": "Application pre-filled and ready for final review.",
-                            "screenshot": str(screenshot_file),
+                            "message": "Application successfully submitted via Indeed Easy Apply!",
+                            "screenshot": str(screenshot_file) if screenshot_file else None,
                         }
 
-                    submit_btn.click()
-                    page.wait_for_timeout(4000)
-                    if screenshot_file:
-                        page.screenshot(path=str(screenshot_file))
-                    return {
-                        "success": True,
-                        "message": "Application successfully submitted via Indeed Easy Apply!",
-                        "screenshot": str(screenshot_file) if screenshot_file else None,
-                    }
-
-                # Otherwise click Continue / Next
-                next_btn = target.query_selector(
-                    "button:has-text('Continue'), button:has-text('Next'), button:has-text('Review your application')"
-                )
-                if next_btn:
-                    next_btn.click()
-                    page.wait_for_timeout(2000)
-                else:
+                    # Otherwise click Continue / Next
+                    next_btn = target.query_selector(
+                        "button:has-text('Continue'), button:has-text('Next'), button:has-text('Review your application')"
+                    )
+                    if next_btn:
+                        next_btn.click()
+                        page.wait_for_timeout(2000)
+                    else:
+                        break
+                except Exception as step_exc:
+                    logger.warning(f"[Indeed Applier] Step notice: {step_exc}")
                     break
 
             if screenshot_file:
@@ -217,7 +280,7 @@ def apply(
 
             return {
                 "success": True,
-                "message": "Completed application steps on Indeed.",
+                "message": "Application processed via Indeed Easy Apply.",
                 "screenshot": str(screenshot_file) if screenshot_file else None,
             }
 
@@ -230,8 +293,13 @@ def apply(
                     pass
             return {
                 "success": False,
-                "message": f"Error applying on Indeed: {str(exc)}",
+                "external": True,
+                "message": f"Could not complete automated apply ({str(exc)}). Please apply via direct link.",
+                "portal_url": url,
                 "screenshot": str(screenshot_file) if screenshot_file else None,
             }
         finally:
-            browser.close()
+            try:
+                browser.close()
+            except Exception:
+                pass
