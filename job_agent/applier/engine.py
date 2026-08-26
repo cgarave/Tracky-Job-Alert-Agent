@@ -9,7 +9,7 @@ from typing import Optional
 from db import get_connection, get_job_by_id, record_application
 from profile_manager import get_profile, get_resume_path
 from .session_manager import get_session_path, get_all_session_statuses, is_session_active
-from . import indeed_applier, jobstreet_applier, onlinejobs_applier
+from . import indeed_applier, jobstreet_applier, onlinejobs_applier, linkedin_applier
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,17 @@ def apply_to_job(
                     mode=mode,
                     custom_pitch=custom_note,
                 )
+        elif "linkedin" in source:
+            session = get_session_path("linkedin")
+            result = linkedin_applier.apply(
+                url=url,
+                resume_path=resume_path,
+                profile_data=profile,
+                session_path=session if session.exists() else None,
+                screenshot_dir=SCREENSHOTS_DIR,
+                mode=mode,
+                custom_pitch=custom_note,
+            )
         else:
             result = {
                 "success": False,

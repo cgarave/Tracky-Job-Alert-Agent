@@ -276,11 +276,16 @@ def apply(
                     break
 
             if screenshot_file:
-                page.screenshot(path=str(screenshot_file))
+                try:
+                    page.screenshot(path=str(screenshot_file))
+                except Exception:
+                    pass
 
             return {
-                "success": True,
-                "message": "Application processed via Indeed Easy Apply.",
+                "success": False,
+                "external": True,
+                "message": "Could not reach final submit step on Indeed Easy Apply form. Application link available.",
+                "portal_url": url,
                 "screenshot": str(screenshot_file) if screenshot_file else None,
             }
 
