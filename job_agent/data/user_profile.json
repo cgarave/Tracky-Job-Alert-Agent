@@ -49,7 +49,7 @@
   },
   "auto_apply": {
     "enabled": false,
-    "daily_cap": 10,
+    "daily_cap": 1,
     "match_threshold": 75,
     "blacklisted_companies": [],
     "blacklisted_keywords": [

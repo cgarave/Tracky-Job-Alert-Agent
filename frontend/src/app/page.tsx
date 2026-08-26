@@ -21,6 +21,7 @@ import {
   ApplicationRecord,
   DaemonSettings,
   SystemStatus,
+  BrowserInfo,
 } from "@/types";
 import * as api from "@/lib/api";
 
@@ -84,6 +85,8 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<Record<string, PlatformSession>>({});
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [settings, setSettings] = useState<DaemonSettings>(DEFAULT_SETTINGS);
+  const [browsers, setBrowsers] = useState<BrowserInfo[]>([]);
+  const [preferredBrowser, setPreferredBrowser] = useState<string>("brave");
 
   // Filters & UI States
   const [search, setSearch] = useState("");
@@ -145,6 +148,18 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const loadBrowsers = useCallback(async () => {
+    try {
+      const data = await api.fetchBrowsers();
+      setBrowsers(data.browsers || []);
+      if (data.preferred) {
+        setPreferredBrowser(data.preferred);
+      }
+    } catch (e) {
+      console.error("Browsers load error:", e);
+    }
+  }, []);
+
   const loadApplications = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
@@ -161,6 +176,9 @@ export default function DashboardPage() {
     try {
       const data = await api.fetchSettings();
       setSettings(data);
+      if (data.preferred_browser) {
+        setPreferredBrowser(data.preferred_browser);
+      }
     } catch (e) {
       console.error("Settings load error:", e);
     }
@@ -171,6 +189,7 @@ export default function DashboardPage() {
     loadJobs();
     loadProfile();
     loadSessions();
+    loadBrowsers();
     loadApplications();
     loadSettings();
 
@@ -179,7 +198,7 @@ export default function DashboardPage() {
       loadStatus();
     }, 10000);
     return () => clearInterval(interval);
-  }, [loadStatus, loadJobs, loadProfile, loadSessions, loadApplications, loadSettings]);
+  }, [loadStatus, loadJobs, loadProfile, loadSessions, loadBrowsers, loadApplications, loadSettings]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handleSaveProfile = async (updated: UserProfile) => {
@@ -251,10 +270,22 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLaunchLogin = async (platform: string) => {
+  const handleSelectBrowser = async (browserId: string) => {
+    setPreferredBrowser(browserId);
     try {
-      const res = await api.launchLogin(platform);
-      toast.success(res.message || "Browser window launched! Please log in.");
+      await api.setPreferredBrowser(browserId);
+      toast.success(`Default login browser updated to ${browserId.toUpperCase()}`);
+      loadBrowsers();
+    } catch (e: any) {
+      toast.error(`Could not set preferred browser: ${e.message}`);
+    }
+  };
+
+  const handleLaunchLogin = async (platform: string, customBrowserId?: string) => {
+    const browserToUse = customBrowserId || preferredBrowser;
+    try {
+      const res = await api.launchLogin(platform, browserToUse);
+      toast.success(res.message || `Browser window launched with ${browserToUse}! Please log in.`);
       setTimeout(loadSessions, 8000);
     } catch (e: any) {
       toast.error(`Login error: ${e.message}`);
@@ -381,6 +412,9 @@ export default function DashboardPage() {
           {activeTab === "sessions" && (
             <SessionsTab
               sessions={sessions}
+              browsers={browsers}
+              preferredBrowser={preferredBrowser}
+              onSelectBrowser={handleSelectBrowser}
               onLaunchLogin={handleLaunchLogin}
               onRefresh={loadSessions}
               isLoading={isLoadingSessions}
@@ -399,6 +433,7 @@ export default function DashboardPage() {
           {activeTab === "settings" && (
             <SettingsTab
               settings={settings}
+              browsers={browsers}
               onSaveSettings={handleSaveSettings}
               isSaving={isSavingSettings}
             />

@@ -18,6 +18,7 @@ from typing import Optional
 import ai_parser
 import db
 import profile_manager
+from applier import browser_manager
 from applier.engine import apply_to_job, check_platform_sessions, SCREENSHOTS_DIR
 from applier.session_manager import launch_interactive_login
 
@@ -153,6 +154,17 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             else:
                 self._send_json({})
 
+        elif path == "/api/browsers":
+            try:
+                browsers = browser_manager.detect_available_browsers()
+                preferred = browser_manager.get_preferred_browser(CONFIG_PATH)
+                self._send_json({
+                    "browsers": browsers,
+                    "preferred": preferred,
+                })
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+
         else:
             # Serve Static Assets (HTML/CSS/JS/Images)
             super().do_GET()
@@ -260,23 +272,35 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             })
 
 
+        elif path == "/api/browsers/preferred":
+            body = self._read_body_json()
+            browser_id = body.get("browser", "")
+            if not browser_id:
+                self._send_json({"error": "browser required"}, 400)
+                return
+            saved = browser_manager.set_preferred_browser(browser_id, CONFIG_PATH)
+            self._send_json({"status": "success", "preferred": saved})
+
         elif path == "/api/sessions/login":
             body = self._read_body_json()
             platform = body.get("platform", "")
+            browser_id = body.get("browser")
             if not platform:
                 self._send_json({"error": "platform required"}, 400)
                 return
 
             def _login_worker():
                 try:
-                    launch_interactive_login(platform)
+                    launch_interactive_login(platform, browser_id=browser_id)
                 except Exception as exc:
                     logger.error(f"Login worker error: {exc}")
 
             threading.Thread(target=_login_worker, daemon=True).start()
+            chosen = browser_id or browser_manager.get_preferred_browser(CONFIG_PATH)
             self._send_json({
                 "status": "launched",
-                "message": f"Interactive browser launched for {platform}. Log in and close browser when done.",
+                "browser": chosen,
+                "message": f"Interactive {chosen.capitalize()} browser launched for {platform}. Log in and close browser when done.",
             })
 
         elif path == "/api/apply":

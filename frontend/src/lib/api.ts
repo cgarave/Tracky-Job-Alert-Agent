@@ -1,4 +1,4 @@
-import { Job, UserProfile, PlatformSession, ApplicationRecord, DaemonSettings, SystemStatus } from "@/types";
+import { Job, UserProfile, PlatformSession, ApplicationRecord, DaemonSettings, SystemStatus, BrowserInfo } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -82,13 +82,27 @@ export async function fetchSessions(): Promise<{ sessions: Record<string, Platfo
   return handleResponse<{ sessions: Record<string, PlatformSession> }>(res);
 }
 
-export async function launchLogin(platform: string): Promise<{ status: string; message: string }> {
+export async function fetchBrowsers(): Promise<{ browsers: BrowserInfo[]; preferred: string }> {
+  const res = await fetch(`${API_BASE}/api/browsers`);
+  return handleResponse<{ browsers: BrowserInfo[]; preferred: string }>(res);
+}
+
+export async function setPreferredBrowser(browser: string): Promise<{ status: string; preferred: string }> {
+  const res = await fetch(`${API_BASE}/api/browsers/preferred`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ browser }),
+  });
+  return handleResponse<{ status: string; preferred: string }>(res);
+}
+
+export async function launchLogin(platform: string, browser?: string): Promise<{ status: string; message: string; browser?: string }> {
   const res = await fetch(`${API_BASE}/api/sessions/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform }),
+    body: JSON.stringify({ platform, browser }),
   });
-  return handleResponse<{ status: string; message: string }>(res);
+  return handleResponse<{ status: string; message: string; browser?: string }>(res);
 }
 
 export async function fetchApplications(): Promise<{ applications: ApplicationRecord[] }> {

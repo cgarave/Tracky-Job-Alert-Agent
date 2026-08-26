@@ -82,12 +82,24 @@ export interface ApplicationRecord {
   location?: string;
 }
 
+export interface BrowserInfo {
+  id: string;
+  name: string;
+  engine: string;
+  installed: boolean;
+  is_native?: boolean;
+  executable_path?: string | null;
+  icon?: string;
+  description: string;
+}
+
 export interface DaemonSettings {
   keywords: string[];
   location: string;
   check_interval_minutes: number;
   recipient: string;
   gemini_api_key?: string;
+  preferred_browser?: string;
   paused?: boolean;
 }
 

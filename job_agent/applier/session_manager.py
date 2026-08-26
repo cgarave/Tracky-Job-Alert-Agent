@@ -1,6 +1,7 @@
 """
 Session and Cookie Manager for Job Platforms.
-Enables 1-click interactive login and persistent cookie storage.
+Enables 1-click interactive login with user-chosen browsers (Safari, Brave, Chrome, Edge, Firefox, etc.)
+and persistent cookie storage for automated runs.
 """
 import json
 import logging
@@ -8,6 +9,8 @@ import threading
 import time
 from pathlib import Path
 from typing import Optional
+
+from . import browser_manager
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,6 @@ PLATFORM_URLS = {
 }
 
 
-
 def get_session_path(platform: str) -> Path:
     """Return the JSON session storage path for a platform."""
     return SESSIONS_DIR / f"session_{platform.lower()}.json"
@@ -50,7 +52,7 @@ def is_session_active(platform: str) -> bool:
     if not path.exists():
         return False
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         cookies = data.get("cookies", [])
         return len(cookies) > 0
     except Exception:
@@ -77,9 +79,9 @@ def get_all_session_statuses() -> dict:
     return result
 
 
-def launch_interactive_login(platform: str) -> dict:
+def launch_interactive_login(platform: str, browser_id: Optional[str] = None) -> dict:
     """
-    Open a visible browser window so the user can log in manually.
+    Open a visible browser window (Safari, Brave, Chrome, etc.) so the user can log in manually.
     Saves cookies and storage state once login is completed or browser is closed.
     """
     plat = platform.lower()
@@ -94,13 +96,15 @@ def launch_interactive_login(platform: str) -> dict:
     except ImportError:
         raise RuntimeError("Playwright is not installed.")
 
-    logger.info(f"Launching interactive login window for {info['name']}...")
+    chosen_browser = (browser_id or browser_manager.get_preferred_browser()).lower()
+    logger.info(f"Launching interactive login window for {info['name']} using browser '{chosen_browser}'...")
 
     with sync_playwright() as p:
-        # Launch visible browser for user to log in
-        browser = p.chromium.launch(
+        browser = browser_manager.launch_browser(
+            p,
+            browser_id=chosen_browser,
             headless=False,
-            args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
+            extra_args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
         )
 
         # Load existing state if available
@@ -116,8 +120,7 @@ def launch_interactive_login(platform: str) -> dict:
 
         page.goto(info["login_url"], timeout=45000)
 
-        # Wait for user to finish login (keep window open until user closes it or navigates to home)
-        logger.info("Waiting for user to log in. Please close the browser window when finished.")
+        logger.info(f"Waiting for user to log in to {info['name']}. Please close the browser window when finished.")
         
         try:
             # Poll until browser/page is closed by user
@@ -139,4 +142,9 @@ def launch_interactive_login(platform: str) -> dict:
             pass
 
     logger.info(f"Saved session state for {plat} to {session_path}")
-    return {"status": "success", "platform": plat, "saved_to": str(session_path)}
+    return {
+        "status": "success",
+        "platform": plat,
+        "browser": chosen_browser,
+        "saved_to": str(session_path),
+    }
