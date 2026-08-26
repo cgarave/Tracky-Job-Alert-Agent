@@ -1,4 +1,4 @@
-"""LinkedIn Philippines job scraper using python-jobspy with guest API fallback."""
+"""LinkedIn Philippines job scraper using python-jobspy with guest API fallback sorted by newest listings."""
 import logging
 import urllib.parse
 from bs4 import BeautifulSoup
@@ -9,17 +9,18 @@ logger = logging.getLogger(__name__)
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "en-US,en;q=0.9",
 }
 
 
 def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict]:
-    """Fallback scraper using LinkedIn public guest job search API."""
+    """Fallback scraper using LinkedIn public guest job search API filtered to past 3 days and sorted by date."""
     encoded_kw = urllib.parse.quote(keyword)
     encoded_loc = urllib.parse.quote(location)
-    url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={encoded_kw}&location={encoded_loc}&start=0"
+    # f_TPR=r259200 (past 72h / 3 days), sortBy=DD (Date Descending / newest first)
+    url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={encoded_kw}&location={encoded_loc}&f_TPR=r259200&sortBy=DD&start=0"
 
     try:
         resp = requests.get(url, headers=HEADERS, timeout=12)
@@ -62,12 +63,12 @@ def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict
 
 def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -> list[dict]:
     """
-    Scrape job listings from LinkedIn Philippines.
+    Scrape fresh job listings from LinkedIn Philippines.
     Returns list of normalized job dicts: {title, company, url, source, location, salary, apply_type}.
     """
     results = []
 
-    # 1. Try python-jobspy
+    # 1. Try python-jobspy with 72-hour freshness limit
     try:
         from jobspy import scrape_jobs
 
@@ -77,6 +78,7 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
             location=location,
             results_wanted=max_results,
             country_indeed="Philippines",
+            hours_old=72,
         )
 
         if not df.empty:
@@ -95,7 +97,7 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                     results.append({
                         "title": title,
                         "company": company,
-                        "url": url,
+                        "url": url.split("?")[0],
                         "source": "LinkedIn",
                         "location": job_loc,
                         "salary": salary_str,
@@ -103,12 +105,12 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                     })
 
             if results:
-                logger.info(f"[LinkedIn] '{keyword}': {len(results)} results (via JobSpy)")
+                logger.info(f"[LinkedIn] '{keyword}': {len(results)} fresh results (via JobSpy)")
                 return results[:max_results]
     except Exception as exc:
         logger.warning(f"[LinkedIn] JobSpy failed for '{keyword}': {exc}")
 
-    # 2. Try guest API fallback
+    # 2. Try guest API fallback with date sort
     results = _scrape_fallback(keyword, location, max_results)
-    logger.info(f"[LinkedIn] '{keyword}': {len(results)} results (via Guest API)")
+    logger.info(f"[LinkedIn] '{keyword}': {len(results)} fresh results (via Guest API)")
     return results[:max_results]
