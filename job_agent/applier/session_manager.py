@@ -82,7 +82,8 @@ def get_all_session_statuses() -> dict:
 def launch_interactive_login(platform: str, browser_id: Optional[str] = None) -> dict:
     """
     Open a visible browser window (Safari, Brave, Chrome, etc.) so the user can log in manually.
-    Saves cookies and storage state once login is completed or browser is closed.
+    Saves cookies and storage state cleanly once login is completed and browser is closed.
+    Avoids active storage polling during interaction to prevent tab flickering and anti-bot challenge loops.
     """
     plat = platform.lower()
     if plat not in PLATFORM_URLS:
@@ -104,44 +105,38 @@ def launch_interactive_login(platform: str, browser_id: Optional[str] = None) ->
             p,
             browser_id=chosen_browser,
             headless=False,
-            extra_args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
         )
 
-        # Load existing state if available
-        context_kwargs = {"viewport": None}
-        if session_path.exists():
-            try:
-                context_kwargs["storage_state"] = str(session_path)
-            except Exception:
-                pass
-
-        context = browser.new_context(**context_kwargs)
+        context = browser.new_context(viewport=None)
         page = context.new_page()
 
-        page.goto(info["login_url"], timeout=45000)
+        try:
+            page.goto(info["login_url"], timeout=45000)
+        except Exception as exc:
+            logger.warning(f"Initial navigation notice for {info['name']}: {exc}")
 
         logger.info(f"Waiting for user to log in to {info['name']}. Please close the browser window when finished.")
-        
+
         try:
-            # Poll until browser/page is closed by user
-            while not page.is_closed():
-                try:
-                    # Save state intermittently if logged in
-                    context.storage_state(path=str(session_path))
-                except Exception:
-                    pass
-                time.sleep(2)
+            # Wait for user to interact and close the page/window naturally
+            # Zero polling / zero CDP queries while open, preventing tab flicker or reloads
+            page.wait_for_close(timeout=0)
         except Exception:
             pass
 
+        # Capture and save authenticated session cookies & storage state
         try:
-            if not page.is_closed():
-                context.storage_state(path=str(session_path))
-                browser.close()
+            context.storage_state(path=str(session_path))
+            logger.info(f"Successfully saved session state for {plat} to {session_path}")
+        except Exception as exc:
+            logger.error(f"Error saving storage state for {plat}: {exc}")
+
+        try:
+            context.close()
+            browser.close()
         except Exception:
             pass
 
-    logger.info(f"Saved session state for {plat} to {session_path}")
     return {
         "status": "success",
         "platform": plat,
