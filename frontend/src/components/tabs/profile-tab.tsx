@@ -1,306 +1,372 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/types";
-import { UploadCloud, FileText, CheckCircle2, Eye, ShieldCheck, Save, Loader2, Sparkles } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  FileCheck,
+  User,
+  Mail,
+  Phone,
+  Briefcase,
+  Banknote,
+  Sparkles,
+  Upload,
+  ShieldCheck,
+  Save,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+} from "lucide-react";
 import { toast } from "sonner";
+import { uploadResume, analyzeResume } from "@/lib/api";
 
 interface ProfileTabProps {
   profile: UserProfile;
-  onSaveProfile: (p: UserProfile) => Promise<void>;
-  onUploadResume: (file: File) => Promise<void>;
-  onAnalyzeResume?: () => Promise<void>;
-  isSaving: boolean;
-  isAnalyzing?: boolean;
+  onSaveProfile: (profile: UserProfile) => Promise<void>;
+  onRefreshProfile: () => void;
+  isLoading: boolean;
 }
 
 export function ProfileTab({
   profile,
   onSaveProfile,
-  onUploadResume,
-  onAnalyzeResume,
-  isSaving,
-  isAnalyzing = false,
+  onRefreshProfile,
+  isLoading,
 }: ProfileTabProps) {
-  const [formData, setFormData] = useState(profile.personal);
-  const [isDragging, setIsDragging] = useState(false);
+  const [formData, setFormData] = useState<UserProfile>(profile);
+  const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isAutofilling, setIsAutofilling] = useState(false);
 
   useEffect(() => {
-    setFormData(profile.personal);
-  }, [profile.personal]);
+    setFormData(profile);
+  }, [profile]);
 
+  const handlePersonalChange = (field: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      personal: {
+        ...prev.personal,
+        [field]: value,
+      },
+    }));
+  };
 
-  const handleInputChange = (field: keyof typeof formData, val: string) => {
-    setFormData((prev) => ({ ...prev, [field]: val }));
+  const handleWorkChange = (field: string, value: string | number | string[]) => {
+    setFormData((prev) => ({
+      ...prev,
+      work_preferences: {
+        ...prev.work_preferences,
+        [field]: value,
+      },
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = { ...profile, personal: formData };
-    await onSaveProfile(updated);
+    setIsSaving(true);
+    try {
+      await onSaveProfile(formData);
+      toast.success("Profile saved successfully!");
+    } catch {
+      toast.error("Failed to save profile.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleFile = async (file?: File) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Only authentic PDF files (.pdf) are supported.");
+
+    if (!file.name.endsWith(".pdf")) {
+      toast.error("Please upload a PDF file only.");
       return;
     }
+
     setIsUploading(true);
     try {
-      await onUploadResume(file);
+      const res = await uploadResume(file);
+      if (res.success) {
+        toast.success(`Resume "${file.name}" uploaded successfully!`);
+        onRefreshProfile();
+      } else {
+        toast.error(res.message || "Failed to upload resume.");
+      }
+    } catch {
+      toast.error("Error uploading resume.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const resume = profile.resume;
-  const hasResume = !!(resume && resume.filename && resume.path);
-  const fileSizeKb = Math.round((resume?.file_size_bytes || 0) / 1024);
+  const handleAutofill = async () => {
+    setIsAutofilling(true);
+    try {
+      const res = await analyzeResume();
+      if (res.success && res.profile) {
+        setFormData(res.profile);
+        toast.success("Profile autofilled from resume analysis!");
+      } else {
+        toast.error(res.message || "Autofill failed.");
+      }
+    } catch {
+      toast.error("Error analyzing resume with AI.");
+    } finally {
+      setIsAutofilling(false);
+    }
+  };
+
+  const resume = profile.resume || { filename: "" };
+  const hasResume = !!resume.filename;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* Left Column: Authentic Resume Uploader */}
-      <div className="lg:col-span-5 flex flex-col gap-6">
-        <Card className="border-indigo-500/20 shadow-indigo-500/5">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <span>📄 Authentic Resume</span>
-              </CardTitle>
-              <Badge variant="default" className="gap-1 font-semibold text-[11px]">
-                <ShieldCheck className="w-3 h-3 text-indigo-400" />
-                <span>Strict File Attach</span>
-              </Badge>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      {/* Authentic Resume Upload Section */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-indigo-400" />
+                <CardTitle className="text-base font-bold text-white tracking-tight">
+                  Authentic Resume (PDF Document)
+                </CardTitle>
+              </div>
+              <CardDescription className="text-xs text-slate-400 mt-1">
+                Upload your genuine PDF resume. Tracky strictly attaches this original file to all automated job applications.
+              </CardDescription>
             </div>
-            <CardDescription className="text-xs">
-              Upload your authentic PDF resume. Tracky strictly attaches this original file and will <strong>never</strong> generate fake or rewritten resumes.
-            </CardDescription>
-          </CardHeader>
 
-          <CardContent className="flex flex-col gap-4">
-            {/* Dropzone */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                if (e.dataTransfer.files.length > 0) {
-                  handleFile(e.dataTransfer.files[0]);
-                }
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              className={`p-8 rounded-xl border-2 border-dashed transition-all text-center cursor-pointer flex flex-col items-center justify-center gap-2.5 ${
-                isDragging
-                  ? "border-indigo-400 bg-indigo-500/10 scale-[1.01]"
-                  : "border-indigo-500/30 bg-slate-950/40 hover:bg-slate-950/70 hover:border-indigo-400"
-              }`}
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    handleFile(e.target.files[0]);
-                  }
-                }}
-              />
-              <div className="w-12 h-12 rounded-xl bg-indigo-500/15 flex items-center justify-center text-indigo-400">
-                {isUploading ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : (
-                  <UploadCloud className="w-6 h-6" />
-                )}
+            {hasResume ? (
+              <Badge variant="success" className="gap-1 text-xs self-start sm:self-auto bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verified PDF Attached</span>
+              </Badge>
+            ) : (
+              <Badge variant="destructive" className="gap-1 text-xs self-start sm:self-auto">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Missing Resume</span>
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-indigo-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">
-                  {isUploading ? "Uploading Resume..." : "Drag & Drop your PDF resume"}
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  or <span className="text-indigo-400 font-medium underline">browse files</span> from your Mac
-                </p>
+                <div className="text-xs font-semibold text-white truncate max-w-sm">
+                  {hasResume ? resume.filename : "No PDF Resume Uploaded"}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {hasResume ? "Active for Easy Apply & automated submissions" : "Upload your genuine PDF to begin applying"}
+                </div>
               </div>
-              <span className="text-[11px] text-slate-500">PDF only (Max 10MB)</span>
             </div>
 
-            {/* Active Resume Card */}
-            {hasResume && (
-              <div className="flex flex-col gap-2.5">
-                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <h5 className="text-xs font-semibold text-white truncate">{resume.filename}</h5>
-                      <p className="text-[11px] text-slate-400">
-                        {fileSizeKb} KB · Uploaded {resume.uploaded_at?.split("T")[0] || "recently"}
-                      </p>
-                    </div>
-                  </div>
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor="resume-upload"
+                className="cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 text-slate-200 hover:bg-slate-800 transition-colors"
+              >
+                <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{isUploading ? "Uploading..." : hasResume ? "Replace PDF" : "Upload PDF"}</span>
+                <input
+                  id="resume-upload"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                  className="hidden"
+                />
+              </Label>
 
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    asChild
-                    className="gap-1 text-xs shrink-0"
-                  >
-                    <a href="/api/resume/view" target="_blank" rel="noopener noreferrer">
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>View PDF</span>
-                    </a>
-                  </Button>
-                </div>
-
+              {hasResume && (
                 <Button
                   type="button"
-                  variant="default"
+                  variant="outline"
                   size="sm"
-                  onClick={onAnalyzeResume}
-                  disabled={isAnalyzing}
-                  className="w-full gap-2 text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-500/20"
+                  onClick={handleAutofill}
+                  disabled={isAutofilling}
+                  className="text-xs gap-1.5 bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-200"
                 >
-                  {isAnalyzing ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  )}
-                  <span>{isAnalyzing ? "Gemini AI Analyzing Resume..." : "✨ Auto-Fill Profile with Gemini AI"}</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{isAutofilling ? "Analyzing..." : "Auto-Fill from Resume"}</span>
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-          </CardContent>
-        </Card>
+      {/* Personal Details */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Personal Information
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Pre-fills employer contact fields across all job board application wizards.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="first_name" className="text-xs text-slate-300">
+                First Name
+              </Label>
+              <Input
+                id="first_name"
+                value={formData.personal?.first_name || ""}
+                onChange={(e) => handlePersonalChange("first_name", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. John"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="last_name" className="text-xs text-slate-300">
+                Last Name
+              </Label>
+              <Input
+                id="last_name"
+                value={formData.personal?.last_name || ""}
+                onChange={(e) => handlePersonalChange("last_name", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. Doe"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email" className="text-xs text-slate-300">
+                Email Address
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.personal?.email || ""}
+                onChange={(e) => handlePersonalChange("email", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. applicant@example.com"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="phone" className="text-xs text-slate-300">
+                Phone Number
+              </Label>
+              <Input
+                id="phone"
+                value={formData.personal?.phone || ""}
+                onChange={(e) => handlePersonalChange("phone", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. +63 912 345 6789"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="headline" className="text-xs text-slate-300">
+                Professional Headline / Target Role
+              </Label>
+              <Input
+                id="headline"
+                value={formData.personal?.headline || ""}
+                onChange={(e) => handlePersonalChange("headline", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. Senior Full Stack Engineer (React / TypeScript / Node.js)"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Work Preferences */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Work & Compensation Preferences
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Automates salary, years of experience, and screening questions during multi-step applications.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="years_of_experience" className="text-xs text-slate-300">
+                Years of Experience
+              </Label>
+              <Input
+                id="years_of_experience"
+                type="number"
+                value={formData.work_preferences?.years_of_experience ?? 3}
+                onChange={(e) => handleWorkChange("years_of_experience", parseInt(e.target.value) || 0)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="expected_salary_php" className="text-xs text-slate-300">
+                Expected Monthly Salary (PHP)
+              </Label>
+              <Input
+                id="expected_salary_php"
+                type="number"
+                value={formData.work_preferences?.expected_salary_php ?? 100000}
+                onChange={(e) => handleWorkChange("expected_salary_php", parseInt(e.target.value) || 0)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="skills" className="text-xs text-slate-300">
+                Primary Skills (comma separated)
+              </Label>
+              <Input
+                id="skills"
+                value={(formData.work_preferences?.skills || []).join(", ")}
+                onChange={(e) =>
+                  handleWorkChange(
+                    "skills",
+                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                  )
+                }
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. React, Next.js, TypeScript, Tailwind CSS, Python, Node.js"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save Button Bar */}
+      <div className="flex items-center justify-end">
+        <Button
+          type="submit"
+          disabled={isSaving || isLoading}
+          className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>{isSaving ? "Saving..." : "Save Profile Details"}</span>
+        </Button>
       </div>
-
-      {/* Right Column: Personal Information Form */}
-      <div className="lg:col-span-7">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">👤 Personal Information</CardTitle>
-            <CardDescription className="text-xs">
-              Your contact details are pre-filled automatically during application form filling.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="first_name">First Name</Label>
-                  <Input
-                    id="first_name"
-                    placeholder="e.g. Juan"
-                    value={formData.first_name || ""}
-                    onChange={(e) => handleInputChange("first_name", e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="last_name">Last Name</Label>
-                  <Input
-                    id="last_name"
-                    placeholder="e.g. Dela Cruz"
-                    value={formData.last_name || ""}
-                    onChange={(e) => handleInputChange("last_name", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="e.g. juan@example.com"
-                    value={formData.email || ""}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="phone">Mobile Phone</Label>
-                  <Input
-                    id="phone"
-                    placeholder="e.g. +639171234567"
-                    value={formData.phone || ""}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="headline">Headline / Target Role</Label>
-                <Input
-                  id="headline"
-                  placeholder="e.g. Senior Full Stack Developer"
-                  value={formData.headline || ""}
-                  onChange={(e) => handleInputChange("headline", e.target.value)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="location">Current Location / City</Label>
-                <Input
-                  id="location"
-                  placeholder="e.g. Metro Manila, Philippines"
-                  value={formData.location || ""}
-                  onChange={(e) => handleInputChange("location", e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="linkedin_url">LinkedIn URL</Label>
-                  <Input
-                    id="linkedin_url"
-                    placeholder="https://linkedin.com/in/..."
-                    value={formData.linkedin_url || ""}
-                    onChange={(e) => handleInputChange("linkedin_url", e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="github_url">GitHub URL</Label>
-                  <Input
-                    id="github_url"
-                    placeholder="https://github.com/..."
-                    value={formData.github_url || ""}
-                    onChange={(e) => handleInputChange("github_url", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="portfolio_url">Portfolio / Personal Website</Label>
-                <Input
-                  id="portfolio_url"
-                  placeholder="https://yourportfolio.com"
-                  value={formData.portfolio_url || ""}
-                  onChange={(e) => handleInputChange("portfolio_url", e.target.value)}
-                />
-              </div>
-
-              <Button type="submit" disabled={isSaving} className="self-end gap-2 mt-2">
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>Save Personal Details</span>
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    </form>
   );
 }

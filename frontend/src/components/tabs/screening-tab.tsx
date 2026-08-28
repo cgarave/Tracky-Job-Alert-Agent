@@ -7,193 +7,160 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Save, Loader2 } from "lucide-react";
+import {
+  Sliders,
+  Shield,
+  Clock,
+  DollarSign,
+  Save,
+  CheckCircle2,
+  FileText,
+} from "lucide-react";
+import { toast } from "sonner";
 
 interface ScreeningTabProps {
   profile: UserProfile;
-  onSaveProfile: (p: UserProfile) => Promise<void>;
-  isSaving: boolean;
+  onSaveProfile: (profile: UserProfile) => Promise<void>;
+  isLoading: boolean;
 }
 
-export function ScreeningTab({ profile, onSaveProfile, isSaving }: ScreeningTabProps) {
-  const [workPrefs, setWorkPrefs] = useState(profile.work_preferences);
-  const [screeningQA, setScreeningQA] = useState(profile.screening_answers);
-  const [skillsStr, setSkillsStr] = useState((profile.work_preferences.skills || []).join(", "));
+export function ScreeningTab({
+  profile,
+  onSaveProfile,
+  isLoading,
+}: ScreeningTabProps) {
+  const [formData, setFormData] = useState<UserProfile>(profile);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    setWorkPrefs(profile.work_preferences);
-    setScreeningQA(profile.screening_answers);
-    setSkillsStr((profile.work_preferences.skills || []).join(", "));
+    setFormData(profile);
   }, [profile]);
 
+  const handleQAChange = (field: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      screening_answers: {
+        ...prev.screening_answers,
+        [field]: value,
+      },
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const skillsList = skillsStr
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const updated: UserProfile = {
-      ...profile,
-      work_preferences: {
-        ...workPrefs,
-        skills: skillsList,
-      },
-      screening_answers: screeningQA,
-    };
-
-    await onSaveProfile(updated);
+    setIsSaving(true);
+    try {
+      await onSaveProfile(formData);
+      toast.success("Screening Q&A answers saved successfully!");
+    } catch {
+      toast.error("Failed to save screening answers.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  const qa = formData.screening_answers || {};
+
   return (
-    <Card className="max-w-4xl">
-      <CardHeader>
-        <CardTitle className="text-base">📝 Screening & Work Preferences</CardTitle>
-        <CardDescription className="text-xs">
-          Pre-configure standard responses for common employer questions (salary expectations, notice period, and technical background).
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {/* Numbers Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="experience">Years of Experience</Label>
-              <Input
-                id="experience"
-                type="number"
-                min="0"
-                max="40"
-                value={workPrefs.years_of_experience || 0}
-                onChange={(e) =>
-                  setWorkPrefs((prev) => ({
-                    ...prev,
-                    years_of_experience: parseInt(e.target.value) || 0,
-                  }))
-                }
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="salary">Expected Monthly Salary (PHP)</Label>
-              <Input
-                id="salary"
-                placeholder="e.g. 120000"
-                value={workPrefs.expected_salary_php || ""}
-                onChange={(e) =>
-                  setWorkPrefs((prev) => ({
-                    ...prev,
-                    expected_salary_php: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="notice">Notice Period (Weeks)</Label>
-              <Input
-                id="notice"
-                type="number"
-                min="0"
-                max="12"
-                value={workPrefs.notice_period_weeks || 4}
-                onChange={(e) =>
-                  setWorkPrefs((prev) => ({
-                    ...prev,
-                    notice_period_weeks: parseInt(e.target.value) || 4,
-                  }))
-                }
-              />
-            </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Screening & Work Preferences
+            </CardTitle>
           </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Configure standardized answers to common employer screening questionnaires for Indeed, JobStreet, and OnlineJobs.
+          </CardDescription>
+        </CardHeader>
 
-          {/* Preferences Row */}
+        <CardContent className="pt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="auth">Work Authorization</Label>
+              <Label htmlFor="notice_period" className="text-xs text-slate-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Notice Period / Availability</span>
+              </Label>
               <Input
-                id="auth"
-                value={workPrefs.work_authorization || ""}
-                onChange={(e) =>
-                  setWorkPrefs((prev) => ({
-                    ...prev,
-                    work_authorization: e.target.value,
-                  }))
-                }
+                id="notice_period"
+                value={qa.notice_period || "30 days"}
+                onChange={(e) => handleQAChange("notice_period", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. Immediate, 15 days, 30 days"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="remote">Workplace Preference</Label>
-              <select
-                id="remote"
-                value={workPrefs.remote_preference || "Remote / Hybrid"}
-                onChange={(e) =>
-                  setWorkPrefs((prev) => ({
-                    ...prev,
-                    remote_preference: e.target.value,
-                  }))
-                }
-                className="h-10 px-3.5 rounded-lg border border-white/10 bg-slate-950/60 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="Remote / Hybrid">Remote / Hybrid</option>
-                <option value="Fully Remote">Fully Remote Only</option>
-                <option value="On-site / Hybrid">On-site / Hybrid</option>
-              </select>
+              <Label htmlFor="work_auth" className="text-xs text-slate-300 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                <span>Work Authorization</span>
+              </Label>
+              <Input
+                id="work_auth"
+                value={qa.work_authorization || "Yes (Filipino Citizen)"}
+                onChange={(e) => handleQAChange("work_authorization", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. Yes (Filipino Citizen)"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="shift_pref" className="text-xs text-slate-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Shift & Schedule Preference</span>
+              </Label>
+              <Input
+                id="shift_pref"
+                value={qa.shift_preference || "Flexible / Day / Night Shift"}
+                onChange={(e) => handleQAChange("shift_preference", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. Day shift, US hours, Flexible"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="portfolio_url" className="text-xs text-slate-300 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                <span>Portfolio / GitHub / Website URL</span>
+              </Label>
+              <Input
+                id="portfolio_url"
+                value={qa.portfolio_url || ""}
+                onChange={(e) => handleQAChange("portfolio_url", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. https://github.com/username"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="why_hire_me" className="text-xs text-slate-300">
+                Default Cover Pitch & Value Proposition (Why Hire Me)
+              </Label>
+              <Textarea
+                id="why_hire_me"
+                rows={4}
+                value={qa.why_hire_me || ""}
+                onChange={(e) => handleQAChange("why_hire_me", e.target.value)}
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100 font-sans leading-relaxed"
+                placeholder="Describe your core strengths, project achievements, and value proposition for prospective employers."
+              />
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Skills Input */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="skills">Key Skills (Comma separated)</Label>
-            <Input
-              id="skills"
-              placeholder="Python, FastAPI, React, TypeScript, SQL, Docker"
-              value={skillsStr}
-              onChange={(e) => setSkillsStr(e.target.value)}
-            />
-            <span className="text-[11px] text-slate-400">
-              Used to match job descriptions and automatically highlight strengths in application letters.
-            </span>
-          </div>
-
-          {/* Screening Free-Form Answers */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="why_hire">Standard "Why should we hire you?" Pitch Note</Label>
-            <Textarea
-              id="why_hire"
-              rows={4}
-              placeholder="Summarize your key achievements, reliability, and value proposition..."
-              value={screeningQA.why_hire_me || ""}
-              onChange={(e) =>
-                setScreeningQA((prev) => ({ ...prev, why_hire_me: e.target.value }))
-              }
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="salary_note">Salary Expectation Note</Label>
-            <Input
-              id="salary_note"
-              placeholder="e.g. My expected salary is negotiable depending on overall benefits package."
-              value={screeningQA.salary_expectation || ""}
-              onChange={(e) =>
-                setScreeningQA((prev) => ({
-                  ...prev,
-                  salary_expectation: e.target.value,
-                }))
-              }
-            />
-          </div>
-
-          <Button type="submit" disabled={isSaving} className="self-end gap-2 mt-2">
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Save Screening Preferences</span>
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      <div className="flex items-center justify-end">
+        <Button
+          type="submit"
+          disabled={isSaving || isLoading}
+          className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>{isSaving ? "Saving..." : "Save Screening Q&A"}</span>
+        </Button>
+      </div>
+    </form>
   );
 }

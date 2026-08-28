@@ -1,166 +1,221 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { UserProfile } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Bot, Shield, Save, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Bot,
+  ShieldAlert,
+  Filter,
+  Save,
+  CheckCircle2,
+  Sliders,
+  AlertTriangle,
+} from "lucide-react";
+import { toast } from "sonner";
 
 interface AutoApplyTabProps {
   profile: UserProfile;
-  onSaveProfile: (p: UserProfile) => Promise<void>;
-  isSaving: boolean;
+  onSaveProfile: (profile: UserProfile) => Promise<void>;
+  isLoading: boolean;
 }
 
-export function AutoApplyTab({ profile, onSaveProfile, isSaving }: AutoApplyTabProps) {
-  const [autoApply, setAutoApply] = useState(profile.auto_apply);
-  const [blacklistComp, setBlacklistComp] = useState(
-    (profile.auto_apply.blacklisted_companies || []).join(", ")
-  );
-  const [blacklistKw, setBlacklistKw] = useState(
-    (profile.auto_apply.blacklisted_keywords || []).join(", ")
-  );
+export function AutoApplyTab({
+  profile,
+  onSaveProfile,
+  isLoading,
+}: AutoApplyTabProps) {
+  const [formData, setFormData] = useState<UserProfile>(profile);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setFormData(profile);
+  }, [profile]);
+
+  const handleAutoApplyChange = (
+    field: string,
+    value: boolean | number | string[]
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      auto_apply: {
+        ...prev.auto_apply,
+        [field]: value,
+      },
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const compList = blacklistComp
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const kwList = blacklistKw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    setIsSaving(true);
+    try {
+      await onSaveProfile(formData);
+      toast.success("Auto-Apply settings updated!");
+    } catch {
+      toast.error("Failed to update auto-apply settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    const updated: UserProfile = {
-      ...profile,
-      auto_apply: {
-        ...autoApply,
-        blacklisted_companies: compList,
-        blacklisted_keywords: kwList,
-      },
-    };
-
-    await onSaveProfile(updated);
+  const auto = formData.auto_apply || {
+    enabled: false,
+    daily_cap: 5,
+    match_threshold: 75,
+    blacklisted_companies: [],
+    blacklisted_keywords: [],
   };
 
   return (
-    <Card className="max-w-3xl">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
-              <Bot className="w-4 h-4" />
-            </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      {/* Master Toggle Banner */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-base">🤖 Autonomous Auto-Apply Guardrails</CardTitle>
-              <CardDescription className="text-xs">
-                Configure safety parameters and automatic submission rules.
+              <div className="flex items-center gap-2">
+                <Bot className="w-5 h-5 text-indigo-400" />
+                <CardTitle className="text-base font-bold text-white tracking-tight">
+                  Autonomous Auto-Apply Engine
+                </CardTitle>
+              </div>
+              <CardDescription className="text-xs text-slate-400 mt-1">
+                Automatically submits applications for newly scraped job matches using your authentic PDF resume.
               </CardDescription>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-slate-300">
-              {autoApply.enabled ? (
-                <span className="text-emerald-400">Active (Auto-Pilot)</span>
-              ) : (
-                <span className="text-slate-500">Disabled</span>
-              )}
-            </span>
-            <Switch
-              checked={autoApply.enabled}
-              onCheckedChange={(val) =>
-                setAutoApply((prev) => ({ ...prev, enabled: val }))
-              }
-            />
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-slate-300">
+                {auto.enabled ? "Auto-Apply Active" : "Auto-Apply Paused"}
+              </span>
+              <Switch
+                checked={auto.enabled}
+                onCheckedChange={(checked) => handleAutoApplyChange("enabled", checked)}
+              />
+            </div>
           </div>
-        </div>
-      </CardHeader>
+        </CardHeader>
 
-      <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 flex items-start gap-3">
-            <Shield className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-300 leading-relaxed">
-              When enabled, Tracky automatically submits your authentic PDF resume to new job listings that match your criteria and support 1-click apply (*Indeed Easy Apply*, *JobStreet Quick Apply*, *OnlineJobs.ph*).
-            </p>
-          </div>
-
+        <CardContent className="pt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="daily_cap">Daily Application Cap</Label>
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-1.5">
+              <Label htmlFor="daily_cap" className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                <span>Daily Application Cap</span>
+                <Badge variant="outline" className="text-[10px] font-mono bg-slate-900 text-slate-300 border-slate-700">
+                  {auto.daily_cap || 5} per day
+                </Badge>
+              </Label>
               <Input
                 id="daily_cap"
                 type="number"
-                min="1"
-                max="50"
-                value={autoApply.daily_cap || 5}
-                onChange={(e) =>
-                  setAutoApply((prev) => ({
-                    ...prev,
-                    daily_cap: parseInt(e.target.value) || 5,
-                  }))
-                }
+                min={1}
+                max={30}
+                value={auto.daily_cap ?? 5}
+                onChange={(e) => handleAutoApplyChange("daily_cap", parseInt(e.target.value) || 1)}
+                className="bg-slate-900 border-slate-800 text-xs text-slate-100 mt-1"
               />
               <span className="text-[11px] text-slate-500">
-                Recommended: 5–15 per day to maintain account health.
+                Limits automated daily submissions to maintain account safety.
               </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-1.5">
+              <Label htmlFor="match_threshold" className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                <span>Match Score Threshold</span>
+                <Badge variant="outline" className="text-[10px] font-mono bg-slate-900 text-slate-300 border-slate-700">
+                  {auto.match_threshold || 75}% match
+                </Badge>
+              </Label>
+              <Input
+                id="match_threshold"
+                type="number"
+                min={50}
+                max={100}
+                value={auto.match_threshold ?? 75}
+                onChange={(e) => handleAutoApplyChange("match_threshold", parseInt(e.target.value) || 50)}
+                className="bg-slate-900 border-slate-800 text-xs text-slate-100 mt-1"
+              />
+              <span className="text-[11px] text-slate-500">
+                Minimum keyword and title match required before auto-applying.
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Safety Filters & Blacklists */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Safety Filters & Blacklists
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Prevent automated applications to specific companies, staffing agencies, or unwanted title keywords.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="blacklisted_companies" className="text-xs text-slate-300 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <span>Blacklisted Companies (comma separated)</span>
+              </Label>
+              <Input
+                id="blacklisted_companies"
+                value={(auto.blacklisted_companies || []).join(", ")}
+                onChange={(e) =>
+                  handleAutoApplyChange(
+                    "blacklisted_companies",
+                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                  )
+                }
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. Acme Staffing, AgencyX, CyberRecruit"
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="match_score">Minimum Match Score (%)</Label>
+              <Label htmlFor="blacklisted_keywords" className="text-xs text-slate-300 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <span>Blacklisted Title Keywords (comma separated)</span>
+              </Label>
               <Input
-                id="match_score"
-                type="number"
-                min="50"
-                max="100"
-                value={autoApply.match_threshold || 75}
+                id="blacklisted_keywords"
+                value={(auto.blacklisted_keywords || []).join(", ")}
                 onChange={(e) =>
-                  setAutoApply((prev) => ({
-                    ...prev,
-                    match_threshold: parseInt(e.target.value) || 75,
-                  }))
+                  handleAutoApplyChange(
+                    "blacklisted_keywords",
+                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                  )
                 }
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
+                placeholder="e.g. unpaid, intern, commission-only, cold calling"
               />
-              <span className="text-[11px] text-slate-500">
-                Only apply if keyword relevance exceeds this threshold.
-              </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="blacklist_comp">Blacklisted Companies (Comma-separated)</Label>
-            <Input
-              id="blacklist_comp"
-              placeholder="e.g. SpamCorp, LowPay LLC, Unnamed Agency"
-              value={blacklistComp}
-              onChange={(e) => setBlacklistComp(e.target.value)}
-            />
-            <span className="text-[11px] text-slate-500">
-              Tracky will never apply to jobs from these employers.
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="blacklist_kw">Excluded Title Keywords (Comma-separated)</Label>
-            <Input
-              id="blacklist_kw"
-              placeholder="e.g. unpaid, internship, 6-day workweek, graveyard"
-              value={blacklistKw}
-              onChange={(e) => setBlacklistKw(e.target.value)}
-            />
-          </div>
-
-          <Button type="submit" disabled={isSaving} className="self-end gap-2 mt-2">
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>Save Auto-Apply Rules</span>
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      {/* Save Action */}
+      <div className="flex items-center justify-end">
+        <Button
+          type="submit"
+          disabled={isSaving || isLoading}
+          className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>{isSaving ? "Saving..." : "Save Auto-Apply Configuration"}</span>
+        </Button>
+      </div>
+    </form>
   );
 }

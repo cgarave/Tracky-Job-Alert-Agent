@@ -50,10 +50,10 @@ export function Sidebar({
   ];
 
   return (
-    <aside className="w-72 border-r border-white/10 bg-slate-950/80 backdrop-blur-2xl flex flex-col p-5 h-screen sticky top-0 z-30">
+    <aside className="w-72 border-r border-slate-800 bg-slate-950/80 backdrop-blur-2xl flex flex-col p-5 h-screen sticky top-0 z-30">
       {/* Brand Header */}
-      <div className="flex items-center gap-3.5 pb-5 border-b border-white/10 mb-5">
-        <div className="relative w-11 h-11 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/20 border border-white/10">
+      <div className="flex items-center gap-3.5 pb-5 border-b border-slate-800 mb-5">
+        <div className="relative w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-indigo-500/10 border border-slate-800">
           <Image
             src="/logo.png"
             alt="Tracky Logo"
@@ -63,13 +63,13 @@ export function Sidebar({
           />
         </div>
         <div>
-          <h2 className="font-bold text-lg text-white tracking-tight leading-tight">Tracky</h2>
+          <h2 className="font-bold text-base text-white tracking-tight leading-tight">Tracky</h2>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className={cn(
-              "w-2 h-2 rounded-full animate-pulse",
+              "w-2 h-2 rounded-full",
               isPaused ? "bg-amber-400" : "bg-emerald-400 shadow-[0_0_8px_#34d399]"
             )} />
-            <span className={cn("text-xs font-semibold", isPaused ? "text-amber-400" : "text-emerald-400")}>
+            <span className={cn("text-[11px] font-medium", isPaused ? "text-amber-400" : "text-emerald-400")}>
               {isPaused ? "Paused" : "Active"}
             </span>
           </div>
@@ -77,7 +77,7 @@ export function Sidebar({
       </div>
 
       {/* Nav Menu */}
-      <nav className="flex flex-col gap-1.5 flex-1 overflow-y-auto pr-1">
+      <nav className="flex flex-col gap-1 flex-1 overflow-y-auto pr-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -86,16 +86,16 @@ export function Sidebar({
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={cn(
-                "flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left group",
+                "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left group",
                 isActive
                   ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 shadow-sm"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent"
+                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-900 border border-transparent"
               )}
             >
-              <Icon className={cn("w-4 h-4 transition-colors", isActive ? "text-indigo-400" : "text-slate-400 group-hover:text-slate-200")} />
+              <Icon className={cn("w-4 h-4 transition-colors", isActive ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300")} />
               <span className="flex-1 truncate">{item.label}</span>
               {item.badge !== undefined && item.badge > 0 && (
-                <Badge variant={item.badgeVariant || "secondary"} className="text-[10px] px-2 py-0.5 h-5 font-mono">
+                <Badge variant={item.badgeVariant || "secondary"} className="text-[10px] px-1.5 py-0 h-4 font-mono">
                   {item.badge}
                 </Badge>
               )}
@@ -105,9 +105,9 @@ export function Sidebar({
       </nav>
 
       {/* Footer info & Scan Now Action */}
-      <div className="pt-4 border-t border-white/10 flex flex-col gap-3 mt-auto">
-        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-white/5 text-xs text-slate-400">
-          <span className="text-base">📄</span>
+      <div className="pt-4 border-t border-slate-800 flex flex-col gap-3 mt-auto">
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-400">
+          <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
           <span className="truncate flex-1 font-medium text-slate-300">
             {resumeName || "No Resume Uploaded"}
           </span>
@@ -121,9 +121,9 @@ export function Sidebar({
         <Button
           onClick={onScanNow}
           disabled={isScanning}
-          className="w-full gap-2 font-semibold shadow-lg shadow-indigo-500/25"
+          className="w-full gap-2 font-medium text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
         >
-          <Zap className={cn("w-4 h-4 fill-current", isScanning && "animate-spin")} />
+          <Zap className={cn("w-3.5 h-3.5 fill-current", isScanning && "animate-spin")} />
           <span>{isScanning ? "Scanning..." : "Run Scan Now"}</span>
         </Button>
       </div>

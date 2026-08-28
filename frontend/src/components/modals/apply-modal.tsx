@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText,
+  FileCheck,
   Rocket,
   ExternalLink,
   ShieldCheck,
@@ -23,7 +23,13 @@ import {
   Loader2,
   Copy,
   Check,
-  Sparkles,
+  Building2,
+  MapPin,
+  User,
+  Mail,
+  Phone,
+  Briefcase,
+  Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -80,41 +86,47 @@ export function ApplyModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto bg-slate-900 border-slate-800 text-slate-100 p-6 shadow-2xl">
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto bg-slate-900 border-slate-800 text-slate-100 p-6 shadow-2xl backdrop-blur-2xl">
         <DialogHeader>
-          <div className="flex items-center gap-2 mb-1">
-            <Badge variant="outline" className="bg-slate-800 border-slate-700 text-indigo-400">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Badge variant="outline" className="bg-slate-950 border-slate-800 text-slate-300 text-[10px]">
               {job.source}
             </Badge>
-            {job.location && <span className="text-xs text-slate-400">📍 {job.location}</span>}
+            {job.location && (
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-slate-500" />
+                <span>{job.location}</span>
+              </span>
+            )}
           </div>
-          <DialogTitle className="text-lg font-bold text-white">{job.title}</DialogTitle>
-          <DialogDescription className="text-xs font-medium text-slate-300">
-            🏢 {job.company}
+          <DialogTitle className="text-lg font-bold text-white tracking-tight">{job.title}</DialogTitle>
+          <DialogDescription className="text-xs font-medium text-slate-400 flex items-center gap-1.5 mt-1">
+            <Building2 className="w-3.5 h-3.5 text-slate-500" />
+            <span>{job.company}</span>
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
           {/* Authentic Resume Indicator */}
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-slate-400">Attached Authentic Resume:</Label>
+            <Label className="text-xs text-slate-400">Attached Authentic Resume</Label>
             {hasResume ? (
               <div className="p-3 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <FileCheck className="w-4 h-4 text-emerald-400" />
                   <span className="text-xs font-semibold text-white truncate max-w-xs">
                     {resume.filename}
                   </span>
                 </div>
-                <Badge variant="success" className="gap-1 text-[10px]">
+                <Badge variant="success" className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                   <ShieldCheck className="w-3 h-3" />
-                  <span>Verified PDF</span>
+                  <span>Verified PDF Attached</span>
                 </Badge>
               </div>
             ) : (
               <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2.5 text-rose-300 text-xs">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>No resume uploaded! Please upload a PDF in Profile tab before automated apply.</span>
+                <span>No resume uploaded. Please upload a PDF in Profile tab before automated apply.</span>
               </div>
             )}
           </div>
@@ -123,17 +135,17 @@ export function ApplyModal({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="custom_pitch" className="text-xs text-slate-400">
-                Application Pitch / Cover Note (Editable):
+                Application Pitch / Cover Note (Editable)
               </Label>
               <button
                 type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(pitch);
                   setCopied(true);
-                  toast.success("Pitch copied!");
+                  toast.success("Pitch copied to clipboard!");
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
               >
                 {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                 <span>{copied ? "Copied" : "Copy Pitch"}</span>
@@ -144,56 +156,59 @@ export function ApplyModal({
               rows={5}
               value={pitch}
               onChange={(e) => setPitch(e.target.value)}
-              className="text-xs leading-relaxed font-normal font-sans bg-slate-950/60 border-slate-800"
+              className="text-xs leading-relaxed font-normal font-sans bg-slate-950/60 border-slate-800 text-slate-100"
             />
           </div>
 
           {/* Profile Details Preview */}
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-slate-400">Pre-filled Profile Context:</Label>
+            <Label className="text-xs text-slate-400">Pre-filled Profile Context</Label>
             <div className="flex flex-wrap gap-1.5">
-              <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700">
-                👤 {profile.personal.first_name} {profile.personal.last_name || "Applicant"}
+              <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                <User className="w-3 h-3 text-slate-400" />
+                <span>{profile.personal?.first_name} {profile.personal?.last_name || "Applicant"}</span>
               </span>
-              {profile.personal.email && (
-                <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700">
-                  ✉️ {profile.personal.email}
+              {profile.personal?.email && (
+                <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                  <Mail className="w-3 h-3 text-slate-400" />
+                  <span>{profile.personal.email}</span>
                 </span>
               )}
-              {profile.personal.phone && (
-                <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700">
-                  📞 {profile.personal.phone}
+              {profile.personal?.phone && (
+                <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                  <Phone className="w-3 h-3 text-slate-400" />
+                  <span>{profile.personal.phone}</span>
                 </span>
               )}
-              <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700">
-                💼 {profile.work_preferences.years_of_experience || 0} yrs exp
+              <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                <Briefcase className="w-3 h-3 text-slate-400" />
+                <span>{profile.work_preferences?.years_of_experience || 0} yrs exp</span>
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700">
-                💰 PHP {profile.work_preferences.expected_salary_php || "100,000"}
+              <span className="px-2.5 py-1 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 border border-slate-700 flex items-center gap-1.5 font-mono">
+                <Banknote className="w-3 h-3 text-emerald-400" />
+                <span>PHP {profile.work_preferences?.expected_salary_php?.toLocaleString() || "100,000"}</span>
               </span>
             </div>
           </div>
         </div>
 
         <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-800">
-          {/* Option B: Copy & Open Tab */}
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={handleCopyAndOpen}
-            className="w-full sm:w-auto gap-1.5 text-xs bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-200"
-            title="Copies pitch to clipboard and opens the job in a new tab in your browser"
+            className="w-full sm:w-auto gap-1.5 text-xs bg-slate-950 border-slate-800 hover:bg-slate-850 text-slate-200"
+            title="Copies pitch to clipboard and opens the job in a new tab"
           >
             <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
             <span>Open in Tab & Copy Pitch</span>
           </Button>
 
-          {/* Option A: Automated Apply */}
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !hasResume}
-            className="w-full sm:w-auto gap-2 font-semibold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
+            className="w-full sm:w-auto gap-1.5 font-medium text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm"
           >
             {isSubmitting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

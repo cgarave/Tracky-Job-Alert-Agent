@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { PlatformSession, BrowserInfo } from "@/types";
+import { PlatformSession } from "@/types";
 import {
   Globe,
   Briefcase,
@@ -10,16 +10,9 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Compass,
-  ShieldCheck,
-  CircleDot,
-  Flame,
-  Sparkles,
-  ChevronDown,
-  Check,
-  Layers,
   ExternalLink,
-  SlidersHorizontal,
+  ShieldCheck,
+  Check,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,10 +20,7 @@ import { Badge } from "@/components/ui/badge";
 
 interface SessionsTabProps {
   sessions: Record<string, PlatformSession>;
-  browsers?: BrowserInfo[];
-  preferredBrowser?: string;
-  onSelectBrowser?: (browserId: string) => Promise<void>;
-  onLaunchLogin: (platform: string, browserId?: string) => Promise<void>;
+  onLaunchLogin: (platform: string) => Promise<void>;
   onOpenConnectModal: (platformKey: string) => void;
   onRefresh: () => void;
   isLoading: boolean;
@@ -38,43 +28,20 @@ interface SessionsTabProps {
 
 export function SessionsTab({
   sessions,
-  browsers = [],
-  preferredBrowser = "brave",
-  onSelectBrowser,
   onLaunchLogin,
   onOpenConnectModal,
   onRefresh,
   isLoading,
 }: SessionsTabProps) {
   const [loggingInPlatform, setLoggingInPlatform] = useState<string | null>(null);
-  const [openDropdownPlatform, setOpenDropdownPlatform] = useState<string | null>(null);
 
-  const handleQuickLogin = async (platformKey: string, customBrowserId?: string) => {
+  const handleQuickLogin = async (platformKey: string) => {
     setLoggingInPlatform(platformKey);
-    setOpenDropdownPlatform(null);
     try {
-      await onLaunchLogin(platformKey, customBrowserId || preferredBrowser);
+      await onLaunchLogin(platformKey);
       onOpenConnectModal(platformKey);
     } finally {
       setLoggingInPlatform(null);
-    }
-  };
-
-  const getBrowserIcon = (id: string) => {
-    switch (id.toLowerCase()) {
-      case "safari":
-        return <Compass className="w-4 h-4 text-blue-400" />;
-      case "brave":
-        return <ShieldCheck className="w-4 h-4 text-orange-400" />;
-      case "chrome":
-        return <CircleDot className="w-4 h-4 text-emerald-400" />;
-      case "firefox":
-        return <Flame className="w-4 h-4 text-amber-400" />;
-      case "edge":
-      case "arc":
-        return <Sparkles className="w-4 h-4 text-cyan-400" />;
-      default:
-        return <Layers className="w-4 h-4 text-indigo-400" />;
     }
   };
 
@@ -84,7 +51,7 @@ export function SessionsTab({
       name: "Indeed.ph",
       loginUrl: "https://secure.indeed.com/account/login",
       icon: Globe,
-      color: "text-blue-400 bg-blue-500/15 border-blue-500/30",
+      color: "text-blue-400 bg-blue-500/10 border-blue-500/20",
       desc: "Authenticates for Indeed Easy Apply multi-step application submissions.",
     },
     {
@@ -92,7 +59,7 @@ export function SessionsTab({
       name: "JobStreet.ph",
       loginUrl: "https://www.jobstreet.com.ph/login",
       icon: Briefcase,
-      color: "text-pink-400 bg-pink-500/15 border-pink-500/30",
+      color: "text-pink-400 bg-pink-500/10 border-pink-500/20",
       desc: "Authenticates for JobStreet Quick Apply single-click applications.",
     },
     {
@@ -100,7 +67,7 @@ export function SessionsTab({
       name: "LinkedIn.com",
       loginUrl: "https://www.linkedin.com/login",
       icon: Globe,
-      color: "text-sky-400 bg-sky-500/15 border-sky-500/30",
+      color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
       desc: "Authenticates for LinkedIn Easy Apply and candidate submissions.",
     },
     {
@@ -108,211 +75,112 @@ export function SessionsTab({
       name: "OnlineJobs.ph",
       loginUrl: "https://www.onlinejobs.ph/jobseekers/login",
       icon: Laptop,
-      color: "text-emerald-400 bg-emerald-500/15 border-emerald-500/30",
+      color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
       desc: "Authenticates for OnlineJobs.ph direct jobseeker messaging and employer pitches.",
     },
   ];
-
-  const currentBrowserObj = browsers.find((b) => b.id === preferredBrowser) || {
-    id: preferredBrowser,
-    name: preferredBrowser.charAt(0).toUpperCase() + preferredBrowser.slice(1),
-    installed: true,
-  };
 
   return (
     <div className="flex flex-col gap-6">
       {/* Top Header & Refresh */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <span>Platform Account Sessions</span>
-          </h2>
-          <p className="text-xs text-slate-400">
-            Connect your job board accounts via <strong>New Tab</strong> or the <strong>1-Click Cookie Sync Helper</strong>. Tracky reuses these authenticated sessions so you never get challenged by 2FA during automated runs.
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-base font-bold text-white tracking-tight">
+              Platform Account Sessions
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Connect your job board accounts by logging in via <strong>New Tab</strong> or using the session cookie helper. Tracky reuses these authenticated sessions so you never get challenged during automated runs.
           </p>
         </div>
 
-        <Button variant="secondary" size="sm" onClick={onRefresh} disabled={isLoading} className="gap-2 self-start md:self-auto">
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="gap-2 self-start md:self-auto bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${isLoading ? "animate-spin" : ""}`} />
           <span>Refresh Status</span>
         </Button>
       </div>
 
-      {/* Browser Selection Banner */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-md">
-        <CardContent className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-300">Default Login Browser:</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {browsers.map((b) => {
-                const isSelected = b.id === preferredBrowser;
-                return (
-                  <button
-                    key={b.id}
-                    onClick={() => onSelectBrowser && onSelectBrowser(b.id)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border ${
-                      isSelected
-                        ? "bg-indigo-600/30 border-indigo-500/60 text-white shadow-sm ring-1 ring-indigo-500/40"
-                        : b.installed
-                        ? "bg-slate-800/70 border-slate-700/60 text-slate-300 hover:bg-slate-800 hover:text-white"
-                        : "bg-slate-900/40 border-slate-800/50 text-slate-500 cursor-not-allowed opacity-50"
-                    }`}
-                    title={b.description || b.name}
-                    disabled={!b.installed}
-                  >
-                    {getBrowserIcon(b.id)}
-                    <span>{b.name}</span>
-                    {b.installed && !isSelected && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" title="Installed on your machine" />
-                    )}
-                    {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400 ml-0.5" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="text-[11px] text-slate-400 flex items-center gap-2">
-            <span>Active Engine:</span>
-            <Badge variant="outline" className="text-[10px] uppercase font-mono tracking-wider bg-slate-800/80 text-slate-300 border-slate-700">
-              {currentBrowserObj.name}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Platform Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {platforms.map((p) => {
           const sess = sessions[p.key] || { connected: false, updated_at: "" };
           const Icon = p.icon;
           const isLoggingIn = loggingInPlatform === p.key;
-          const isDropdownOpen = openDropdownPlatform === p.key;
 
           return (
-            <Card key={p.key} className="flex flex-col justify-between relative bg-slate-900/40 border-slate-800 hover:border-slate-700/80 transition-all">
-              <CardHeader>
-                <div className="flex items-center justify-between mb-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${p.color}`}>
-                    <Icon className="w-5 h-5" />
+            <Card
+              key={p.key}
+              className="flex flex-col justify-between relative bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80 transition-all backdrop-blur-xl shadow-lg"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between mb-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${p.color}`}>
+                    <Icon className="w-4 h-4" />
                   </div>
                   {sess.connected ? (
-                    <Badge variant="success" className="gap-1 text-[11px]">
+                    <Badge variant="success" className="gap-1 text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                       <CheckCircle2 className="w-3 h-3" />
                       <span>Connected</span>
                     </Badge>
                   ) : (
-                    <Badge variant="destructive" className="gap-1 text-[11px]">
-                      <AlertCircle className="w-3 h-3" />
+                    <Badge variant="outline" className="gap-1 text-[10px] font-medium bg-slate-950 text-slate-400 border-slate-800">
+                      <AlertCircle className="w-3 h-3 text-slate-500" />
                       <span>Not Connected</span>
                     </Badge>
                   )}
                 </div>
-                <CardTitle className="text-base">{p.name}</CardTitle>
-                <CardDescription className="text-xs">{p.desc}</CardDescription>
+                <CardTitle className="text-sm font-semibold text-white">{p.name}</CardTitle>
+                <CardDescription className="text-xs text-slate-400 leading-relaxed mt-1">{p.desc}</CardDescription>
               </CardHeader>
 
               <CardContent className="pt-0">
-                <div className="pt-3 border-t border-white/5 flex flex-col gap-3">
+                <div className="pt-3 border-t border-slate-800/60 flex flex-col gap-3">
                   <div className="text-[11px] text-slate-400 flex items-center justify-between">
                     {sess.updated_at ? (
-                      <span>
+                      <span className="text-slate-400">
                         Saved: <strong className="text-slate-300 font-mono">{sess.updated_at}</strong>
                       </span>
                     ) : (
-                      <span>Never logged in</span>
+                      <span className="text-slate-500">No session saved</span>
                     )}
                     {sess.cookie_count ? (
-                      <span className="text-emerald-400 font-mono text-[10px]">{sess.cookie_count} cookies</span>
+                      <span className="text-emerald-400 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        {sess.cookie_count} cookies
+                      </span>
                     ) : null}
                   </div>
 
-                  {/* Primary Connection Actions */}
+                  {/* Connection Action Buttons */}
                   <div className="flex flex-col gap-2">
-                    {/* Interactive Setup & Sync Modal Launcher */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(p.loginUrl, "_blank", "noopener,noreferrer")}
+                      className="w-full text-xs h-8 gap-1.5 text-slate-200 bg-slate-950 border-slate-800 hover:bg-slate-850 hover:border-slate-700 transition-colors"
+                      title="Open official login page in new browser tab"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Open in New Tab</span>
+                    </Button>
+
                     <Button
                       variant="default"
                       size="sm"
                       onClick={() => onOpenConnectModal(p.key)}
-                      className="w-full gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-md shadow-indigo-500/20"
+                      disabled={isLoggingIn}
+                      className="w-full gap-1.5 text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm transition-colors"
                     >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      <span>{sess.connected ? "⚙️ Manage & Re-sync" : "🔑 Connect Account"}</span>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>{sess.connected ? "Manage & Re-sync" : "Verify & Save Session"}</span>
                     </Button>
-
-                    {/* Quick Secondary Actions: Open New Tab / Quick Helper */}
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(p.loginUrl, "_blank", "noopener,noreferrer")}
-                        className="flex-1 text-[11px] h-7 gap-1 text-slate-300 border-slate-800 hover:bg-slate-800"
-                        title="Open official login page in new browser tab"
-                      >
-                        <ExternalLink className="w-3 h-3 text-indigo-400" />
-                        <span>New Tab ↗</span>
-                      </Button>
-
-                      {/* Split button for Quick Helper Launch */}
-                      <div className="relative flex items-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleQuickLogin(p.key)}
-                          disabled={isLoggingIn}
-                          className="text-[11px] h-7 px-2 gap-1 rounded-r-none border-r-0 border-slate-800 hover:bg-slate-800 text-slate-300"
-                          title="Launch 1-Click Cookie Sync Helper Window"
-                        >
-                          {getBrowserIcon(preferredBrowser)}
-                          <span>Sync ({currentBrowserObj.name.split(" ")[0]})</span>
-                        </Button>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setOpenDropdownPlatform(isDropdownOpen ? null : p.key)}
-                          disabled={isLoggingIn}
-                          className="px-1.5 h-7 text-xs rounded-l-none border-l border-slate-700/80 border-slate-800 hover:bg-slate-800 text-slate-400"
-                          title="Choose browser for sync"
-                        >
-                          <ChevronDown className="w-3 h-3 text-slate-400" />
-                        </Button>
-
-                        {/* Popover Dropdown for Alternative Browsers */}
-                        {isDropdownOpen && (
-                          <div className="absolute right-0 bottom-full mb-2 w-56 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl p-1.5 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100">
-                            <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                              Launch Sync using:
-                            </div>
-                            {browsers.map((b) => (
-                              <button
-                                key={b.id}
-                                disabled={!b.installed || isLoggingIn}
-                                onClick={() => handleQuickLogin(p.key, b.id)}
-                                className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                                  !b.installed
-                                    ? "opacity-40 cursor-not-allowed text-slate-500"
-                                    : "text-slate-200 hover:bg-indigo-600/30 hover:text-white"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {getBrowserIcon(b.id)}
-                                  <span>{b.name}</span>
-                                </div>
-                                {b.id === preferredBrowser && (
-                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
-                                    Default
-                                  </Badge>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </div>
               </CardContent>

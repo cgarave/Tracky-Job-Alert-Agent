@@ -1,4 +1,4 @@
-import { Job, UserProfile, PlatformSession, ApplicationRecord, DaemonSettings, SystemStatus, BrowserInfo } from "@/types";
+import { Job, UserProfile, PlatformSession, ApplicationRecord, DaemonSettings, SystemStatus } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -43,6 +43,7 @@ export async function uploadResume(file: File): Promise<{
   path: string;
   ai_analyzed?: boolean;
   profile?: UserProfile;
+  success?: boolean;
 }> {
   const formData = new FormData();
   formData.append("resume", file);
@@ -56,6 +57,7 @@ export async function uploadResume(file: File): Promise<{
     path: string;
     ai_analyzed?: boolean;
     profile?: UserProfile;
+    success?: boolean;
   }>(res);
 }
 
@@ -64,6 +66,7 @@ export async function analyzeResume(): Promise<{
   message: string;
   ai_analyzed?: boolean;
   profile?: UserProfile;
+  success?: boolean;
 }> {
   const res = await fetch(`${API_BASE}/api/resume/analyze`, {
     method: "POST",
@@ -73,36 +76,22 @@ export async function analyzeResume(): Promise<{
     message: string;
     ai_analyzed?: boolean;
     profile?: UserProfile;
+    success?: boolean;
   }>(res);
 }
-
 
 export async function fetchSessions(): Promise<{ sessions: Record<string, PlatformSession> }> {
   const res = await fetch(`${API_BASE}/api/sessions`);
   return handleResponse<{ sessions: Record<string, PlatformSession> }>(res);
 }
 
-export async function fetchBrowsers(): Promise<{ browsers: BrowserInfo[]; preferred: string }> {
-  const res = await fetch(`${API_BASE}/api/browsers`);
-  return handleResponse<{ browsers: BrowserInfo[]; preferred: string }>(res);
-}
-
-export async function setPreferredBrowser(browser: string): Promise<{ status: string; preferred: string }> {
-  const res = await fetch(`${API_BASE}/api/browsers/preferred`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ browser }),
-  });
-  return handleResponse<{ status: string; preferred: string }>(res);
-}
-
-export async function launchLogin(platform: string, browser?: string): Promise<{ status: string; message: string; browser?: string; platform?: string }> {
+export async function launchLogin(platform: string): Promise<{ status: string; message: string; platform?: string }> {
   const res = await fetch(`${API_BASE}/api/sessions/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform, browser }),
+    body: JSON.stringify({ platform }),
   });
-  return handleResponse<{ status: string; message: string; browser?: string; platform?: string }>(res);
+  return handleResponse<{ status: string; message: string; platform?: string }>(res);
 }
 
 export async function verifySession(platform: string): Promise<{ status: string; connected: boolean; message: string; details?: PlatformSession }> {
@@ -128,13 +117,17 @@ export async function fetchApplications(): Promise<{ applications: ApplicationRe
   return handleResponse<{ applications: ApplicationRecord[] }>(res);
 }
 
-export async function applyToJob(jobId: string, customNote?: string, mode: string = "manual"): Promise<{ status: string; message: string }> {
+export async function applyToJob(
+  jobId: string,
+  customNote?: string,
+  mode: string = "manual"
+): Promise<{ status: string; message: string; success?: boolean; external?: boolean }> {
   const res = await fetch(`${API_BASE}/api/apply`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ job_id: jobId, custom_note: customNote, mode }),
   });
-  return handleResponse<{ status: string; message: string }>(res);
+  return handleResponse<{ status: string; message: string; success?: boolean; external?: boolean }>(res);
 }
 
 export async function triggerScan(): Promise<{ status: string; message: string }> {

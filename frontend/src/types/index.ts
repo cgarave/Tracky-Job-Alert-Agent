@@ -11,64 +11,69 @@ export interface Job {
   match_score?: number;
   seen_at?: string;
   application_status?: string;
+  applied_status?: string;
   applied_at?: string;
   application_mode?: string;
   application_screenshot?: string;
 }
 
 export interface UserProfile {
-  personal: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone: string;
-    location: string;
-    headline: string;
-    linkedin_url: string;
-    github_url: string;
-    portfolio_url: string;
+  personal?: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+    location?: string;
+    headline?: string;
+    linkedin_url?: string;
+    github_url?: string;
+    portfolio_url?: string;
   };
-  work_preferences: {
-    years_of_experience: number;
-    current_title: string;
-    expected_salary_php: string;
-    notice_period_weeks: number;
-    work_authorization: string;
-    remote_preference: string;
-    willing_to_relocate: boolean;
-    skills: string[];
+  work_preferences?: {
+    years_of_experience?: number;
+    current_title?: string;
+    expected_salary_php?: number | string;
+    notice_period_weeks?: number;
+    work_authorization?: string;
+    remote_preference?: string;
+    willing_to_relocate?: boolean;
+    skills?: string[];
   };
-  screening_answers: {
-    why_hire_me: string;
-    notice_period: string;
-    salary_expectation: string;
-    relocation: string;
+  screening_answers?: {
+    why_hire_me?: string;
+    notice_period?: string;
+    salary_expectation?: string;
+    relocation?: string;
+    work_authorization?: string;
+    shift_preference?: string;
+    portfolio_url?: string;
+    [key: string]: string | undefined;
   };
-  resume: {
-    filename: string;
-    path: string;
-    uploaded_at: string;
-    file_size_bytes: number;
+  resume?: {
+    filename?: string;
+    path?: string;
+    uploaded_at?: string;
+    file_size_bytes?: number;
   };
-  auto_apply: {
-    enabled: boolean;
-    daily_cap: number;
-    match_threshold: number;
-    blacklisted_companies: string[];
-    blacklisted_keywords: string[];
+  auto_apply?: {
+    enabled?: boolean;
+    daily_cap?: number;
+    match_threshold?: number;
+    blacklisted_companies?: string[];
+    blacklisted_keywords?: string[];
   };
 }
 
 export interface PlatformSession {
   platform?: string;
-  name: string;
+  name?: string;
   login_url?: string;
   home_url?: string;
   connected: boolean;
   cookie_count?: number;
-  updated_at: string;
+  updated_at?: string;
   is_helper_open?: boolean;
-  session_file: string;
+  session_file?: string;
 }
 
 export interface ApplicationRecord {
@@ -87,17 +92,6 @@ export interface ApplicationRecord {
   location?: string;
 }
 
-export interface BrowserInfo {
-  id: string;
-  name: string;
-  engine: string;
-  installed: boolean;
-  is_native?: boolean;
-  executable_path?: string | null;
-  icon?: string;
-  description: string;
-}
-
 export interface DaemonSettings {
   keywords: string[];
   location: string;
@@ -107,7 +101,6 @@ export interface DaemonSettings {
   preferred_browser?: string;
   paused?: boolean;
 }
-
 
 export interface SystemStatus {
   status: string;
