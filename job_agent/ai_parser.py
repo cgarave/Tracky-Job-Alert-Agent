@@ -17,6 +17,7 @@ except ImportError:
 
 # Single primary model specified by reference: https://aistudio.google.com/docs/models
 MODEL_NAME = "gemini-3.1-flash-lite"
+logger = logging.getLogger(__name__)
 
 
 

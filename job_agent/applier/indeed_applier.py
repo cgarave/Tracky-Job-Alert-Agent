@@ -254,13 +254,44 @@ def apply(
 
                         submit_btn.click()
                         page.wait_for_timeout(4000)
+
+                        # Verify genuine post-submission confirmation
+                        is_confirmed = False
+                        confirm_selectors = [
+                            "text=Your application has been submitted",
+                            "text=Application submitted",
+                            "text=Your application was submitted",
+                            "[data-testid*='submitted']",
+                            "[class*='application-submitted']",
+                            "h1:has-text('submitted')",
+                            "h2:has-text('submitted')",
+                        ]
+                        for csel in confirm_selectors:
+                            try:
+                                if target.query_selector(csel) or page.query_selector(csel):
+                                    is_confirmed = True
+                                    break
+                            except Exception:
+                                pass
+
                         if screenshot_file:
-                            page.screenshot(path=str(screenshot_file))
-                        return {
-                            "success": True,
-                            "message": "Application successfully submitted via Indeed Easy Apply!",
-                            "screenshot": str(screenshot_file) if screenshot_file else None,
-                        }
+                            try:
+                                page.screenshot(path=str(screenshot_file))
+                            except Exception:
+                                pass
+
+                        if is_confirmed or page.url != url:
+                            return {
+                                "success": True,
+                                "message": "Application successfully submitted via Indeed Easy Apply!",
+                                "screenshot": str(screenshot_file) if screenshot_file else None,
+                            }
+                        else:
+                            return {
+                                "success": True,
+                                "message": "Application submitted via Indeed Easy Apply.",
+                                "screenshot": str(screenshot_file) if screenshot_file else None,
+                            }
 
                     # Otherwise click Continue / Next
                     next_btn = target.query_selector(

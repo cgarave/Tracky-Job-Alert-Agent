@@ -144,9 +144,9 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             self._send_json({"applications": apps})
 
         elif path.startswith("/api/screenshot/"):
-            filename = path.replace("/api/screenshot/", "")
-            scr_path = SCREENSHOTS_DIR / filename
-            if scr_path.exists() and scr_path.is_file():
+            filename = Path(path.replace("/api/screenshot/", "")).name
+            scr_path = (SCREENSHOTS_DIR / filename).resolve()
+            if scr_path.is_relative_to(SCREENSHOTS_DIR.resolve()) and scr_path.exists() and scr_path.is_file():
                 self._send_file_bytes(scr_path.read_bytes(), "image/png")
             else:
                 self._send_json({"error": "Screenshot not found."}, 404)
@@ -297,17 +297,15 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
 
             def _login_worker():
                 try:
-                    launch_interactive_login(platform, browser_id=browser_id)
+                    launch_interactive_login(platform)
                 except Exception as exc:
                     logger.error(f"Login worker error: {exc}")
 
             threading.Thread(target=_login_worker, daemon=True).start()
-            chosen = browser_id or browser_manager.get_preferred_browser(CONFIG_PATH)
             self._send_json({
                 "status": "launched",
-                "browser": chosen,
                 "platform": platform,
-                "message": f"Interactive {chosen.capitalize()} browser launched for {platform}. Log in and click 'Verify & Save' when done.",
+                "message": f"Interactive session helper launched for {platform}. Log in and click 'Verify & Save' when done.",
             })
 
         elif path == "/api/sessions/verify":
