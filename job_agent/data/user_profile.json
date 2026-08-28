@@ -48,9 +48,9 @@
     "file_size_bytes": 10179
   },
   "auto_apply": {
-    "enabled": false,
+    "enabled": true,
     "daily_cap": 2,
-    "match_threshold": 75,
+    "match_threshold": 80,
     "blacklisted_companies": [],
     "blacklisted_keywords": [
       "unpaid",
