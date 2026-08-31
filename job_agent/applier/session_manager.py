@@ -10,6 +10,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+try:
+    from .stealth import configure_stealth_context, DEFAULT_EXTRA_HEADERS
+except (ImportError, ModuleNotFoundError):
+    from stealth import configure_stealth_context, DEFAULT_EXTRA_HEADERS
+
 logger = logging.getLogger(__name__)
 
 SESSIONS_DIR = Path(__file__).parent.parent / "data" / "sessions"
@@ -309,9 +314,11 @@ def launch_interactive_login(platform: str) -> dict:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=False,
+            ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-default-browser-check",
+                "--disable-infobars",
                 "--window-size=1366,850",
             ],
         )
@@ -319,6 +326,7 @@ def launch_interactive_login(platform: str) -> dict:
         context_kwargs: dict = {
             "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "viewport": {"width": 1366, "height": 850},
+            "extra_http_headers": DEFAULT_EXTRA_HEADERS,
         }
 
         # Load existing cookies if present so user might already be authenticated
@@ -327,21 +335,18 @@ def launch_interactive_login(platform: str) -> dict:
 
         context = browser.new_context(**context_kwargs)
         
-        # Handle OAuth / SSO popups smoothly
+        # Apply full anti-bot CDP stealth & suppress Google One Tap flapping
+        configure_stealth_context(context, suppress_google_one_tap=True)
+
+        # Handle OAuth / SSO popups smoothly without flapping
         def _handle_popup(new_p):
             try:
-                new_p.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                configure_stealth_context(new_p.context, suppress_google_one_tap=False)
             except Exception:
                 pass
         context.on("page", _handle_popup)
 
         page = context.new_page()
-
-        # Stealth evasion
-        try:
-            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        except Exception:
-            pass
 
         with _lock:
             _active_logins[plat] = {

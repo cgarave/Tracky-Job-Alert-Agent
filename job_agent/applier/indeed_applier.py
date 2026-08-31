@@ -7,7 +7,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from . import browser_manager
+try:
+    from .stealth import configure_stealth_context, solve_turnstile_challenge, DEFAULT_EXTRA_HEADERS
+except (ImportError, ModuleNotFoundError):
+    from stealth import configure_stealth_context, solve_turnstile_challenge, DEFAULT_EXTRA_HEADERS
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +53,22 @@ def apply(
 
     with sync_playwright() as pw:
         headless = mode != "interactive"
-        browser = browser_manager.launch_browser(
-            pw,
+        browser = pw.chromium.launch(
             headless=headless,
+            ignore_default_args=["--enable-automation"],
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-default-browser-check",
+                "--disable-infobars",
+                "--window-size=1280,800",
+            ],
         )
 
         context_kwargs = {
             "user_agent": USER_AGENT,
             "viewport": {"width": 1280, "height": 800},
             "locale": "en-US",
+            "extra_http_headers": DEFAULT_EXTRA_HEADERS,
         }
         if session_path and session_path.exists():
             try:
@@ -67,26 +77,25 @@ def apply(
                 logger.warning(f"Could not load session state: {e}")
 
         context = browser.new_context(**context_kwargs)
-        page = context.new_page()
+        
+        # Apply full anti-bot CDP stealth & suppress Google One Tap flapping
+        configure_stealth_context(context, suppress_google_one_tap=True)
 
-        # Stealth anti-detection injection
-        try:
-            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        except Exception:
-            pass
+        page = context.new_page()
 
         try:
             logger.info(f"[Indeed Applier] Navigating to {url}")
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
             page.wait_for_timeout(3000)
 
-            # Check if blocked by Cloudflare Turnstile
+            # Check and solve Cloudflare Turnstile / Bot challenge if present
             page_title = page.title() or ""
-            if "blocked" in page_title.lower() or "just a moment" in page_title.lower():
-                logger.info("[Indeed Applier] Waiting for Cloudflare verification to resolve...")
-                page.wait_for_timeout(5000)
+            if "blocked" in page_title.lower() or "just a moment" in page_title.lower() or "security check" in page_title.lower():
+                logger.info("[Indeed Applier] Cloudflare challenge detected — attempting automated Turnstile resolution...")
+                passed = solve_turnstile_challenge(page, timeout_ms=15000)
+                page.wait_for_timeout(2000)
                 page_title = page.title() or ""
-                if "blocked" in page_title.lower():
+                if not passed and ("blocked" in page_title.lower() or "just a moment" in page_title.lower()):
                     if screenshot_file:
                         try:
                             page.screenshot(path=str(screenshot_file))
@@ -99,6 +108,8 @@ def apply(
                         "portal_url": url,
                         "screenshot": str(screenshot_file) if screenshot_file else None,
                     }
+                else:
+                    logger.info("[Indeed Applier] Cloudflare Turnstile bypassed successfully!")
 
             # Comprehensive Indeed Apply Selectors
             EASY_APPLY_SELECTORS = [

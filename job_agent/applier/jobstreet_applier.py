@@ -7,6 +7,11 @@ import time
 from pathlib import Path
 from typing import Optional
 
+try:
+    from .stealth import configure_stealth_context, DEFAULT_EXTRA_HEADERS
+except (ImportError, ModuleNotFoundError):
+    from stealth import configure_stealth_context, DEFAULT_EXTRA_HEADERS
+
 from . import browser_manager
 
 logger = logging.getLogger(__name__)
@@ -26,21 +31,22 @@ def apply(
     mode: str = "manual",
 ) -> dict:
     """
-    Automate JobStreet Quick Apply process.
-    Strictly verifies authenticated session and genuine post-submit confirmation.
+    Automate JobStreet.ph (SEEK) application wizard.
+    Strictly verifies submission and uploads authentic resume.
     Returns dict: {success: bool, message: str, screenshot: Optional[str], external: bool}
     """
     from playwright.sync_api import sync_playwright
 
     personal = profile_data.get("personal", {})
     work = profile_data.get("work_preferences", {})
-    qa = profile_data.get("screening_answers", {})
 
     first_name = personal.get("first_name", "")
     last_name = personal.get("last_name", "")
     full_name = f"{first_name} {last_name}".strip() or "Applicant"
     email = personal.get("email", "")
     phone = personal.get("phone", "")
+    expected_salary = str(work.get("expected_salary_php", "100000"))
+    exp_years = str(work.get("years_of_experience", "3"))
 
     screenshot_file = None
     if screenshot_dir:
@@ -49,15 +55,22 @@ def apply(
 
     with sync_playwright() as pw:
         headless = mode != "interactive"
-        browser = browser_manager.launch_browser(
-            pw,
+        browser = pw.chromium.launch(
             headless=headless,
+            ignore_default_args=["--enable-automation"],
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-default-browser-check",
+                "--disable-infobars",
+                "--window-size=1280,800",
+            ],
         )
 
         context_kwargs = {
             "user_agent": USER_AGENT,
             "viewport": {"width": 1280, "height": 800},
             "locale": "en-US",
+            "extra_http_headers": DEFAULT_EXTRA_HEADERS,
         }
         if session_path and session_path.exists():
             try:
@@ -66,12 +79,8 @@ def apply(
                 logger.warning(f"Could not load JobStreet session state: {e}")
 
         context = browser.new_context(**context_kwargs)
+        configure_stealth_context(context, suppress_google_one_tap=True)
         page = context.new_page()
-
-        try:
-            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        except Exception:
-            pass
 
         try:
             logger.info(f"[JobStreet Applier] Navigating to {url}")
