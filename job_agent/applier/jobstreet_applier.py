@@ -78,10 +78,43 @@ def apply(
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
             page.wait_for_timeout(3000)
 
-            # Check if listing redirects to external employer site
-            apply_btn = page.query_selector(
-                "[data-automation='job-detail-apply'], button:has-text('Apply'), a:has-text('Apply now'), a[data-automation='job-detail-apply']"
-            )
+            # Comprehensive SEEK / JobStreet Apply Selectors
+            JOBSTREET_APPLY_SELECTORS = [
+                "[data-automation='job-detail-apply']",
+                "[data-automation='applyButton']",
+                "a[data-automation='job-detail-apply']",
+                "button[data-automation='job-detail-apply']",
+                "a[href*='/apply']",
+                "button:has-text('Apply now')",
+                "button:has-text('Apply')",
+                "a:has-text('Apply now')",
+                "a:has-text('Apply')",
+            ]
+
+            apply_btn = None
+            for sel in JOBSTREET_APPLY_SELECTORS:
+                try:
+                    el = page.query_selector(sel)
+                    if el and el.is_visible():
+                        apply_btn = el
+                        break
+                except Exception:
+                    pass
+
+            if not apply_btn:
+                # Wait up to 6s for SEEK React hydration
+                try:
+                    page.wait_for_selector(
+                        "[data-automation='job-detail-apply'], [data-automation='applyButton'], a[href*='apply']",
+                        timeout=6000,
+                    )
+                    for sel in JOBSTREET_APPLY_SELECTORS:
+                        el = page.query_selector(sel)
+                        if el and el.is_visible():
+                            apply_btn = el
+                            break
+                except Exception:
+                    pass
 
             if not apply_btn:
                 if screenshot_file:
@@ -92,13 +125,13 @@ def apply(
                 return {
                     "success": False,
                     "external": True,
-                    "message": "JobStreet apply button not found. Please apply via direct link.",
+                    "message": "JobStreet apply button not detected. Please apply via direct link.",
                     "portal_url": url,
                     "screenshot": str(screenshot_file) if screenshot_file else None,
                 }
 
             href = apply_btn.get_attribute("href") or ""
-            if href and ("jobstreet.com" not in href and href.startswith("http")):
+            if href and ("jobstreet.com" not in href and "seek.com" not in href and href.startswith("http")):
                 if screenshot_file:
                     try:
                         page.screenshot(path=str(screenshot_file))

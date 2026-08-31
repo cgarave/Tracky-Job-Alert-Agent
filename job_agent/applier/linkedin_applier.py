@@ -81,10 +81,36 @@ def apply(
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
             page.wait_for_timeout(3000)
 
-            # Check if this is an Easy Apply or External Apply
-            easy_apply_btn = page.query_selector(
-                "button.jobs-apply-button:has-text('Easy Apply'), button[aria-label*='Easy Apply'], button:has-text('Easy Apply')"
-            )
+            # Comprehensive LinkedIn Easy Apply Selectors
+            LINKEDIN_EASY_APPLY_SELECTORS = [
+                "button.jobs-apply-button:has-text('Easy Apply')",
+                "button[aria-label*='Easy Apply']",
+                "button:has-text('Easy Apply')",
+                "div.jobs-apply-button--top-card button",
+                "[data-control-name='jobdetails_topcard_inapply']",
+            ]
+
+            easy_apply_btn = None
+            for sel in LINKEDIN_EASY_APPLY_SELECTORS:
+                try:
+                    el = page.query_selector(sel)
+                    if el and el.is_visible():
+                        easy_apply_btn = el
+                        break
+                except Exception:
+                    pass
+
+            if not easy_apply_btn:
+                # Wait up to 6s for LinkedIn job details hydration
+                try:
+                    page.wait_for_selector("button.jobs-apply-button, button:has-text('Easy Apply')", timeout=6000)
+                    for sel in LINKEDIN_EASY_APPLY_SELECTORS:
+                        el = page.query_selector(sel)
+                        if el and el.is_visible():
+                            easy_apply_btn = el
+                            break
+                except Exception:
+                    pass
 
             if not easy_apply_btn:
                 # Check for external apply button

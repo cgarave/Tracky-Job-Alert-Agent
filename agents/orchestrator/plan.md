@@ -1,28 +1,20 @@
 # Orchestrator Task Plan
 
-## Current Task: Fix Session Sync, Metrics Counters, and Auto-Apply Execution
+## Current Task: Fix Login Window Twitching & Universal Easy Apply Button Detection
 
-### Phase 1: Database & Status API Layer [PENDING APPROVAL]
-- [ ] Add `count_today_applications(conn)` and alias `get_application_stats = get_stats` in `db.py`
-- [ ] Fix timezone-aware `today_applied` query in `db.get_stats()`
-- [ ] Fix `/api/status` in `dashboard_server.py` to call `db.get_stats(conn)`
+### Phase 1: Interactive Login Window Stabilization [IN PROGRESS]
+- [ ] Add single-instance check in `session_manager.py` to prevent duplicate concurrent launches
+- [ ] Remove `--start-maximized` and set native `--window-size=1366,850`
+- [ ] Handle OAuth/SSO popups gracefully (`page.on('popup')`)
 
-### Phase 2: Session Manager & Interactive Browser Sync [PENDING APPROVAL]
-- [ ] Upgrade `launch_interactive_login()` to auto-detect login completion and immediately flush cookies with updated timestamp
-- [ ] Add `save_raw_cookies(platform, cookies)` for direct cookie sync
-- [ ] Add `/api/sessions/import` endpoint in `dashboard_server.py`
+### Phase 2: Universal Easy Apply Selector Engine [IN PROGRESS]
+- [ ] Expand Indeed Easy Apply selectors + React hydration waiting
+- [ ] Expand JobStreet (SEEK) Apply selectors + hydration waiting
+- [ ] Expand OnlineJobs.ph and LinkedIn Easy Apply selectors
+- [ ] Add explicit external ATS redirect extraction (Workday, Greenhouse, Lever)
 
-### Phase 3: Auto-Apply Daemon & Applier Resilience [PENDING APPROVAL]
-- [ ] Fix `count_today_applications` call in `main.py` auto-apply loop
-- [ ] Enforce session pre-checks across all platforms in `main.py`
-- [ ] Add explicit login detection and user notices in appliers
-
-### Phase 4: Frontend Connect Modal & Live Status Refresh [PENDING APPROVAL]
-- [ ] Enhance `connect-platform-modal.tsx` with 1-Click Interactive Login Launcher and live polling
-- [ ] Add Cookie Import / Paste tab in modal
-- [ ] Verify live timestamp and cookie count refresh
-
-### Phase 5: Verification & Testing
-- [ ] Execute `./scripts/agent-verify.sh`
-- [ ] Run Python unit tests for `get_stats()`, `count_today_applications()`, and session auth
-- [ ] Create atomic local commits with developer documentation
+### Phase 3: Verification & Validation
+- [ ] Run `./scripts/agent-verify.sh`
+- [ ] Test single-instance Playwright launcher
+- [ ] Test selector detection logic
+- [ ] Commit with developer documentation

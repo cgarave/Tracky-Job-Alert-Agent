@@ -288,6 +288,11 @@ def launch_interactive_login(platform: str) -> dict:
     if plat not in PLATFORM_URLS:
         raise ValueError(f"Unsupported platform: {platform}")
 
+    with _lock:
+        if plat in _active_logins:
+            logger.info(f"Login helper window for {plat} is already open.")
+            return {"status": "already_open", "platform": plat}
+
     info = PLATFORM_URLS[plat]
     session_path = get_session_path(plat)
 
@@ -307,7 +312,7 @@ def launch_interactive_login(platform: str) -> dict:
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-default-browser-check",
-                "--start-maximized",
+                "--window-size=1366,850",
             ],
         )
 
@@ -321,6 +326,15 @@ def launch_interactive_login(platform: str) -> dict:
             context_kwargs["storage_state"] = str(session_path)
 
         context = browser.new_context(**context_kwargs)
+        
+        # Handle OAuth / SSO popups smoothly
+        def _handle_popup(new_p):
+            try:
+                new_p.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            except Exception:
+                pass
+        context.on("page", _handle_popup)
+
         page = context.new_page()
 
         # Stealth evasion
@@ -350,7 +364,9 @@ def launch_interactive_login(platform: str) -> dict:
                 if not browser.is_connected():
                     break
                 if not context.pages or all(p.is_closed() for p in context.pages):
-                    break
+                    time.sleep(0.5)
+                    if not context.pages or all(p.is_closed() for p in context.pages):
+                        break
                 if close_event.is_set():
                     break
 

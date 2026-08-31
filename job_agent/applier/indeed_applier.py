@@ -100,22 +100,84 @@ def apply(
                         "screenshot": str(screenshot_file) if screenshot_file else None,
                     }
 
-            # Check if this is an external company portal or Easy Apply
-            external_btn = None
-            try:
-                external_btn = page.query_selector(
-                    "a:has-text('Apply on company site'), button:has-text('Apply on company site'), a[href*='applyUrl']"
-                )
-            except Exception:
-                pass
+            # Comprehensive Indeed Apply Selectors
+            EASY_APPLY_SELECTORS = [
+                "button#indeedApplyButton",
+                "button[id*='indeedApply']",
+                "[data-testid='indeedApply']",
+                "[data-testid*='apply-button']",
+                "button[aria-label*='Apply now']",
+                "button[aria-label*='Easily apply']",
+                "div[id*='applyButton'] button",
+                "button:has-text('Apply now')",
+                "button:has-text('Easily apply')",
+                "button:has-text('Apply with Indeed')",
+                "a:has-text('Apply now')",
+                "a[href*='/apply/']",
+                "a[href*='smartapply']",
+            ]
+
+            EXTERNAL_APPLY_SELECTORS = [
+                "a:has-text('Apply on company site')",
+                "button:has-text('Apply on company site')",
+                "a:has-text('Apply on employer site')",
+                "button:has-text('Apply on employer site')",
+                "a[href*='applyUrl']",
+                "[data-testid*='external-apply']",
+            ]
 
             apply_btn = None
-            try:
-                apply_btn = page.query_selector(
-                    "button#indeedApplyButton, button:has-text('Apply now'), button:has-text('Easily apply'), [data-gnav-element='indeedApplyButton']"
-                )
-            except Exception:
-                pass
+            external_btn = None
+
+            # 1. Check if any Easy Apply selector is immediately present and visible
+            for sel in EASY_APPLY_SELECTORS:
+                try:
+                    el = page.query_selector(sel)
+                    if el and el.is_visible():
+                        apply_btn = el
+                        break
+                except Exception:
+                    pass
+
+            # 2. If not immediately found, wait up to 6s for React viewjob pane hydration
+            if not apply_btn:
+                try:
+                    page.wait_for_selector(
+                        "button#indeedApplyButton, [data-testid='indeedApply'], button:has-text('Apply now'), a:has-text('Apply on company site')",
+                        timeout=6000,
+                    )
+                    for sel in EASY_APPLY_SELECTORS:
+                        el = page.query_selector(sel)
+                        if el and el.is_visible():
+                            apply_btn = el
+                            break
+                except Exception:
+                    pass
+
+            # 3. Check inside any embedded iframes
+            if not apply_btn:
+                for f in page.frames:
+                    for sel in EASY_APPLY_SELECTORS:
+                        try:
+                            el = f.query_selector(sel)
+                            if el and el.is_visible():
+                                apply_btn = el
+                                break
+                        except Exception:
+                            pass
+                    if apply_btn:
+                        break
+
+            # 4. Check for external employer ATS portal link
+            if not apply_btn:
+                for sel in EXTERNAL_APPLY_SELECTORS:
+                    try:
+                        el = page.query_selector(sel)
+                        if el:
+                            external_btn = el
+                            break
+                    except Exception:
+                        pass
 
             if not apply_btn and external_btn:
                 ext_url = url
@@ -137,12 +199,6 @@ def apply(
                 }
 
             if not apply_btn:
-                try:
-                    apply_btn = page.query_selector("button[class*='apply'], a[class*='apply']")
-                except Exception:
-                    pass
-
-            if not apply_btn:
                 if screenshot_file:
                     try:
                         page.screenshot(path=str(screenshot_file))
@@ -151,14 +207,14 @@ def apply(
                 return {
                     "success": False,
                     "external": True,
-                    "message": "Direct Easy Apply button not present on listing. External application link available.",
+                    "message": "Direct Easy Apply button not detected on listing. External application link available.",
                     "portal_url": url,
                     "screenshot": str(screenshot_file) if screenshot_file else None,
                 }
 
             # Click Apply button
             apply_btn.click()
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(3500)
 
             # Check for iframe modal (Indeed uses smartapply iframe or modal dialog)
             frame = None
