@@ -1,31 +1,28 @@
 "use client";
 
 import React, { useState } from "react";
-import { Job, UserProfile } from "@/types";
+import { Job } from "@/types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ExternalLink,
-  Rocket,
   Search,
-  CheckCircle2,
   Building2,
   MapPin,
   Banknote,
   LayoutGrid,
   List,
-  SlidersHorizontal,
   Clock,
+  Globe,
 } from "lucide-react";
+import { formatTimeAgo } from "@/lib/utils";
 
 interface JobsTabProps {
   jobs: Job[];
-  onOpenApplyModal: (job: Job) => void;
-  profile: UserProfile;
 }
 
-export function JobsTab({ jobs, onOpenApplyModal }: JobsTabProps) {
+export function JobsTab({ jobs }: JobsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSource, setSelectedSource] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -140,89 +137,65 @@ export function JobsTab({ jobs, onOpenApplyModal }: JobsTabProps) {
                   <th className="py-3 px-4">Platform</th>
                   <th className="py-3 px-4">Location</th>
                   <th className="py-3 px-4">Salary</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 pr-4 pl-2 text-right">Actions</th>
+                  <th className="py-3 px-4">Discovered</th>
+                  <th className="py-3 pr-4 pl-2 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {filteredJobs.map((job) => {
-                  const isApplied = job.applied_status === "submitted";
-                  const isExternal = job.applied_status === "external_link";
+                {filteredJobs.map((job) => (
+                  <tr key={job.job_id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="py-3 px-4 max-w-xs">
+                      <span className="font-semibold text-white block truncate">
+                        {job.title}
+                      </span>
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                        <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span>{job.company}</span>
+                      </span>
+                    </td>
 
-                  return (
-                    <tr key={job.job_id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3 px-4 max-w-xs">
-                        <span className="font-semibold text-white block truncate">
-                          {job.title}
-                        </span>
-                        <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
-                          <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
-                          <span>{job.company}</span>
-                        </span>
-                      </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
+                        {job.source}
+                      </Badge>
+                    </td>
 
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
-                          {job.source}
-                        </Badge>
-                      </td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-400">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span>{job.location || "Philippines"}</span>
+                      </div>
+                    </td>
 
-                      <td className="py-3 px-4 whitespace-nowrap text-slate-400">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                          <span>{job.location || "Philippines"}</span>
-                        </div>
-                      </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400">
+                        <Banknote className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span>{job.salary || "Negotiable"}</span>
+                      </div>
+                    </td>
 
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400">
-                          <Banknote className="w-3 h-3 text-emerald-500 shrink-0" />
-                          <span>{job.salary || "Negotiable"}</span>
-                        </div>
-                      </td>
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-400 text-[11px]">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-slate-500" />
+                        <span>{formatTimeAgo(job.seen_at)}</span>
+                      </div>
+                    </td>
 
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        {isApplied ? (
-                          <Badge variant="success" className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>Applied</span>
-                          </Badge>
-                        ) : isExternal ? (
-                          <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
-                            External Portal
-                          </Badge>
-                        ) : (
-                          <span className="text-[11px] text-slate-500">Unapplied</span>
-                        )}
-                      </td>
-
-                      <td className="py-3 pr-4 pl-2 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            asChild
-                            className="h-7 px-2 text-xs bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300"
-                          >
-                            <a href={job.url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="w-3 h-3 text-indigo-400" />
-                            </a>
-                          </Button>
-
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => onOpenApplyModal(job)}
-                            className="h-7 px-2.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
-                          >
-                            <Rocket className="w-3 h-3 mr-1" />
-                            <span>Apply</span>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                    <td className="py-3 pr-4 pl-2 text-right whitespace-nowrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="h-7 px-3 text-xs bg-slate-950 border-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 gap-1.5 transition-colors"
+                      >
+                        <a href={job.url} target="_blank" rel="noopener noreferrer">
+                          <span>View Job</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -230,83 +203,62 @@ export function JobsTab({ jobs, onOpenApplyModal }: JobsTabProps) {
       ) : (
         /* Visual Card Grid View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredJobs.map((job) => {
-            const isApplied = job.applied_status === "submitted";
-            const isExternal = job.applied_status === "external_link";
+          {filteredJobs.map((job) => (
+            <Card
+              key={job.job_id}
+              className="flex flex-col justify-between bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80 transition-all backdrop-blur-xl shadow-lg"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
+                    {job.source}
+                  </Badge>
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+                    <Clock className="w-3 h-3 text-slate-600" />
+                    {formatTimeAgo(job.seen_at)}
+                  </span>
+                </div>
 
-            return (
-              <Card
-                key={job.job_id}
-                className="flex flex-col justify-between bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80 transition-all backdrop-blur-xl shadow-lg"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
-                      {job.source}
-                    </Badge>
-                    {isApplied ? (
-                      <Badge variant="success" className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>Applied</span>
-                      </Badge>
-                    ) : isExternal ? (
-                      <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
-                        External Portal
-                      </Badge>
-                    ) : null}
-                  </div>
+                <CardTitle className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                  {job.title}
+                </CardTitle>
 
-                  <CardTitle className="text-sm font-bold text-white line-clamp-2 leading-snug">
-                    {job.title}
-                  </CardTitle>
+                <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
+                  <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span className="truncate">{job.company}</span>
+                </div>
+              </CardHeader>
 
-                  <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
-                    <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span className="truncate">{job.company}</span>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-0">
-                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/60">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <span className="truncate max-w-[140px]">{job.location || "Philippines"}</span>
-                      </div>
-                      <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400">
-                        <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>{job.salary || "Negotiable"}</span>
-                      </div>
+              <CardContent className="pt-0">
+                <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/60">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span className="truncate max-w-[140px]">{job.location || "Philippines"}</span>
                     </div>
-
-                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/40">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                        className="flex-1 text-xs h-8 bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300"
-                      >
-                        <a href={job.url} target="_blank" rel="noopener noreferrer" className="gap-1.5">
-                          <span>View Listing</span>
-                          <ExternalLink className="w-3 h-3 text-indigo-400" />
-                        </a>
-                      </Button>
-
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => onOpenApplyModal(job)}
-                        className="flex-1 text-xs h-8 bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm gap-1.5"
-                      >
-                        <Rocket className="w-3.5 h-3.5" />
-                        <span>Apply</span>
-                      </Button>
+                    <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400">
+                      <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>{job.salary || "Negotiable"}</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+
+                  <div className="mt-2 pt-2 border-t border-slate-800/40">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="w-full text-xs h-8 bg-slate-950 border-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 gap-1.5 transition-colors shadow-sm"
+                    >
+                      <a href={job.url} target="_blank" rel="noopener noreferrer">
+                        <span>Open Listing</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>

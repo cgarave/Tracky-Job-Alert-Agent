@@ -6,14 +6,16 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Settings,
   MessageSquare,
-  Key,
   Save,
   Clock,
   MapPin,
   Sliders,
+  Power,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,11 +65,11 @@ export function SettingsTab({
           <div className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-indigo-400" />
             <CardTitle className="text-base font-bold text-white tracking-tight">
-              Search & Daemon Configuration
+              Search & Alert Configuration
             </CardTitle>
           </div>
           <CardDescription className="text-xs text-slate-400 mt-1">
-            Configure target keywords, scraping intervals, and notification endpoints.
+            Configure target keywords, scraping intervals, and iMessage notification destination.
           </CardDescription>
         </CardHeader>
 
@@ -122,7 +124,7 @@ export function SettingsTab({
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="recipient" className="text-xs text-slate-300 flex items-center gap-1.5">
                 <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
                 <span>iMessage Recipient (Phone / Apple ID)</span>
@@ -135,37 +137,31 @@ export function SettingsTab({
                 placeholder="e.g. +639123456789 or name@icloud.com"
               />
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* AI Intelligence Config */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Key className="w-5 h-5 text-indigo-400" />
-            <CardTitle className="text-base font-bold text-white tracking-tight">
-              AI Parser Key (Optional)
-            </CardTitle>
-          </div>
-          <CardDescription className="text-xs text-slate-400 mt-1">
-            Provide a Google Gemini API key to enable AI-powered PDF resume parsing and profile auto-fill.
-          </CardDescription>
-        </CardHeader>
+            {/* Daemon State Toggle */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800 sm:col-span-2 mt-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                  <Power className={`w-4 h-4 ${formData.paused ? "text-amber-400" : "text-emerald-400"}`} />
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-white block">Scanner Daemon Status</span>
+                  <span className="text-[11px] text-slate-400">
+                    {formData.paused ? "Paused — background scanning is inactive" : "Active — periodically discovering new jobs"}
+                  </span>
+                </div>
+              </div>
 
-        <CardContent className="pt-0">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="gemini_api_key" className="text-xs text-slate-300">
-              Gemini API Key
-            </Label>
-            <Input
-              id="gemini_api_key"
-              type="password"
-              value={formData.gemini_api_key || ""}
-              onChange={(e) => handleChange("gemini_api_key", e.target.value)}
-              className="bg-slate-950 border-slate-800 text-xs text-slate-100"
-              placeholder="AIzaSy..."
-            />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium">
+                  {formData.paused ? "Paused" : "Active"}
+                </span>
+                <Switch
+                  checked={!formData.paused}
+                  onCheckedChange={(checked) => handleChange("paused", !checked)}
+                />
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -176,7 +172,7 @@ export function SettingsTab({
           disabled={isSaving || isLoading}
           className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm"
         >
-          <Save className="w-3.5 h-3.5" />
+          {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           <span>{isSaving ? "Saving..." : "Save Settings"}</span>
         </Button>
       </div>

@@ -29,20 +29,14 @@ python3 -m py_compile \
     "$SCRIPT_DIR/job_agent/dashboard_server.py" \
     "$SCRIPT_DIR/job_agent/db.py" \
     "$SCRIPT_DIR/job_agent/notifier.py" \
-    "$SCRIPT_DIR/job_agent/profile_manager.py" \
-    "$SCRIPT_DIR/job_agent/applier/engine.py" \
-    "$SCRIPT_DIR/job_agent/applier/indeed_applier.py" \
-    "$SCRIPT_DIR/job_agent/applier/jobstreet_applier.py" \
-    "$SCRIPT_DIR/job_agent/applier/onlinejobs_applier.py" \
-    "$SCRIPT_DIR/job_agent/applier/linkedin_applier.py" \
-    "$SCRIPT_DIR/job_agent/applier/session_manager.py" \
-    "$SCRIPT_DIR/job_agent/applier/browser_manager.py" \
+    "$SCRIPT_DIR/job_agent/listener.py" \
+    "$SCRIPT_DIR/job_agent/commander.py" \
     "$SCRIPT_DIR/job_agent/scrapers/indeed.py" \
     "$SCRIPT_DIR/job_agent/scrapers/jobstreet.py" \
     "$SCRIPT_DIR/job_agent/scrapers/onlinejobs.py" \
     "$SCRIPT_DIR/job_agent/scrapers/linkedin.py"
 
-info "All Python backend and applier modules compiled with 0 syntax errors."
+info "All Python backend modules compiled with 0 syntax errors."
 
 # ── 2. Next.js Frontend Build & Typecheck ────────────────────────────────────
 section "2. Validating Next.js frontend build & TypeScript types..."

@@ -1,4 +1,4 @@
-import { Job, UserProfile, PlatformSession, ApplicationRecord, DaemonSettings, SystemStatus } from "@/types";
+import { Job, DaemonSettings, SystemStatus } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -23,128 +23,19 @@ export async function fetchJobs(search?: string, source?: string): Promise<{ job
   return handleResponse<{ jobs: Job[]; total: number }>(res);
 }
 
-export async function fetchProfile(): Promise<UserProfile> {
-  const res = await fetch(`${API_BASE}/api/profile`);
-  return handleResponse<UserProfile>(res);
-}
-
-export async function saveProfile(profile: UserProfile): Promise<{ status: string; profile: UserProfile }> {
-  const res = await fetch(`${API_BASE}/api/profile`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(profile),
-  });
-  return handleResponse<{ status: string; profile: UserProfile }>(res);
-}
-
-export async function uploadResume(file: File): Promise<{
-  status: string;
-  message: string;
-  path: string;
-  ai_analyzed?: boolean;
-  profile?: UserProfile;
-  success?: boolean;
-}> {
-  const formData = new FormData();
-  formData.append("resume", file);
-  const res = await fetch(`${API_BASE}/api/resume/upload`, {
-    method: "POST",
-    body: formData,
-  });
-  return handleResponse<{
-    status: string;
-    message: string;
-    path: string;
-    ai_analyzed?: boolean;
-    profile?: UserProfile;
-    success?: boolean;
-  }>(res);
-}
-
-export async function analyzeResume(): Promise<{
-  status: string;
-  message: string;
-  ai_analyzed?: boolean;
-  profile?: UserProfile;
-  success?: boolean;
-}> {
-  const res = await fetch(`${API_BASE}/api/resume/analyze`, {
-    method: "POST",
-  });
-  return handleResponse<{
-    status: string;
-    message: string;
-    ai_analyzed?: boolean;
-    profile?: UserProfile;
-    success?: boolean;
-  }>(res);
-}
-
-export async function fetchSessions(): Promise<{ sessions: Record<string, PlatformSession> }> {
-  const res = await fetch(`${API_BASE}/api/sessions`);
-  return handleResponse<{ sessions: Record<string, PlatformSession> }>(res);
-}
-
-export async function launchLogin(platform: string): Promise<{ status: string; message: string; platform?: string }> {
-  const res = await fetch(`${API_BASE}/api/sessions/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform }),
-  });
-  return handleResponse<{ status: string; message: string; platform?: string }>(res);
-}
-
-export async function verifySession(platform: string): Promise<{ status: string; connected: boolean; message: string; details?: PlatformSession }> {
-  const res = await fetch(`${API_BASE}/api/sessions/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform }),
-  });
-  return handleResponse<{ status: string; connected: boolean; message: string; details?: PlatformSession }>(res);
-}
-
-export async function importCookies(
-  platform: string,
-  cookies: string
-): Promise<{ status: string; connected: boolean; message: string; details?: PlatformSession }> {
-  const res = await fetch(`${API_BASE}/api/sessions/import`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform, cookies }),
-  });
-  return handleResponse<{ status: string; connected: boolean; message: string; details?: PlatformSession }>(res);
-}
-
-export async function cancelSessionLogin(platform: string): Promise<{ status: string; platform: string }> {
-  const res = await fetch(`${API_BASE}/api/sessions/cancel`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ platform }),
-  });
-  return handleResponse<{ status: string; platform: string }>(res);
-}
-
-export async function fetchApplications(): Promise<{ applications: ApplicationRecord[] }> {
-  const res = await fetch(`${API_BASE}/api/applications`);
-  return handleResponse<{ applications: ApplicationRecord[] }>(res);
-}
-
-export async function applyToJob(
-  jobId: string,
-  customNote?: string,
-  mode: string = "manual"
-): Promise<{ status: string; message: string; success?: boolean; external?: boolean }> {
-  const res = await fetch(`${API_BASE}/api/apply`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: jobId, custom_note: customNote, mode }),
-  });
-  return handleResponse<{ status: string; message: string; success?: boolean; external?: boolean }>(res);
-}
-
 export async function triggerScan(): Promise<{ status: string; message: string }> {
   const res = await fetch(`${API_BASE}/api/scan-now`, { method: "POST" });
   return handleResponse<{ status: string; message: string }>(res);
+}
+
+export async function pauseDaemon(): Promise<{ status: string; paused: boolean }> {
+  const res = await fetch(`${API_BASE}/api/pause`, { method: "POST" });
+  return handleResponse<{ status: string; paused: boolean }>(res);
+}
+
+export async function resumeDaemon(): Promise<{ status: string; paused: boolean }> {
+  const res = await fetch(`${API_BASE}/api/resume`, { method: "POST" });
+  return handleResponse<{ status: string; paused: boolean }>(res);
 }
 
 export async function fetchSettings(): Promise<DaemonSettings> {

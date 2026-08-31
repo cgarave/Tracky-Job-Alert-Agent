@@ -7,8 +7,8 @@ interface StatsRibbonProps {
   heading: string;
   subtitle: string;
   totalJobs: number;
-  totalApplied: number;
-  todayApplied: number;
+  todayNewJobs?: number;
+  keywordsCount?: number;
   lastScanTime?: string;
 }
 
@@ -16,8 +16,8 @@ export function StatsRibbon({
   heading,
   subtitle,
   totalJobs,
-  totalApplied,
-  todayApplied,
+  todayNewJobs = 0,
+  keywordsCount = 0,
   lastScanTime,
 }: StatsRibbonProps) {
   return (
@@ -36,13 +36,13 @@ export function StatsRibbon({
         </div>
 
         <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Applied</span>
-          <span className="text-xl font-bold text-emerald-400 mt-0.5 font-mono">{totalApplied}</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discovered Today</span>
+          <span className="text-xl font-bold text-indigo-400 mt-0.5 font-mono">{todayNewJobs}</span>
         </div>
 
         <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Applied Today</span>
-          <span className="text-xl font-bold text-indigo-400 mt-0.5 font-mono">{todayApplied}</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Keywords</span>
+          <span className="text-xl font-bold text-emerald-400 mt-0.5 font-mono">{keywordsCount}</span>
         </div>
 
         <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
