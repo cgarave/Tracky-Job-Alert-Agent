@@ -1,4 +1,4 @@
-"""onlinejobs.ph scraper using requests + BeautifulSoup with Playwright fallback."""
+"""onlinejobs.ph scraper using requests + BeautifulSoup with Playwright fallback and description extraction."""
 import logging
 import re
 import time
@@ -52,8 +52,10 @@ def _parse_html(html_content: str, max_results: int) -> list[dict]:
             if not clean_title:
                 clean_title = raw_title
 
-            card_text = card.get_text(separator=" ", strip=True)
+            desc_el = card.select_one(".desc, .job-description, p")
+            desc_text = desc_el.get_text(separator=" ", strip=True) if desc_el else card.get_text(separator=" ", strip=True)
 
+            card_text = card.get_text(separator=" ", strip=True)
             salary_match = re.search(
                 r"(\$[\d,]+(?:\s*-\s*\$[\d,]+)?(?:\s*/\s*mo|\s*a month|\s*/\s*hr)?|₱[\d,]+|TBD|Negotiable)",
                 card_text,
@@ -70,7 +72,7 @@ def _parse_html(html_content: str, max_results: int) -> list[dict]:
                     "location": "Remote / Philippines",
                     "salary": salary,
                     "apply_type": "Direct Message",
-                    "description": card_text[:300],
+                    "description": desc_text,
                 }
             )
         except Exception:

@@ -1,4 +1,4 @@
-"""LinkedIn Philippines job scraper using python-jobspy with guest API fallback sorted by newest listings."""
+"""LinkedIn Philippines job scraper using python-jobspy with guest API fallback sorted by newest listings and description extraction."""
 import logging
 import urllib.parse
 from bs4 import BeautifulSoup
@@ -36,6 +36,7 @@ def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict
             comp_el = card.select_one(".base-search-card__subtitle, h4")
             link_el = card.select_one("a.base-card__full-link, a")
             loc_el = card.select_one(".job-search-card__location")
+            snippet_el = card.select_one(".job-search-card__snippet, .job-description, p")
 
             if not title_el or not link_el:
                 continue
@@ -44,6 +45,7 @@ def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict
             company = comp_el.get_text(strip=True) if comp_el else "Unknown Company"
             href = link_el.get("href", "").split("?")[0]
             loc_text = loc_el.get_text(strip=True) if loc_el else location
+            desc = snippet_el.get_text(strip=True) if snippet_el else ""
 
             if title and href:
                 results.append({
@@ -54,6 +56,7 @@ def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict
                     "location": loc_text,
                     "salary": "Negotiable",
                     "apply_type": "LinkedIn Apply",
+                    "description": desc,
                 })
         return results
     except Exception as exc:
@@ -64,7 +67,7 @@ def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict
 def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -> list[dict]:
     """
     Scrape fresh job listings from LinkedIn Philippines.
-    Returns list of normalized job dicts: {title, company, url, source, location, salary, apply_type}.
+    Returns list of normalized job dicts: {title, company, url, source, location, salary, apply_type, description}.
     """
     results = []
 
@@ -87,6 +90,10 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                 company = str(row.get("company") or "").strip() or "LinkedIn Employer"
                 url = str(row.get("job_url") or "").strip()
                 job_loc = str(row.get("location") or "").strip() or location
+                desc = str(row.get("description") or "").strip()
+                if desc == "nan":
+                    desc = ""
+
                 salary = str(row.get("min_amount") or "")
                 if salary and salary != "nan":
                     salary_str = f"{salary} PHP"
@@ -102,6 +109,7 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                         "location": job_loc,
                         "salary": salary_str,
                         "apply_type": "LinkedIn Apply",
+                        "description": desc,
                     })
 
             if results:

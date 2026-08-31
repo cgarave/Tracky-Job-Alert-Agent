@@ -134,9 +134,9 @@ def get_jobs(
         query += " AND source = ?"
         params.append(source)
     if search:
-        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ?)"
+        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)"
         term = f"%{search}%"
-        params.extend([term, term, term])
+        params.extend([term, term, term, term])
 
     query += " ORDER BY seen_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
@@ -190,9 +190,9 @@ def delete_all_jobs(
         query += " AND source = ?"
         params.append(source)
     if search:
-        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ?)"
+        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)"
         term = f"%{search}%"
-        params.extend([term, term, term])
+        params.extend([term, term, term, term])
 
     cur = conn.execute(query, params)
     matching_ids = [row["job_id"] for row in cur.fetchall()]

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DeleteConfirmModal } from "@/components/modals/delete-confirm-modal";
+import { JobDetailsModal } from "@/components/modals/job-details-modal";
 import {
   ExternalLink,
   Search,
@@ -20,6 +21,8 @@ import {
   CheckSquare,
   X,
   Sparkles,
+  Eye,
+  FileText,
 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils";
 import * as api from "@/lib/api";
@@ -49,6 +52,9 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Job Details modal state
+  const [activeDetailJob, setActiveDetailJob] = useState<Job | null>(null);
+
   const sources = useMemo(() => ["all", ...Array.from(new Set(jobs.map((j) => j.source)))], [jobs]);
 
   const filteredJobs = useMemo(() => {
@@ -56,7 +62,8 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
       const matchesSearch =
         job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (job.location && job.location.toLowerCase().includes(searchTerm.toLowerCase()));
+        (job.location && job.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (job.description && job.description.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesSource = selectedSource === "all" || job.source === selectedSource;
       return matchesSearch && matchesSource;
     });
@@ -138,17 +145,17 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
   // Keyboard shortcut: Escape to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectedIds.size > 0 && !isDeleteModalOpen) {
+      if (e.key === "Escape" && selectedIds.size > 0 && !isDeleteModalOpen && !activeDetailJob) {
         handleClearSelection();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIds, isDeleteModalOpen, handleClearSelection]);
+  }, [selectedIds, isDeleteModalOpen, activeDetailJob, handleClearSelection]);
 
   // Open delete modal for single item
-  const handlePromptSingleDelete = (job: Job, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handlePromptSingleDelete = (job: Job, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setDeleteTarget({
       type: "single",
       count: 1,
@@ -202,7 +209,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             type="text"
-            placeholder="Search by title, role, company, or location..."
+            placeholder="Search by title, role, company, location, or skills in description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
@@ -348,9 +355,17 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       </td>
 
                       <td className="py-3 px-3 max-w-xs">
-                        <span className="font-semibold text-white block truncate">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDetailJob(job);
+                          }}
+                          className="font-semibold text-white hover:text-indigo-400 transition-colors text-left block truncate"
+                          title="Click to view full description"
+                        >
                           {job.title}
-                        </span>
+                        </button>
                         <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
                           <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
                           <span>{job.company}</span>
@@ -387,13 +402,24 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       <td className="py-3 pr-4 pl-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setActiveDetailJob(job)}
+                            className="h-7 px-2 text-xs text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 gap-1 rounded-md"
+                            title="View full description & details"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Details</span>
+                          </Button>
+
+                          <Button
                             variant="outline"
                             size="sm"
                             asChild
                             className="h-7 px-2.5 text-xs bg-slate-950 border-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 gap-1.5 transition-colors"
                           >
                             <a href={job.url} target="_blank" rel="noopener noreferrer">
-                              <span>View</span>
+                              <span>Link</span>
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           </Button>
@@ -463,7 +489,14 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                     </div>
                   </div>
 
-                  <CardTitle className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                  <CardTitle
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveDetailJob(job);
+                    }}
+                    className="text-sm font-bold text-white hover:text-indigo-400 transition-colors line-clamp-2 leading-snug cursor-pointer"
+                    title="Click to view full description"
+                  >
                     {job.title}
                   </CardTitle>
 
@@ -486,7 +519,31 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       </div>
                     </div>
 
+                    {/* Scraped Job Description Teaser */}
+                    {job.description && (
+                      <p
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDetailJob(job);
+                        }}
+                        className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed bg-slate-950/60 p-2 rounded-lg border border-slate-800/60 hover:border-slate-700 cursor-pointer transition-colors"
+                        title="Click to read full description"
+                      >
+                        {job.description}
+                      </p>
+                    )}
+
                     <div className="mt-2 pt-2 border-t border-slate-800/40 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActiveDetailJob(job)}
+                        className="flex-1 text-xs h-8 bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300 gap-1.5 transition-colors shadow-sm"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Description</span>
+                      </Button>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -494,7 +551,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                         className="flex-1 text-xs h-8 bg-slate-950 border-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 gap-1.5 transition-colors shadow-sm"
                       >
                         <a href={job.url} target="_blank" rel="noopener noreferrer">
-                          <span>Open Listing</span>
+                          <span>Open</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </Button>
@@ -559,7 +616,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
         </aside>
       )}
 
-      {/* Confirmation Modal */}
+      {/* Single / Bulk Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => {
@@ -570,6 +627,14 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
         count={deleteTarget?.count || 0}
         singleJobTitle={deleteTarget?.singleJob?.title}
         isDeleting={isDeleting}
+      />
+
+      {/* Full Job Description & Details Modal */}
+      <JobDetailsModal
+        job={activeDetailJob}
+        isOpen={!!activeDetailJob}
+        onClose={() => setActiveDetailJob(null)}
+        onDelete={(job) => handlePromptSingleDelete(job)}
       />
     </div>
   );
