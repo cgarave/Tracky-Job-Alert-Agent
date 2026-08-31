@@ -205,59 +205,6 @@ def scraper_loop(dry_run: bool = False) -> None:
         elif not recipient:
             logger.warning("No recipient set in config.json — job alerts cannot be sent.")
 
-        # ── Autonomous Auto-Apply Processing ─────────────────────────────────
-        if not dry_run and new_jobs:
-            try:
-                import profile_manager
-                from applier.engine import apply_to_job
-
-                prof = profile_manager.get_profile()
-                auto_cfg = prof.get("auto_apply", {})
-                if auto_cfg.get("enabled", False):
-                    resume_path = profile_manager.get_resume_path()
-                    if resume_path and resume_path.exists():
-                        from applier.session_manager import is_session_active
-                        from applier.engine import apply_to_job
-
-                        daily_cap = auto_cfg.get("daily_cap", 5)
-                        today_applied = db_module.count_today_applications(db_conn)
-                        remaining_quota = max(0, daily_cap - today_applied)
-
-                        blacklist_companies = [c.lower() for c in auto_cfg.get("blacklisted_companies", []) if c]
-                        blacklist_kw = [k.lower() for k in auto_cfg.get("blacklisted_keywords", []) if k]
-
-                        applied_in_this_scan = 0
-                        for job in new_jobs:
-                            if applied_in_this_scan >= remaining_quota:
-                                logger.info(f"Auto-apply daily cap ({daily_cap}) reached.")
-                                break
-
-                            comp = job.get("company", "").lower()
-                            title = job.get("title", "").lower()
-                            src = job.get("source", "").lower()
-
-                            if any(b in comp for b in blacklist_companies):
-                                continue
-                            if any(b in title for b in blacklist_kw):
-                                continue
-
-                            # Skip if platform requires session and it is not connected
-                            if "onlinejobs" in src and not is_session_active("onlinejobs"):
-                                logger.info(f"Skipping auto-apply for '{job.get('title')}' — OnlineJobs session not connected.")
-                                continue
-
-                            logger.info(f"🤖 Auto-applying to: {job.get('title')} @ {job.get('company')}")
-                            res = apply_to_job(job_id=job["job_id"], mode="auto")
-                            if res.get("success") and not res.get("external"):
-                                applied_in_this_scan += 1
-                                if recipient:
-                                    send_imessage(
-                                        recipient,
-                                        f"🤖 Auto-Applied!\n\n📋 {job.get('title')}\n🏢 {job.get('company')}\n🌐 {job.get('source')}\n📄 Authentic PDF Resume attached."
-                                    )
-            except Exception as exc:
-                logger.error(f"Error during auto-apply processing: {exc}")
-
         interval_minutes = config.get("check_interval_minutes", 60)
         logger.info(f"Next scan in {interval_minutes} minute(s).")
 
@@ -336,13 +283,6 @@ def main() -> None:
     recipient = config.get("recipient", "")
 
     logger.info("=== Tracky starting ===")
-
-    # Disable auto-apply by default on app launch
-    try:
-        import profile_manager
-        profile_manager.disable_auto_apply()
-    except Exception as exc:
-        logger.warning(f"Could not disable auto apply on main startup: {exc}")
 
 
     if not recipient:

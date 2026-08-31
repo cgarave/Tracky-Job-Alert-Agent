@@ -1,6 +1,6 @@
 """
 Parse and execute iMessage bot commands.
-Supports job scraping, settings management, and 1-click job applications.
+Supports job scraping, settings management, and live status reports.
 """
 import json
 import logging
@@ -8,7 +8,6 @@ import threading
 from pathlib import Path
 
 import db
-import profile_manager
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 HELP_TEXT = (
     "🐶 Tracky Commands\n\n"
-    "📋 Job Search:\n"
+    "📋 Job Alerts:\n"
     "/status — current settings & stats\n"
     "/keywords — list active keywords\n"
     "/add <kw> — add search keyword\n"
@@ -25,19 +24,11 @@ HELP_TEXT = (
     "/location <place> — set location filter\n"
     "/run — trigger immediate scan\n"
     "/pause | /resume — pause/resume scraper\n\n"
-    "🚀 Application Engine:\n"
-    "/apply <job_id> — apply to a job with your resume\n"
-    "/autoapply on|off — toggle auto-pilot apply\n"
-    "/dailycap <n> — set max auto applications/day\n"
-    "/applications — list recent applications\n"
-    "/dashboard — link to web control center\n\n"
+    "🖥️ Dashboard:\n"
+    "/dashboard — link to web dashboard\n\n"
     "/help — show this message"
 )
 
-
-# ---------------------------------------------------------------------------
-# Config helpers
-# ---------------------------------------------------------------------------
 
 def _load() -> dict:
     with open(CONFIG_PATH) as f:
@@ -49,15 +40,8 @@ def _save(config: dict) -> None:
         json.dump(config, f, indent=2)
 
 
-# ---------------------------------------------------------------------------
-# Command parser
-# ---------------------------------------------------------------------------
-
 def parse(text: str) -> tuple[str | None, str]:
-    """
-    Split a raw message into (command, argument).
-    Returns (None, '') if the message is not a command.
-    """
+    """Split a raw message into (command, argument)."""
     text = text.strip()
     if not text.startswith("/"):
         return None, ""
@@ -66,10 +50,6 @@ def parse(text: str) -> tuple[str | None, str]:
     arg = parts[1].strip() if len(parts) > 1 else ""
     return cmd, arg
 
-
-# ---------------------------------------------------------------------------
-# Command executor
-# ---------------------------------------------------------------------------
 
 def execute(text: str, send_fn, run_now_event: threading.Event | None = None) -> bool:
     """Parse `text` as a command and execute it."""
@@ -85,7 +65,7 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
 
     # ── /dashboard | /gui ───────────────────────────────────────────────────
     elif cmd in ("/dashboard", "/gui"):
-        send_fn("🖥️ Tracky Dashboard is available at:\nhttp://127.0.0.1:5050\n\nOpen in your Mac browser to view jobs, upload your resume, and configure auto-apply.")
+        send_fn("🖥️ Tracky Dashboard is available at:\nhttp://127.0.0.1:5050\n\nOpen in your Mac browser to view discovered jobs and configure alert settings.")
 
     # ── /status ──────────────────────────────────────────────────────────────
     elif cmd == "/status":
@@ -94,24 +74,19 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
         state = "🔴 Paused" if config.get("paused") else "🟢 Active"
         interval = config.get("check_interval_minutes", 60)
         location = config.get("location", "Philippines")
-        
-        conn = db.get_connection()
-        stats = db.get_application_stats(conn)
-        conn.close()
 
-        prof = profile_manager.get_profile()
-        auto_state = "🟢 Enabled" if prof.get("auto_apply", {}).get("enabled") else "⚪ Disabled"
-        resume_name = prof.get("resume", {}).get("filename") or "None uploaded"
+        conn = db.get_connection()
+        stats = db.get_stats(conn)
+        conn.close()
 
         send_fn(
             f"📊 Tracky Status\n\n"
-            f"{state} · Auto-Apply: {auto_state}\n"
+            f"Status: {state}\n"
             f"⏱ Interval: every {interval} min\n"
             f"📍 Location: {location}\n"
-            f"📄 Resume: {resume_name}\n"
             f"🔍 Keywords ({len(keywords)}):\n{kw_list}\n\n"
-            f"📦 Jobs tracked: {stats['total_jobs']}\n"
-            f"🚀 Total Applied: {stats['total_applied']} (Today: {stats['today_applied']})"
+            f"📦 Total Jobs Tracked: {stats['total_jobs']}\n"
+            f"✨ Discovered Today: {stats['today_new_jobs']}"
         )
 
     # ── /keywords ─────────────────────────────────────────────────────────────
@@ -189,69 +164,6 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
         send_fn("🔄 Triggering job scan now… I’ll message you with any new listings.")
         if run_now_event is not None:
             run_now_event.set()
-
-    # ── /apply <job_id> ───────────────────────────────────────────────────────
-    elif cmd == "/apply":
-        if not arg:
-            send_fn("❌ Usage: /apply <job_id>\nExample: /apply a1b2c3d4")
-        else:
-            from applier.engine import apply_to_job
-            send_fn(f"⏳ Submitting application for Job ID {arg} using your authentic PDF resume...")
-
-            def _async_apply():
-                try:
-                    res = apply_to_job(job_id=arg, mode="manual")
-                    if res.get("success"):
-                        send_fn(f"✅ Application submitted successfully for Job {arg}!\n{res.get('message', '')}")
-                    else:
-                        send_fn(f"⚠️ Application outcome for Job {arg}:\n{res.get('message', '')}")
-                except Exception as e:
-                    send_fn(f"❌ Error applying: {str(e)}")
-
-            threading.Thread(target=_async_apply, daemon=True).start()
-
-    # ── /autoapply <on|off> ───────────────────────────────────────────────────
-    elif cmd == "/autoapply":
-        prof = profile_manager.get_profile()
-        val = arg.lower()
-        if val in ("on", "true", "1", "enable"):
-            prof.setdefault("auto_apply", {})["enabled"] = True
-            profile_manager.save_profile(prof)
-            send_fn("🤖 Auto-apply ENABLED! High-matching jobs will be applied to automatically.")
-        elif val in ("off", "false", "0", "disable"):
-            prof.setdefault("auto_apply", {})["enabled"] = False
-            profile_manager.save_profile(prof)
-            send_fn("⚪ Auto-apply DISABLED.")
-        else:
-            send_fn("❌ Usage: /autoapply on OR /autoapply off")
-
-    # ── /dailycap <n> ─────────────────────────────────────────────────────────
-    elif cmd == "/dailycap":
-        try:
-            cap = int(arg)
-            if cap < 1 or cap > 50:
-                send_fn("❌ Daily cap must be between 1 and 50.")
-            else:
-                prof = profile_manager.get_profile()
-                prof.setdefault("auto_apply", {})["daily_cap"] = cap
-                profile_manager.save_profile(prof)
-                send_fn(f"✅ Auto-apply daily cap set to {cap} application(s) per day.")
-        except (ValueError, TypeError):
-            send_fn("❌ Usage: /dailycap <number>\nExample: /dailycap 5")
-
-    # ── /applications ─────────────────────────────────────────────────────────
-    elif cmd == "/applications":
-        conn = db.get_connection()
-        apps = db.get_applications(conn, limit=5)
-        conn.close()
-        if not apps:
-            send_fn("📊 No applications recorded yet.")
-        else:
-            lines = ["📊 Recent Applications:"]
-            for a in apps:
-                status_emoji = "✅" if a["status"] == "submitted" else "⚠️"
-                lines.append(f"{status_emoji} {a.get('title', 'Role')} @ {a.get('company', 'Company')} ({a.get('source', '')})\n  Status: {a['status']} ({a.get('applied_at', '')})")
-            send_fn("\n\n".join(lines))
 
     # ── Unknown ───────────────────────────────────────────────────────────────
     else:

@@ -1,8 +1,7 @@
-"""SQLite job deduplication and application tracking layer."""
-import sqlite3
+"""SQLite job deduplication and tracking layer."""
 import hashlib
 import logging
-from datetime import datetime
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -15,8 +14,8 @@ def get_connection() -> sqlite3.Connection:
     """Open (or create) the SQLite database and ensure the schema exists."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    
-    # 1. Base seen_jobs table
+
+    # Base seen_jobs table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS seen_jobs (
             job_id      TEXT PRIMARY KEY,
@@ -33,36 +32,10 @@ def get_connection() -> sqlite3.Connection:
         )
     """)
 
-    # Check and add missing columns if upgrading existing table
-    cursor = conn.execute("PRAGMA table_info(seen_jobs)")
-    existing_cols = {row["name"] for row in cursor.fetchall()}
-    for col, col_type in [
-        ("location", "TEXT DEFAULT ''"),
-        ("salary", "TEXT DEFAULT ''"),
-        ("apply_type", "TEXT DEFAULT 'unknown'"),
-        ("description", "TEXT DEFAULT ''"),
-        ("match_score", "INTEGER DEFAULT 0"),
-    ]:
-        if col not in existing_cols:
-            try:
-                conn.execute(f"ALTER TABLE seen_jobs ADD COLUMN {col} {col_type}")
-            except Exception as e:
-                logger.debug(f"Column {col} alter ignored: {e}")
+    # Performance Indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
 
-    # 2. Applications history table
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS applications (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_id          TEXT NOT NULL,
-            status          TEXT NOT NULL,
-            mode            TEXT NOT NULL DEFAULT 'manual',
-            applied_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            notes           TEXT DEFAULT '',
-            screenshot_path TEXT DEFAULT '',
-            error_message   TEXT DEFAULT '',
-            FOREIGN KEY (job_id) REFERENCES seen_jobs (job_id)
-        )
-    """)
     conn.commit()
     return conn
 
@@ -80,12 +53,21 @@ def is_new(conn: sqlite3.Connection, job_id: str) -> bool:
 
 
 def mark_seen(conn: sqlite3.Connection, job: dict) -> None:
-    """Record a job as seen. No-op if it already exists (INSERT OR IGNORE)."""
+    """Record a job as seen. Updates metadata if it already exists."""
     conn.execute(
         """
-        INSERT OR IGNORE INTO seen_jobs (
+        INSERT INTO seen_jobs (
             job_id, title, company, url, source, location, salary, apply_type, description, match_score
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(job_id) DO UPDATE SET
+            title=excluded.title,
+            company=excluded.company,
+            url=excluded.url,
+            location=excluded.location,
+            salary=excluded.salary,
+            apply_type=excluded.apply_type,
+            description=excluded.description,
+            match_score=excluded.match_score
         """,
         (
             job.get("job_id"),
@@ -109,39 +91,41 @@ def total_seen(conn: sqlite3.Connection) -> int:
     return cur.fetchone()[0]
 
 
+def count_today_jobs(conn: sqlite3.Connection) -> int:
+    """Return count of new jobs discovered today."""
+    cur = conn.execute(
+        """
+        SELECT COUNT(*) FROM seen_jobs 
+        WHERE (
+            date(seen_at, 'localtime') = date('now', 'localtime')
+            OR date(seen_at) = date('now')
+        )
+        """
+    )
+    row = cur.fetchone()
+    return row[0] if row else 0
+
+
 def get_jobs(
     conn: sqlite3.Connection,
     limit: int = 100,
     offset: int = 0,
     source: Optional[str] = None,
     search: Optional[str] = None,
-    apply_type: Optional[str] = None,
 ) -> list[dict]:
-    """Retrieve tracked jobs with optional filtering."""
-    query = """
-        SELECT j.*, 
-               a.status as application_status,
-               a.applied_at as applied_at,
-               a.mode as application_mode,
-               a.screenshot_path as application_screenshot
-        FROM seen_jobs j
-        LEFT JOIN applications a ON j.job_id = a.job_id
-        WHERE 1=1
-    """
+    """Retrieve tracked jobs ordered by discovery time."""
+    query = "SELECT * FROM seen_jobs WHERE 1=1"
     params: list = []
 
     if source:
-        query += " AND j.source = ?"
+        query += " AND source = ?"
         params.append(source)
-    if apply_type:
-        query += " AND j.apply_type = ?"
-        params.append(apply_type)
     if search:
-        query += " AND (j.title LIKE ? OR j.company LIKE ? OR j.location LIKE ?)"
+        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ?)"
         term = f"%{search}%"
         params.extend([term, term, term])
 
-    query += " ORDER BY j.seen_at DESC LIMIT ? OFFSET ?"
+    query += " ORDER BY seen_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     cur = conn.execute(query, params)
@@ -150,86 +134,22 @@ def get_jobs(
 
 def get_job_by_id(conn: sqlite3.Connection, job_id: str) -> Optional[dict]:
     """Retrieve a single job listing by ID."""
-    cur = conn.execute(
-        """
-        SELECT j.*, 
-               a.status as application_status,
-               a.applied_at as applied_at,
-               a.notes as application_notes,
-               a.screenshot_path as application_screenshot,
-               a.error_message as application_error
-        FROM seen_jobs j
-        LEFT JOIN applications a ON j.job_id = a.job_id
-        WHERE j.job_id = ?
-        """,
-        (job_id,),
-    )
+    cur = conn.execute("SELECT * FROM seen_jobs WHERE job_id = ?", (job_id,))
     row = cur.fetchone()
     return dict(row) if row else None
 
 
-def record_application(
-    conn: sqlite3.Connection,
-    job_id: str,
-    status: str,
-    mode: str = "manual",
-    notes: str = "",
-    screenshot_path: str = "",
-    error_message: str = "",
-) -> int:
-    """Record a submitted, failed, or pending application attempt."""
-    cur = conn.execute(
-        """
-        INSERT INTO applications (job_id, status, mode, notes, screenshot_path, error_message)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (job_id, status, mode, notes, screenshot_path, error_message),
-    )
-    conn.commit()
-    return cur.lastrowid
-
-
-def get_applications(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
-    """Get all past application attempts with job details."""
-    cur = conn.execute(
-        """
-        SELECT a.*, j.title, j.company, j.url, j.source, j.location
-        FROM applications a
-        JOIN seen_jobs j ON a.job_id = j.job_id
-        ORDER BY a.applied_at DESC
-        LIMIT ?
-        """,
-        (limit,),
-    )
-    return [dict(row) for row in cur.fetchall()]
-
-
-def count_today_applications(conn: sqlite3.Connection) -> int:
-    """Return the number of applications submitted today (UTC/local day)."""
-    cur = conn.execute(
-        """
-        SELECT COUNT(*) FROM applications 
-        WHERE DATE(applied_at) = DATE('now') AND status = 'submitted'
-        """
-    )
-    return cur.fetchone()[0]
-
-
-def get_application_stats(conn: sqlite3.Connection) -> dict:
-    """Return summary statistics for the dashboard."""
+def get_stats(conn: sqlite3.Connection) -> dict:
+    """Return dashboard summary stats."""
     total_jobs = total_seen(conn)
-    
-    cur = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'submitted'")
-    total_applied = cur.fetchone()[0]
+    today_new = count_today_jobs(conn)
 
-    cur = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'failed'")
-    total_failed = cur.fetchone()[0]
-
-    today_applied = count_today_applications(conn)
+    # Breakdown by source
+    cur = conn.execute("SELECT source, COUNT(*) FROM seen_jobs GROUP BY source")
+    source_counts = dict(cur.fetchall())
 
     return {
         "total_jobs": total_jobs,
-        "total_applied": total_applied,
-        "total_failed": total_failed,
-        "today_applied": today_applied,
+        "today_new_jobs": today_new,
+        "sources": source_counts,
     }

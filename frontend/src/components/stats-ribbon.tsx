@@ -7,8 +7,8 @@ interface StatsRibbonProps {
   heading: string;
   subtitle: string;
   totalJobs: number;
-  totalApplied: number;
-  todayApplied: number;
+  todayNewJobs?: number;
+  keywordsCount?: number;
   lastScanTime?: string;
 }
 
@@ -16,8 +16,8 @@ export function StatsRibbon({
   heading,
   subtitle,
   totalJobs,
-  totalApplied,
-  todayApplied,
+  todayNewJobs = 0,
+  keywordsCount = 0,
   lastScanTime,
 }: StatsRibbonProps) {
   return (
@@ -26,26 +26,26 @@ export function StatsRibbon({
         <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-white mb-1">
           {heading}
         </h1>
-        <p className="text-sm text-slate-400 max-w-xl">{subtitle}</p>
+        <p className="text-xs text-slate-400 max-w-xl leading-relaxed">{subtitle}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 flex flex-col min-w-[105px] shadow-sm">
+        <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Tracked</span>
-          <span className="text-xl font-bold text-slate-100 mt-0.5">{totalJobs}</span>
+          <span className="text-xl font-bold text-slate-100 mt-0.5 font-mono">{totalJobs}</span>
         </div>
 
-        <div className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 flex flex-col min-w-[105px] shadow-sm">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Applied</span>
-          <span className="text-xl font-bold text-emerald-400 mt-0.5">{totalApplied}</span>
+        <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discovered Today</span>
+          <span className="text-xl font-bold text-indigo-400 mt-0.5 font-mono">{todayNewJobs}</span>
         </div>
 
-        <div className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 flex flex-col min-w-[105px] shadow-sm">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Applied Today</span>
-          <span className="text-xl font-bold text-cyan-400 mt-0.5">{todayApplied}</span>
+        <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Keywords</span>
+          <span className="text-xl font-bold text-emerald-400 mt-0.5 font-mono">{keywordsCount}</span>
         </div>
 
-        <div className="px-4 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 flex flex-col min-w-[105px] shadow-sm">
+        <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Last Scan</span>
           <span className="text-xs font-mono font-medium text-slate-300 mt-1.5">{formatTimeAgo(lastScanTime)}</span>
         </div>
