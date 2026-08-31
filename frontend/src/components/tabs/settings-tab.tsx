@@ -125,17 +125,23 @@ export function SettingsTab({
             </div>
 
             <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="recipient" className="text-xs text-slate-300 flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-                <span>iMessage Recipient (Phone / Apple ID)</span>
+              <Label htmlFor="recipient" className="text-xs text-slate-300 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>iMessage Recipients (Broadcast List)</span>
+                </div>
+                <span className="text-[11px] text-slate-500 font-normal">Comma-separated</span>
               </Label>
               <Input
                 id="recipient"
                 value={formData.recipient || ""}
                 onChange={(e) => handleChange("recipient", e.target.value)}
-                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
-                placeholder="e.g. +639123456789 or name@icloud.com"
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100 placeholder:text-slate-600 focus:border-indigo-500"
+                placeholder="e.g. fravfore@gmail.com, +639171234567, colleague@icloud.com"
               />
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Enter one or multiple phone numbers or Apple ID emails. Tracky will broadcast new job alerts to all verified recipients.
+              </p>
             </div>
 
             {/* Daemon State Toggle */}

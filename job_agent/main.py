@@ -220,22 +220,15 @@ def scraper_loop(dry_run: bool = False) -> None:
 
 def listener_loop() -> None:
     """
-    Polls chat.db every 10 s for incoming messages from the configured recipient.
+    Polls chat.db every 10 s for incoming messages from any of the configured recipients.
     Passes any recognised commands to commander.execute().
     Also checks for run_now.flag written by the menu bar app.
     """
     from listener import get_messages_since
     import commander
-    from notifier import send_imessage
+    from notifier import send_imessage, parse_recipients
 
-    config = load_config()
-    recipient = config.get("recipient", "")
-
-    if not recipient:
-        logger.error("No recipient in config.json — listener loop cannot start.")
-        return
-
-    logger.info(f"Command listener started (polling every 10 s for messages from {recipient})")
+    logger.info("Command listener started (polling chat.db every 10 s for incoming bot commands)")
 
     # Start from "now" so we don't re-process old messages on startup
     last_check = time.time()
@@ -243,26 +236,31 @@ def listener_loop() -> None:
     while True:
         time.sleep(10)
         try:
+            config = load_config()
+            recipients = parse_recipients(config.get("recipient", ""))
+            if not recipients:
+                continue
+
             # Check for menu bar "Run Now" flag file
             if RUN_NOW_FLAG.exists():
                 RUN_NOW_FLAG.unlink(missing_ok=True)
                 logger.info("run_now.flag detected — triggering immediate scan.")
                 run_now_event.set()
 
-            messages = get_messages_since(recipient, last_check)
+            for target in recipients:
+                messages = get_messages_since(target, last_check)
+                for msg in messages:
+                    text = msg["text"]
+                    logger.info(f"Incoming message from {target}: {text!r}")
+
+                    def make_send_fn(dest: str):
+                        return lambda reply: send_imessage(dest, reply)
+
+                    handled = commander.execute(text, make_send_fn(target), run_now_event)
+                    if handled:
+                        logger.info(f"Command handled for {target}: {text!r}")
+
             last_check = time.time()
-
-            for msg in messages:
-                text = msg["text"]
-                logger.info(f"Incoming message: {text!r}")
-
-                def send_fn(reply: str, _recipient: str = recipient) -> None:
-                    send_imessage(_recipient, reply)
-
-                handled = commander.execute(text, send_fn, run_now_event)
-                if handled:
-                    logger.info(f"Command handled: {text!r}")
-
         except Exception as exc:
             logger.error(f"Listener loop error: {exc}")
 
