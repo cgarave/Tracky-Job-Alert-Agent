@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Settings,
   MessageSquare,
@@ -16,6 +17,9 @@ import {
   Sliders,
   Power,
   RefreshCw,
+  Plus,
+  X,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +35,7 @@ export function SettingsTab({
   isLoading,
 }: SettingsTabProps) {
   const [formData, setFormData] = useState<DaemonSettings>(settings);
+  const [keywordInput, setKeywordInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -42,6 +47,54 @@ export function SettingsTab({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleAddKeyword = (rawText?: string) => {
+    const textToAdd = rawText !== undefined ? rawText : keywordInput;
+    if (!textToAdd.trim()) return;
+
+    // Split on commas or semicolons in case user pasted multiple
+    const tokens = textToAdd
+      .split(/[,;\n]/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    const currentKeywords = formData.keywords || [];
+    const lowerExisting = new Set(currentKeywords.map((k) => k.toLowerCase()));
+
+    const newKeywords = [...currentKeywords];
+    for (const token of tokens) {
+      if (!lowerExisting.has(token.toLowerCase())) {
+        newKeywords.push(token);
+        lowerExisting.add(token.toLowerCase());
+      }
+    }
+
+    handleChange("keywords", newKeywords);
+    setKeywordInput("");
+  };
+
+  const handleRemoveKeyword = (indexToRemove: number) => {
+    const nextKeywords = (formData.keywords || []).filter((_, idx) => idx !== indexToRemove);
+    handleChange("keywords", nextKeywords);
+  };
+
+  const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      handleAddKeyword();
+    } else if (e.key === "Backspace" && !keywordInput && (formData.keywords || []).length > 0) {
+      e.preventDefault();
+      handleRemoveKeyword((formData.keywords || []).length - 1);
+    }
+  };
+
+  const handleKeywordPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    if (pasted.includes(",") || pasted.includes("\n") || pasted.includes(";")) {
+      e.preventDefault();
+      handleAddKeyword(pasted);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,6 +109,8 @@ export function SettingsTab({
       setIsSaving(false);
     }
   };
+
+  const keywords = formData.keywords || [];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -75,23 +130,70 @@ export function SettingsTab({
 
         <CardContent className="pt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="keywords" className="text-xs text-slate-300 flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-slate-400" />
-                <span>Job Search Keywords (comma separated)</span>
+            {/* Interactive Keyword Badges / Pills Input */}
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label htmlFor="keyword-input" className="text-xs text-slate-300 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Job Search Keywords</span>
+                </div>
+                <span className="text-[11px] text-indigo-400 font-mono">
+                  {keywords.length} active keyword{keywords.length === 1 ? "" : "s"}
+                </span>
               </Label>
-              <Input
-                id="keywords"
-                value={(formData.keywords || []).join(", ")}
-                onChange={(e) =>
-                  handleChange(
-                    "keywords",
-                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                  )
-                }
-                className="bg-slate-950 border-slate-800 text-xs text-slate-100"
-                placeholder="e.g. software engineer, frontend developer, react developer, python"
-              />
+
+              {/* Tag / Pill Box */}
+              <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-indigo-500/80 transition-colors shadow-inner">
+                {keywords.map((kw, idx) => (
+                  <span
+                    key={`${kw}-${idx}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs font-medium group transition-all hover:border-indigo-400/50"
+                  >
+                    <Tag className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span>{kw}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveKeyword(idx)}
+                      className="p-0.5 text-indigo-400 hover:text-white hover:bg-indigo-500/30 rounded transition-colors"
+                      title={`Remove "${kw}"`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+
+                <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                  <input
+                    id="keyword-input"
+                    type="text"
+                    value={keywordInput}
+                    onChange={(e) => setKeywordInput(e.target.value)}
+                    onKeyDown={handleKeywordKeyDown}
+                    onPaste={handleKeywordPaste}
+                    placeholder={
+                      keywords.length === 0
+                        ? "Type a keyword and press Enter or comma (e.g. React Developer)..."
+                        : "Add another keyword + Enter..."
+                    }
+                    className="flex-1 bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none px-1 py-1"
+                  />
+
+                  {keywordInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddKeyword()}
+                      className="h-6 px-2 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md flex items-center gap-1 shrink-0 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500">
+                Type a role or skill and press <kbd className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded font-mono text-[10px] border border-slate-700">Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded font-mono text-[10px] border border-slate-700">,</kbd> to convert it into a pill. Pressing <kbd className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded font-mono text-[10px] border border-slate-700">Backspace</kbd> on an empty input deletes the last pill.
+              </p>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -176,7 +278,7 @@ export function SettingsTab({
         <Button
           type="submit"
           disabled={isSaving || isLoading}
-          className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm"
+          className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm shadow-indigo-600/30"
         >
           {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           <span>{isSaving ? "Saving..." : "Save Settings"}</span>
