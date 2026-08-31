@@ -1,4 +1,4 @@
-"""SQLite job deduplication, tracking, and dismissal layer."""
+"""SQLite job deduplication, tracking, dismissal, and alert delivery layer."""
 import hashlib
 import logging
 import sqlite3
@@ -28,9 +28,21 @@ def get_connection() -> sqlite3.Connection:
             apply_type  TEXT DEFAULT 'unknown',
             description TEXT DEFAULT '',
             match_score INTEGER DEFAULT 0,
-            seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_alerted  INTEGER DEFAULT 0,
+            alerted_at  TIMESTAMP
         )
     """)
+
+    # Auto-migration for existing databases
+    for col_def in (
+        "is_alerted INTEGER DEFAULT 0",
+        "alerted_at TIMESTAMP",
+    ):
+        try:
+            conn.execute(f"ALTER TABLE seen_jobs ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # 2. Dismissed / Ignored jobs table (prevents future re-scraping alerts)
     conn.execute("""
@@ -43,6 +55,7 @@ def get_connection() -> sqlite3.Connection:
     # Performance Indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_alerted ON seen_jobs(is_alerted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_id ON dismissed_jobs(job_id)")
 
     conn.commit()
@@ -98,6 +111,19 @@ def mark_seen(conn: sqlite3.Connection, job: dict) -> None:
     conn.commit()
 
 
+def mark_jobs_alerted(conn: sqlite3.Connection, job_ids: list[str]) -> int:
+    """Mark job listings as alerted via iMessage with timestamp."""
+    if not job_ids:
+        return 0
+    placeholders = ",".join("?" for _ in job_ids)
+    cur = conn.execute(
+        f"UPDATE seen_jobs SET is_alerted = 1, alerted_at = CURRENT_TIMESTAMP WHERE job_id IN ({placeholders})",
+        job_ids,
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def total_seen(conn: sqlite3.Connection) -> int:
     """Return the total number of jobs tracked so far."""
     cur = conn.execute("SELECT COUNT(*) FROM seen_jobs")
@@ -125,14 +151,20 @@ def get_jobs(
     offset: int = 0,
     source: Optional[str] = None,
     search: Optional[str] = None,
+    alert_status: Optional[str] = None,
 ) -> list[dict]:
-    """Retrieve tracked jobs ordered by discovery time."""
+    """Retrieve tracked jobs ordered by discovery time with optional alert status filtering."""
     query = "SELECT * FROM seen_jobs WHERE 1=1"
     params: list = []
 
     if source:
         query += " AND source = ?"
         params.append(source)
+    if alert_status == "alerted":
+        query += " AND is_alerted = 1"
+    elif alert_status == "unalerted":
+        query += " AND (is_alerted = 0 OR is_alerted IS NULL)"
+
     if search:
         query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)"
         term = f"%{search}%"
@@ -207,6 +239,9 @@ def get_stats(conn: sqlite3.Connection) -> dict:
     total_jobs = total_seen(conn)
     today_new = count_today_jobs(conn)
 
+    cur = conn.execute("SELECT COUNT(*) FROM seen_jobs WHERE is_alerted = 1")
+    total_alerted = cur.fetchone()[0]
+
     # Breakdown by source
     cur = conn.execute("SELECT source, COUNT(*) FROM seen_jobs GROUP BY source")
     source_counts = dict(cur.fetchall())
@@ -214,5 +249,6 @@ def get_stats(conn: sqlite3.Connection) -> dict:
     return {
         "total_jobs": total_jobs,
         "today_new_jobs": today_new,
+        "total_alerted": total_alerted,
         "sources": source_counts,
     }

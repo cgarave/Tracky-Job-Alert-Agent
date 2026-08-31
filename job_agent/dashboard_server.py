@@ -100,8 +100,8 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             conn = db.get_connection()
             limit = int(query.get("limit", [100])[0])
             search = query.get("search", [None])[0]
-            source = query.get("source", [None])[0]
-            jobs = db.get_jobs(conn, limit=limit, search=search, source=source)
+            alert_status = query.get("alert_status", [None])[0]
+            jobs = db.get_jobs(conn, limit=limit, search=search, source=source, alert_status=alert_status)
             conn.close()
             self._send_json({"jobs": jobs, "total": len(jobs)})
 

@@ -1,10 +1,12 @@
-"""Send iMessages via macOS AppleScript with multi-recipient broadcast support."""
+"""Send iMessages via macOS AppleScript with 10-job bubble batching and multi-recipient broadcast support."""
 import logging
 import subprocess
 import time
 from typing import Union
 
 logger = logging.getLogger(__name__)
+
+NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
 
 def parse_recipients(raw: Union[str, list[str], None]) -> list[str]:
@@ -19,13 +21,11 @@ def parse_recipients(raw: Union[str, list[str], None]) -> list[str]:
     if isinstance(raw, list):
         items = [str(x).strip() for x in raw if str(x).strip()]
     elif isinstance(raw, str):
-        # Split by comma or semicolon or newline
         for chunk in raw.replace(";", ",").replace("\n", ",").split(","):
             cleaned = chunk.strip()
             if cleaned:
                 items.append(cleaned)
 
-    # Deduplicate while preserving order
     seen = set()
     result = []
     for item in items:
@@ -61,7 +61,7 @@ def send_imessage(recipient: str, message: str) -> bool:
             ["osascript", "-e", script],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=20,
         )
         if result.returncode != 0:
             logger.error(f"AppleScript error for {recipient} (rc={result.returncode}): {result.stderr.strip()}")
@@ -76,38 +76,59 @@ def send_imessage(recipient: str, message: str) -> bool:
         return False
 
 
-def format_job_alert(job: dict) -> str:
-    """Format a single job dict into a readable actionable iMessage string."""
-    title = job.get("title", "Unknown Title").strip()
-    company = job.get("company", "Unknown Company").strip()
-    source = job.get("source", "Job Board").strip()
-    location = job.get("location", "").strip()
-    salary = job.get("salary", "").strip()
-    url = job.get("url", "").strip()
-
+def format_batch_message(
+    chunk: list[dict],
+    batch_idx: int,
+    total_batches: int,
+    total_found: int,
+    start_index: int = 1,
+) -> str:
+    """
+    Format up to 10 jobs cleanly into a single iMessage text bubble with structured metadata and dividers.
+    """
+    header = f"🐶 Tracky · Batch {batch_idx}/{total_batches} ({len(chunk)} Listings)"
     lines = [
-        "🐶 Tracky · New Job Alert!",
+        header,
+        "═══════════════════════",
         "",
-        f"📋 {title}",
-        f"🏢 {company}",
-        f"🌐 {source}",
     ]
-    if location:
-        lines.append(f"📍 {location}")
-    if salary and salary.lower() != "negotiable":
-        lines.append(f"💰 {salary}")
-    lines.append(f"🔗 {url}")
 
-    return "\n".join(lines)
+    for idx, job in enumerate(chunk):
+        num_label = NUMBER_EMOJIS[idx] if idx < len(NUMBER_EMOJIS) else f"#{start_index + idx}"
+        title = job.get("title", "Unknown Title").strip()
+        company = job.get("company", "Unknown Company").strip()
+        source = job.get("source", "Job Board").strip()
+        location = job.get("location", "").strip()
+        salary = job.get("salary", "").strip()
+        url = job.get("url", "").strip()
 
+        item_block = [
+            f"{num_label} {title}",
+            f"🏢 {company} · 🌐 {source}",
+        ]
 
-def format_digest(jobs: list) -> str:
-    """Format a multi-job digest message when many new jobs are found."""
-    lines = [f"🐶 Tracky · {len(jobs)} new jobs discovered!\n"]
-    for job in jobs[:10]:
-        lines.append(f"• {job.get('title', 'Role')} @ {job.get('company', 'Company')} ({job.get('source', '')})")
-    if len(jobs) > 10:
-        lines.append(f"...and {len(jobs) - 10} more.")
+        meta_parts = []
+        if location:
+            meta_parts.append(f"📍 {location}")
+        if salary and salary.lower() != "negotiable":
+            meta_parts.append(f"💰 {salary}")
+        if meta_parts:
+            item_block.append(" · ".join(meta_parts))
+
+        if url:
+            item_block.append(f"🔗 {url}")
+
+        lines.extend(item_block)
+        if idx < len(chunk) - 1:
+            lines.append("")
+            lines.append("───────────────────────")
+            lines.append("")
+
+    lines.append("")
+    lines.append("═══════════════════════")
+    end_index = start_index + len(chunk) - 1
+    lines.append(f"📱 Showing {start_index}–{end_index} of {total_found} fresh jobs")
+
     return "\n".join(lines)
 
 
@@ -119,33 +140,51 @@ def send_broadcast(recipients: Union[str, list[str]], message: str) -> None:
         time.sleep(1.0)
 
 
-def send_job_alerts(recipients: Union[str, list[str]], jobs: list) -> None:
+def send_job_alerts(recipients: Union[str, list[str]], jobs: list) -> list[str]:
     """
-    Broadcast job alerts to all verified recipients.
-    Each job gets its own formatted message.
+    Broadcast job alerts grouped into 10-job message bubbles (capped at 30 jobs maximum per scan).
+    Returns list of alerted job IDs.
     """
     if not jobs:
-        return
+        return []
 
     targets = parse_recipients(recipients)
     if not targets:
         logger.warning("No valid recipients configured. Skipping alert delivery.")
-        return
+        return []
 
-    cap = 25
+    # Cap at 30 jobs per scan (up to 3 message bubbles of 10)
+    cap = 30
     to_send = jobs[:cap]
+    chunk_size = 10
+    chunks = [to_send[i:i + chunk_size] for i in range(0, len(to_send), chunk_size)]
+    total_batches = len(chunks)
 
-    logger.info(f"Broadcasting {len(to_send)} job alert(s) to {len(targets)} recipient(s): {', '.join(targets)}")
+    logger.info(
+        f"Broadcasting {len(to_send)} job alert(s) in {total_batches} bubble(s) of 10 to {len(targets)} recipient(s): {', '.join(targets)}"
+    )
 
     for target in targets:
-        for job in to_send:
-            send_imessage(target, format_job_alert(job))
-            time.sleep(1.5)
+        start_idx = 1
+        for batch_idx, chunk in enumerate(chunks, start=1):
+            batch_msg = format_batch_message(
+                chunk=chunk,
+                batch_idx=batch_idx,
+                total_batches=total_batches,
+                total_found=len(jobs),
+                start_index=start_idx,
+            )
+            send_imessage(target, batch_msg)
+            start_idx += len(chunk)
+            time.sleep(2.0)  # Safe delay between bubble deliveries
 
         if len(jobs) > cap:
-            send_imessage(
-                target,
-                f"ℹ️ {len(jobs) - cap} more jobs were discovered in this scan.\n"
-                "Tip: Log in to the Tracky Dashboard to view the full listings feed."
+            summary_msg = (
+                f"ℹ️ {len(jobs) - cap} more jobs were discovered in this scan beyond the 30-job alert limit.\n\n"
+                "🖥️ Open the Tracky Dashboard to view and search all listings:\n"
+                "http://127.0.0.1:5050"
             )
+            send_imessage(target, summary_msg)
             time.sleep(1.0)
+
+    return [j["job_id"] for j in to_send if "job_id" in j]

@@ -10,6 +10,8 @@ export interface Job {
   description?: string;
   match_score?: number;
   seen_at?: string;
+  is_alerted?: boolean | number;
+  alerted_at?: string;
 }
 
 export interface DaemonSettings {
@@ -26,6 +28,7 @@ export interface SystemStatus {
   stats: {
     total_jobs: number;
     today_new_jobs?: number;
+    total_alerted?: number;
     sources?: Record<string, number>;
   };
   paused: boolean;

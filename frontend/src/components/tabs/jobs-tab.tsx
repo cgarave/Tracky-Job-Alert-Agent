@@ -23,6 +23,8 @@ import {
   Sparkles,
   Eye,
   FileText,
+  Smartphone,
+  Globe,
 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils";
 import * as api from "@/lib/api";
@@ -37,6 +39,7 @@ interface JobsTabProps {
 export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSource, setSelectedSource] = useState("all");
+  const [selectedAlertFilter, setSelectedAlertFilter] = useState<"all" | "alerted" | "unalerted">("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
 
   // Multi-select state
@@ -57,6 +60,10 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
 
   const sources = useMemo(() => ["all", ...Array.from(new Set(jobs.map((j) => j.source)))], [jobs]);
 
+  // Counts for Alert status filter pills
+  const alertedCount = useMemo(() => jobs.filter((j) => Boolean(j.is_alerted)).length, [jobs]);
+  const unalertedCount = jobs.length - alertedCount;
+
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
       const matchesSearch =
@@ -65,9 +72,13 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
         (job.location && job.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (job.description && job.description.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesSource = selectedSource === "all" || job.source === selectedSource;
-      return matchesSearch && matchesSource;
+      const matchesAlert =
+        selectedAlertFilter === "all" ||
+        (selectedAlertFilter === "alerted" && Boolean(job.is_alerted)) ||
+        (selectedAlertFilter === "unalerted" && !job.is_alerted);
+      return matchesSearch && matchesSource && matchesAlert;
     });
-  }, [jobs, searchTerm, selectedSource]);
+  }, [jobs, searchTerm, selectedSource, selectedAlertFilter]);
 
   // Master Select All status for filtered items
   const isAllFilteredSelected = filteredJobs.length > 0 && filteredJobs.every((j) => selectedIds.has(j.job_id));
@@ -117,12 +128,10 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
   // Toggle master select all for currently filtered items
   const handleToggleSelectAll = () => {
     if (isAllFilteredSelected) {
-      // Deselect all filtered items
       const next = new Set(selectedIds);
       filteredJobs.forEach((j) => next.delete(j.job_id));
       setSelectedIds(next);
     } else {
-      // Select all filtered items
       const next = new Set(selectedIds);
       filteredJobs.forEach((j) => next.add(j.job_id));
       setSelectedIds(next);
@@ -224,7 +233,43 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* iMessage Alert Sent Filter */}
+          <div className="flex items-center rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs">
+            <button
+              onClick={() => setSelectedAlertFilter("all")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all ${
+                selectedAlertFilter === "all"
+                  ? "bg-slate-800 text-white font-medium shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setSelectedAlertFilter("alerted")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all flex items-center gap-1.5 ${
+                selectedAlertFilter === "alerted"
+                  ? "bg-indigo-600 text-white font-medium shadow-sm"
+                  : "text-indigo-400 hover:text-indigo-200"
+              }`}
+            >
+              <Smartphone className="w-3 h-3" />
+              <span>Alert Sent ({alertedCount})</span>
+            </button>
+            <button
+              onClick={() => setSelectedAlertFilter("unalerted")}
+              className={`px-2.5 py-1 rounded-md text-xs transition-all flex items-center gap-1.5 ${
+                selectedAlertFilter === "unalerted"
+                  ? "bg-slate-800 text-white font-medium shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Globe className="w-3 h-3" />
+              <span>Web ({unalertedCount})</span>
+            </button>
+          </div>
+
           {/* Source Filter Tabs */}
           <div className="flex items-center rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs">
             {sources.map((src) => (
@@ -237,7 +282,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                {src === "all" ? `All (${jobs.length})` : src}
+                {src === "all" ? `All Sources` : src}
               </button>
             ))}
           </div>
@@ -307,7 +352,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
             No matching job listings found
           </CardTitle>
           <CardDescription className="text-xs text-slate-400">
-            Try adjusting your search keywords, clearing source filters, or triggering a scan.
+            Try adjusting your search keywords, clearing filters, or triggering a scan.
           </CardDescription>
         </Card>
       ) : viewMode === "table" ? (
@@ -325,7 +370,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                     />
                   </th>
                   <th className="py-3 px-3">Title & Company</th>
-                  <th className="py-3 px-3">Platform</th>
+                  <th className="py-3 px-3">Platform & Delivery</th>
                   <th className="py-3 px-3">Location</th>
                   <th className="py-3 px-3">Salary</th>
                   <th className="py-3 px-3">Discovered</th>
@@ -335,6 +380,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
               <tbody className="divide-y divide-slate-800/50">
                 {filteredJobs.map((job) => {
                   const isSelected = selectedIds.has(job.job_id);
+                  const isAlerted = Boolean(job.is_alerted);
 
                   return (
                     <tr
@@ -373,9 +419,22 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       </td>
 
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
-                          {job.source}
-                        </Badge>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
+                            {job.source}
+                          </Badge>
+                          {isAlerted ? (
+                            <Badge variant="outline" className="text-[10px] bg-indigo-500/15 border-indigo-500/30 text-indigo-300 gap-1 flex items-center">
+                              <Smartphone className="w-2.5 h-2.5 text-indigo-400" />
+                              <span>Alert Sent</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] bg-slate-950/60 border-slate-800/60 text-slate-500 gap-1 flex items-center">
+                              <Globe className="w-2.5 h-2.5 text-slate-600" />
+                              <span>Web</span>
+                            </Badge>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-3 px-3 whitespace-nowrap text-slate-400">
@@ -447,6 +506,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredJobs.map((job) => {
             const isSelected = selectedIds.has(job.job_id);
+            const isAlerted = Boolean(job.is_alerted);
 
             return (
               <Card
@@ -460,7 +520,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
               >
                 <CardHeader className="pb-3 relative">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <div onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={isSelected}
@@ -471,6 +531,18 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-slate-300">
                         {job.source}
                       </Badge>
+
+                      {isAlerted ? (
+                        <Badge variant="outline" className="text-[10px] bg-indigo-500/15 border-indigo-500/30 text-indigo-300 gap-1 flex items-center">
+                          <Smartphone className="w-2.5 h-2.5 text-indigo-400" />
+                          <span>Alert Sent</span>
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] bg-slate-950/60 border-slate-800/60 text-slate-500 gap-1 flex items-center">
+                          <Globe className="w-2.5 h-2.5 text-slate-600" />
+                          <span>Web</span>
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1">

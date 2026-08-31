@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +21,8 @@ import {
   Copy,
   Check,
   FileText,
+  Smartphone,
+  Globe,
 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
   };
 
   const hasDescription = !!(job.description && job.description.trim().length > 0);
+  const isAlerted = Boolean(job.is_alerted);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -55,15 +57,29 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
         {/* Header */}
         <div className="p-6 pb-4 border-b border-slate-800 bg-slate-950/60">
           <DialogHeader>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <Badge variant="outline" className="text-[11px] bg-slate-900 border-slate-800 text-slate-300">
                 {job.source}
               </Badge>
+
+              {isAlerted ? (
+                <Badge variant="outline" className="text-[10px] bg-indigo-500/15 border-indigo-500/30 text-indigo-300 gap-1 flex items-center">
+                  <Smartphone className="w-3 h-3 text-indigo-400" />
+                  <span>Alert Sent (iMessage)</span>
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] bg-slate-800/80 border-slate-700 text-slate-400 gap-1 flex items-center">
+                  <Globe className="w-3 h-3 text-slate-500" />
+                  <span>Web Discovery</span>
+                </Badge>
+              )}
+
               {job.apply_type && job.apply_type !== "unknown" && (
-                <Badge variant="outline" className="text-[10px] bg-indigo-500/10 border-indigo-500/30 text-indigo-300">
+                <Badge variant="outline" className="text-[10px] bg-slate-800 border-slate-700 text-slate-300">
                   {job.apply_type}
                 </Badge>
               )}
+
               <span className="text-xs text-slate-500 flex items-center gap-1 ml-auto font-mono">
                 <Clock className="w-3.5 h-3.5 text-slate-500" />
                 {formatTimeAgo(job.seen_at)}
@@ -110,7 +126,7 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
 
         {/* Scrollable Description Body */}
         <div className="flex-1 overflow-y-auto p-6 text-xs leading-relaxed text-slate-300 space-y-4">
-          <div className="flex items-center gap-2 text-xs font-semibold text-white uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-2">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-2">
             <FileText className="w-4 h-4 text-indigo-400" />
             <span>Job Description & Requirements</span>
           </div>

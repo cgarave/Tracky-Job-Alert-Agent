@@ -201,7 +201,10 @@ def scraper_loop(dry_run: bool = False) -> None:
             return  # Exit after one pass in dry-run mode
 
         if new_jobs and recipient:
-            send_job_alerts(recipient, new_jobs)
+            alerted_ids = send_job_alerts(recipient, new_jobs)
+            if alerted_ids:
+                db_module.mark_jobs_alerted(db_conn, alerted_ids)
+                logger.info(f"Marked {len(alerted_ids)} jobs as alerted in seen_jobs database.")
         elif not recipient:
             logger.warning("No recipient set in config.json — job alerts cannot be sent.")
 
