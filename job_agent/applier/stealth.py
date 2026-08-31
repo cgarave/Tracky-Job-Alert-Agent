@@ -148,8 +148,10 @@ def configure_stealth_context(context, suppress_google_one_tap: bool = True) -> 
         logger.warning(f"Failed to inject stealth script: {exc}")
 
     if suppress_google_one_tap:
-        # Abort Google One Tap background iframes which flap/twitch in automated Chromium
+        # Abort Google One Tap background iframes and SDK endpoints that cause flapping/twitching
         try:
+            context.route("**/*google.com/gsi/*", lambda route: route.abort())
+            context.route("**/*accounts.google.com/gsi/*", lambda route: route.abort())
             context.route("**/gsi/iframe**", lambda route: route.abort())
             context.route("**/gsi/select**", lambda route: route.abort())
             context.route("**/gsi/status**", lambda route: route.abort())
@@ -161,27 +163,34 @@ def solve_turnstile_challenge(page, timeout_ms: int = 15000) -> bool:
     """
     Detects and automatically resolves Cloudflare Turnstile / Bot challenge.
     Simulates humanized mouse movements to click the verification checkbox.
-    Returns True if resolved, False if timed out or not resolved.
+    Returns True if resolved or if not in a challenge, False if timed out.
     """
+    # 1. Quick check: Is this genuinely a Cloudflare challenge?
+    try:
+        has_challenge_dom = page.query_selector(
+            "#challenge-stage, #cf-stage, iframe[src*='challenges.cloudflare.com'], iframe[title*='Cloudflare']"
+        )
+        body_text = page.evaluate("() => document.body ? document.body.innerText : ''")
+        is_blocked = "additional verification required" in body_text.lower() or "troubleshooting cloudflare errors" in body_text.lower()
+
+        if not has_challenge_dom and not is_blocked:
+            # Not an active Cloudflare block
+            return True
+    except Exception:
+        pass
+
     start_time = time.time()
-    logger.info("[Stealth] Checking for Cloudflare Turnstile challenge...")
+    logger.info("[Stealth] Cloudflare challenge detected — attempting automated resolution...")
 
     while (time.time() - start_time) * 1000 < timeout_ms:
-        title = ""
         try:
-            title = page.title().lower()
+            body_text = page.evaluate("() => document.body ? document.body.innerText : ''")
+            if "additional verification required" not in body_text.lower() and "troubleshooting cloudflare errors" not in body_text.lower():
+                if not page.query_selector("iframe[src*='challenges.cloudflare.com']"):
+                    logger.info("[Stealth] Challenge cleared successfully!")
+                    return True
         except Exception:
             pass
-
-        # If page already passed challenge
-        if "just a moment" not in title and "security check" not in title and "attention required" not in title:
-            # Also check if main body is visible
-            try:
-                body = page.query_selector("body")
-                if body and not page.query_selector("iframe[src*='challenges.cloudflare.com']"):
-                    return True
-            except Exception:
-                return True
 
         # Check for Cloudflare Turnstile iframe
         turnstile_iframe = page.frame_locator(
@@ -209,15 +218,6 @@ def solve_turnstile_challenge(page, timeout_ms: int = 15000) -> bool:
                     logger.info("[Stealth] Clicked Turnstile checkbox. Awaiting verification...")
         except Exception as exc:
             logger.debug(f"[Stealth] Turnstile query notice: {exc}")
-
-        # Check if challenge cleared
-        try:
-            title = page.title().lower()
-            if "just a moment" not in title and "security check" not in title and "attention required" not in title:
-                logger.info("[Stealth] Cloudflare Turnstile successfully bypassed!")
-                return True
-        except Exception:
-            pass
 
         page.wait_for_timeout(500)
 

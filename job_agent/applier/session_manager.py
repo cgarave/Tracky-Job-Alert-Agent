@@ -1,6 +1,6 @@
 """
 Session and Cookie Manager for Job Platforms.
-Enables interactive session sync, direct cookie paste/import, and persistent cookie storage for automated runs.
+Enables persistent profile sessions, interactive login sync, direct cookie paste/import, and robust storage state tracking.
 """
 import json
 import logging
@@ -17,8 +17,12 @@ except (ImportError, ModuleNotFoundError):
 
 logger = logging.getLogger(__name__)
 
-SESSIONS_DIR = Path(__file__).parent.parent / "data" / "sessions"
+DATA_DIR = Path(__file__).parent.parent / "data"
+SESSIONS_DIR = DATA_DIR / "sessions"
+PROFILES_DIR = DATA_DIR / "profiles"
+
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 
 PLATFORM_URLS = {
     "indeed": {
@@ -49,7 +53,7 @@ PLATFORM_URLS = {
 
 AUTH_COOKIE_SIGNATURES = {
     "linkedin": ["li_at", "JSESSIONID", "bcookie", "li_sugr"],
-    "indeed": ["CTK", "SURF", "SHARED_INDEED_CSRF_TOKEN", "INDEED_CSRF_TOKEN", "LOGIN_PERSISTENCE", "LV"],
+    "indeed": ["CTK", "SURF", "SHARED_INDEED_CSRF_TOKEN", "INDEED_CSRF_TOKEN", "LOGIN_PERSISTENCE", "LV", "cf_clearance"],
     "jobstreet": ["seekSession", "user", "identity", "JobseekerSession", "token", "auth"],
     "onlinejobs": ["ci_session", "oj_session", "logged_in", "user_id"],
 }
@@ -63,8 +67,15 @@ def get_session_path(platform: str) -> Path:
     return SESSIONS_DIR / f"session_{platform.lower()}.json"
 
 
+def get_profile_dir(platform: str) -> Path:
+    """Return the persistent browser profile directory for a platform."""
+    pdir = PROFILES_DIR / platform.lower()
+    pdir.mkdir(parents=True, exist_ok=True)
+    return pdir
+
+
 def is_session_active(platform: str) -> bool:
-    """Check if a genuine authenticated session file exists with valid login cookies."""
+    """Check if a genuine authenticated session file or persistent profile exists with valid login cookies."""
     plat = platform.lower()
     path = get_session_path(plat)
     if not path.exists():
@@ -153,7 +164,6 @@ def verify_and_save_active_session(platform: str) -> dict:
     path = get_session_path(plat)
     if path.exists():
         try:
-            # Touch file to refresh timestamp to right now
             path.touch()
         except Exception:
             pass
@@ -167,7 +177,7 @@ def verify_and_save_active_session(platform: str) -> dict:
         "message": (
             "Session verified and saved successfully!"
             if active
-            else "No active authenticated session detected. Please log in on the interactive window or paste cookies."
+            else "No active authenticated session detected. Please complete login or paste cookies."
         ),
     }
 
@@ -286,8 +296,8 @@ def import_raw_cookies(platform: str, raw_input: str) -> dict:
 
 def launch_interactive_login(platform: str) -> dict:
     """
-    Launch interactive Playwright browser window to log in and snapshot session cookies.
-    Auto-detects successful login and flushes storage state to disk.
+    Launch persistent browser profile window for authentic login.
+    Uses launch_persistent_context so Google SSO and Cloudflare trust tokens are saved natively.
     """
     plat = platform.lower()
     if plat not in PLATFORM_URLS:
@@ -300,57 +310,42 @@ def launch_interactive_login(platform: str) -> dict:
 
     info = PLATFORM_URLS[plat]
     session_path = get_session_path(plat)
+    profile_dir = get_profile_dir(plat)
 
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         raise RuntimeError("Playwright is not installed.")
 
-    logger.info(f"Launching login helper window for {info['name']}...")
+    logger.info(f"Launching persistent login helper window for {info['name']}...")
 
     save_event = threading.Event()
     close_event = threading.Event()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
             headless=False,
             ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-default-browser-check",
                 "--disable-infobars",
-                "--window-size=1366,850",
+                "--window-size=1280,850",
             ],
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 850},
+            extra_http_headers=DEFAULT_EXTRA_HEADERS,
         )
 
-        context_kwargs: dict = {
-            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            "viewport": {"width": 1366, "height": 850},
-            "extra_http_headers": DEFAULT_EXTRA_HEADERS,
-        }
-
-        # Load existing cookies if present so user might already be authenticated
-        if session_path.exists() and is_session_active(plat):
-            context_kwargs["storage_state"] = str(session_path)
-
-        context = browser.new_context(**context_kwargs)
-        
-        # Apply full anti-bot CDP stealth & suppress Google One Tap flapping
+        # Apply stealth CDP script & suppress Google One Tap background flapping
         configure_stealth_context(context, suppress_google_one_tap=True)
 
-        # Handle OAuth / SSO popups smoothly without flapping
-        def _handle_popup(new_p):
-            try:
-                configure_stealth_context(new_p.context, suppress_google_one_tap=False)
-            except Exception:
-                pass
-        context.on("page", _handle_popup)
-
-        page = context.new_page()
+        # Use the initial page created by persistent context
+        page = context.pages[0] if context.pages else context.new_page()
 
         with _lock:
             _active_logins[plat] = {
-                "browser": browser,
                 "context": context,
                 "page": page,
                 "save_event": save_event,
@@ -362,35 +357,21 @@ def launch_interactive_login(platform: str) -> dict:
         except Exception as exc:
             logger.warning(f"Initial navigation notice for {info['name']}: {exc}")
 
-        # Monitoring loop: periodically snapshot cookies and check for login completion
-        last_save = 0
+        # Monitoring loop: wait until window is closed or save/close event signaled
         while True:
             try:
-                if not browser.is_connected():
-                    break
+                # Check if all pages closed
                 if not context.pages or all(p.is_closed() for p in context.pages):
                     time.sleep(0.5)
                     if not context.pages or all(p.is_closed() for p in context.pages):
                         break
-                if close_event.is_set():
+                if close_event.is_set() or save_event.is_set():
                     break
-
-                now = time.time()
-                # Periodically save storage state every 2 seconds
-                if now - last_save >= 2.0 or save_event.is_set():
-                    try:
-                        context.storage_state(path=str(session_path))
-                        last_save = now
-                    except Exception:
-                        pass
-                    if save_event.is_set():
-                        break
-
                 time.sleep(0.5)
             except Exception:
                 break
 
-        # Final storage snapshot on close
+        # Snapshot storage state on close or save
         try:
             context.storage_state(path=str(session_path))
             logger.info(f"Successfully saved session state for {plat} to {session_path}")
@@ -402,7 +383,6 @@ def launch_interactive_login(platform: str) -> dict:
 
         try:
             context.close()
-            browser.close()
         except Exception:
             pass
 

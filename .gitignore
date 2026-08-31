@@ -37,6 +37,9 @@ job_agent/data/sessions/*
 !job_agent/data/sessions/.gitkeep
 job_agent/data/screenshots/*
 !job_agent/data/screenshots/.gitkeep
+job_agent/data/profiles/*
+!job_agent/data/profiles/.gitkeep
+data/
 
 # macOS
 .DS_Store

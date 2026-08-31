@@ -1,7 +1,4 @@
-"""
-LinkedIn Easy Apply Automator using Playwright.
-Navigates jobs-easy-apply-modal, injects authentic PDF resume, and answers screening fields.
-"""
+import json
 import logging
 import time
 from pathlib import Path
@@ -9,8 +6,10 @@ from typing import Optional
 
 try:
     from .stealth import configure_stealth_context, DEFAULT_EXTRA_HEADERS
+    from .session_manager import get_profile_dir
 except (ImportError, ModuleNotFoundError):
     from stealth import configure_stealth_context, DEFAULT_EXTRA_HEADERS
+    from session_manager import get_profile_dir
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +51,12 @@ def apply(
         ts = int(time.time())
         screenshot_file = screenshot_dir / f"linkedin_{ts}.png"
 
+    profile_dir = get_profile_dir("linkedin")
+
     with sync_playwright() as pw:
-        headless = mode != "interactive"
-        browser = pw.chromium.launch(
-            headless=headless,
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            headless=False,
             ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -63,23 +64,39 @@ def apply(
                 "--disable-infobars",
                 "--window-size=1280,800",
             ],
+            user_agent=USER_AGENT,
+            viewport={"width": 1280, "height": 800},
+            locale="en-US",
+            extra_http_headers=DEFAULT_EXTRA_HEADERS,
         )
 
-        context_kwargs = {
-            "user_agent": USER_AGENT,
-            "viewport": {"width": 1280, "height": 800},
-            "locale": "en-US",
-            "extra_http_headers": DEFAULT_EXTRA_HEADERS,
-        }
         if session_path and session_path.exists():
             try:
-                context_kwargs["storage_state"] = str(session_path)
+                data = json.loads(session_path.read_text(encoding="utf-8"))
+                cookies = data.get("cookies", [])
+                if cookies:
+                    valid_cookies = []
+                    for c in cookies:
+                        if "name" in c and "value" in c:
+                            vc = {
+                                "name": c["name"],
+                                "value": c["value"],
+                                "domain": c.get("domain", ".linkedin.com"),
+                                "path": c.get("path", "/"),
+                            }
+                            if "expires" in c:
+                                vc["expires"] = c["expires"]
+                            if "httpOnly" in c:
+                                vc["httpOnly"] = c["httpOnly"]
+                            if "secure" in c:
+                                vc["secure"] = c["secure"]
+                            valid_cookies.append(vc)
+                    context.add_cookies(valid_cookies)
             except Exception as e:
                 logger.warning(f"Could not load LinkedIn session state: {e}")
 
-        context = browser.new_context(**context_kwargs)
         configure_stealth_context(context, suppress_google_one_tap=True)
-        page = context.new_page()
+        page = context.pages[0] if context.pages else context.new_page()
 
         try:
             logger.info(f"[LinkedIn Applier] Navigating to {url}")
@@ -276,6 +293,8 @@ def apply(
             }
         finally:
             try:
-                browser.close()
+                if session_path:
+                    context.storage_state(path=str(session_path))
+                context.close()
             except Exception:
                 pass

@@ -2,6 +2,7 @@
 Indeed.ph Easy Apply Automator using Playwright.
 Strictly uploads user's authentic PDF resume and answers screening questions.
 """
+import json
 import logging
 import time
 from pathlib import Path
@@ -9,8 +10,10 @@ from typing import Optional
 
 try:
     from .stealth import configure_stealth_context, solve_turnstile_challenge, DEFAULT_EXTRA_HEADERS
+    from .session_manager import get_profile_dir
 except (ImportError, ModuleNotFoundError):
     from stealth import configure_stealth_context, solve_turnstile_challenge, DEFAULT_EXTRA_HEADERS
+    from session_manager import get_profile_dir
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +54,13 @@ def apply(
         ts = int(time.time())
         screenshot_file = screenshot_dir / f"indeed_{ts}.png"
 
+    profile_dir = get_profile_dir("indeed")
+
     with sync_playwright() as pw:
-        headless = mode != "interactive"
-        browser = pw.chromium.launch(
-            headless=headless,
+        # Headed mode natively satisfies Cloudflare WebGL / canvas hardware checks on macOS
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            headless=False,
             ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -62,26 +68,42 @@ def apply(
                 "--disable-infobars",
                 "--window-size=1280,800",
             ],
+            user_agent=USER_AGENT,
+            viewport={"width": 1280, "height": 800},
+            locale="en-US",
+            extra_http_headers=DEFAULT_EXTRA_HEADERS,
         )
 
-        context_kwargs = {
-            "user_agent": USER_AGENT,
-            "viewport": {"width": 1280, "height": 800},
-            "locale": "en-US",
-            "extra_http_headers": DEFAULT_EXTRA_HEADERS,
-        }
+        # Inject session cookies if imported from external JSON or bookmarklet
         if session_path and session_path.exists():
             try:
-                context_kwargs["storage_state"] = str(session_path)
+                data = json.loads(session_path.read_text(encoding="utf-8"))
+                cookies = data.get("cookies", [])
+                if cookies:
+                    valid_cookies = []
+                    for c in cookies:
+                        if "name" in c and "value" in c:
+                            vc = {
+                                "name": c["name"],
+                                "value": c["value"],
+                                "domain": c.get("domain", ".indeed.com"),
+                                "path": c.get("path", "/"),
+                            }
+                            if "expires" in c:
+                                vc["expires"] = c["expires"]
+                            if "httpOnly" in c:
+                                vc["httpOnly"] = c["httpOnly"]
+                            if "secure" in c:
+                                vc["secure"] = c["secure"]
+                            valid_cookies.append(vc)
+                    context.add_cookies(valid_cookies)
             except Exception as e:
                 logger.warning(f"Could not load session state: {e}")
 
-        context = browser.new_context(**context_kwargs)
-        
         # Apply full anti-bot CDP stealth & suppress Google One Tap flapping
         configure_stealth_context(context, suppress_google_one_tap=True)
 
-        page = context.new_page()
+        page = context.pages[0] if context.pages else context.new_page()
 
         try:
             logger.info(f"[Indeed Applier] Navigating to {url}")
@@ -89,27 +111,24 @@ def apply(
             page.wait_for_timeout(3000)
 
             # Check and solve Cloudflare Turnstile / Bot challenge if present
-            page_title = page.title() or ""
-            if "blocked" in page_title.lower() or "just a moment" in page_title.lower() or "security check" in page_title.lower():
-                logger.info("[Indeed Applier] Cloudflare challenge detected — attempting automated Turnstile resolution...")
-                passed = solve_turnstile_challenge(page, timeout_ms=15000)
-                page.wait_for_timeout(2000)
-                page_title = page.title() or ""
-                if not passed and ("blocked" in page_title.lower() or "just a moment" in page_title.lower()):
-                    if screenshot_file:
-                        try:
-                            page.screenshot(path=str(screenshot_file))
-                        except Exception:
-                            pass
-                    return {
-                        "success": False,
-                        "external": True,
-                        "message": "Indeed Cloudflare verification detected. Please connect your Indeed account under 'Platform Accounts' or apply via direct link.",
-                        "portal_url": url,
-                        "screenshot": str(screenshot_file) if screenshot_file else None,
-                    }
-                else:
-                    logger.info("[Indeed Applier] Cloudflare Turnstile bypassed successfully!")
+            solve_turnstile_challenge(page, timeout_ms=12000)
+            page.wait_for_timeout(1500)
+
+            # Verify if still blocked
+            body_text = page.evaluate("() => document.body ? document.body.innerText : ''")
+            if "additional verification required" in body_text.lower() or "troubleshooting cloudflare errors" in body_text.lower():
+                if screenshot_file:
+                    try:
+                        page.screenshot(path=str(screenshot_file))
+                    except Exception:
+                        pass
+                return {
+                    "success": False,
+                    "external": True,
+                    "message": "Indeed Cloudflare verification detected. Please connect your Indeed account under 'Platform Accounts' or apply via direct link.",
+                    "portal_url": url,
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
 
             # Comprehensive Indeed Apply Selectors
             EASY_APPLY_SELECTORS = [
@@ -419,6 +438,8 @@ def apply(
             }
         finally:
             try:
-                browser.close()
+                if session_path:
+                    context.storage_state(path=str(session_path))
+                context.close()
             except Exception:
                 pass
