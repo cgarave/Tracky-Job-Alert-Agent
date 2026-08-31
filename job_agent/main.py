@@ -284,6 +284,16 @@ def main() -> None:
 
     logger.info("=== Tracky starting ===")
 
+    # Initialize app daemon in PAUSED state on startup
+    try:
+        if CONFIG_PATH.exists():
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            cfg["paused"] = True
+            CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+            logger.info("⏸ App daemon initialized in PAUSED state by default.")
+    except Exception as exc:
+        logger.warning(f"Could not set initial paused state: {exc}")
+
 
     if not recipient:
         logger.error(

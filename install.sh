@@ -92,7 +92,7 @@ else
   "location": "Philippines",
   "check_interval_minutes": 60,
   "max_results_per_keyword": 10,
-  "paused": false
+  "paused": true
 }
 JSONEOF
 fi
