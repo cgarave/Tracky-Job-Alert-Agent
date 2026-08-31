@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import signal
+import threading
 import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -52,7 +53,7 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
@@ -168,6 +169,42 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
+        else:
+            self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
+
+    def do_DELETE(self) -> None:
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/api/jobs":
+            body = self._read_body_json()
+            job_ids = body.get("job_ids", [])
+            delete_all = body.get("all", False)
+            block_future = body.get("block_future", True)
+            source = body.get("source") or (query.get("source", [None])[0] if query.get("source") else None)
+            search = body.get("search") or (query.get("search", [None])[0] if query.get("search") else None)
+
+            conn = db.get_connection()
+            deleted_count = 0
+            try:
+                if delete_all:
+                    deleted_count = db.delete_all_jobs(
+                        conn, block_future=block_future, source=source, search=search
+                    )
+                elif job_ids:
+                    deleted_count = db.delete_jobs(conn, job_ids, block_future=block_future)
+                stats = db.get_stats(conn)
+                self._send_json({
+                    "status": "success",
+                    "deleted_count": deleted_count,
+                    "stats": stats,
+                })
+            except Exception as exc:
+                logger.error(f"Error in do_DELETE /api/jobs: {exc}")
+                self._send_json({"error": str(exc)}, 500)
+            finally:
+                conn.close()
         else:
             self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
 

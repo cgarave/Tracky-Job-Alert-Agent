@@ -23,6 +23,36 @@ export async function fetchJobs(search?: string, source?: string): Promise<{ job
   return handleResponse<{ jobs: Job[]; total: number }>(res);
 }
 
+export async function deleteJobs(
+  jobIds: string[],
+  blockFuture: boolean = true
+): Promise<{ status: string; deleted_count: number; stats?: SystemStatus["stats"] }> {
+  const res = await fetch(`${API_BASE}/api/jobs`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_ids: jobIds, block_future: blockFuture }),
+  });
+  return handleResponse<{ status: string; deleted_count: number; stats?: SystemStatus["stats"] }>(res);
+}
+
+export async function deleteAllJobs(
+  blockFuture: boolean = true,
+  search?: string,
+  source?: string
+): Promise<{ status: string; deleted_count: number; stats?: SystemStatus["stats"] }> {
+  const res = await fetch(`${API_BASE}/api/jobs`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      all: true,
+      block_future: blockFuture,
+      search: search || undefined,
+      source: source && source !== "all" ? source : undefined,
+    }),
+  });
+  return handleResponse<{ status: string; deleted_count: number; stats?: SystemStatus["stats"] }>(res);
+}
+
 export async function triggerScan(): Promise<{ status: string; message: string }> {
   const res = await fetch(`${API_BASE}/api/scan-now`, { method: "POST" });
   return handleResponse<{ status: string; message: string }>(res);

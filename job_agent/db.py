@@ -1,4 +1,4 @@
-"""SQLite job deduplication and tracking layer."""
+"""SQLite job deduplication, tracking, and dismissal layer."""
 import hashlib
 import logging
 import sqlite3
@@ -15,7 +15,7 @@ def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    # Base seen_jobs table
+    # 1. Base seen_jobs table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS seen_jobs (
             job_id      TEXT PRIMARY KEY,
@@ -32,9 +32,18 @@ def get_connection() -> sqlite3.Connection:
         )
     """)
 
+    # 2. Dismissed / Ignored jobs table (prevents future re-scraping alerts)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dismissed_jobs (
+            job_id       TEXT PRIMARY KEY,
+            dismissed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Performance Indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_id ON dismissed_jobs(job_id)")
 
     conn.commit()
     return conn
@@ -47,8 +56,12 @@ def make_job_id(title: str, company: str, url: str) -> str:
 
 
 def is_new(conn: sqlite3.Connection, job_id: str) -> bool:
-    """Return True if this job_id has never been seen before."""
-    cur = conn.execute("SELECT 1 FROM seen_jobs WHERE job_id = ?", (job_id,))
+    """Return True if this job_id has never been seen or dismissed before."""
+    cur = conn.execute("""
+        SELECT 1 FROM seen_jobs WHERE job_id = ?
+        UNION
+        SELECT 1 FROM dismissed_jobs WHERE job_id = ?
+    """, (job_id, job_id))
     return cur.fetchone() is None
 
 
@@ -137,6 +150,56 @@ def get_job_by_id(conn: sqlite3.Connection, job_id: str) -> Optional[dict]:
     cur = conn.execute("SELECT * FROM seen_jobs WHERE job_id = ?", (job_id,))
     row = cur.fetchone()
     return dict(row) if row else None
+
+
+def delete_jobs(conn: sqlite3.Connection, job_ids: list[str], block_future: bool = True) -> int:
+    """
+    Delete jobs by ID list from seen_jobs.
+    If block_future is True, record IDs into dismissed_jobs to avoid future alerts.
+    Returns the count of deleted rows.
+    """
+    if not job_ids:
+        return 0
+
+    if block_future:
+        conn.executemany(
+            "INSERT OR IGNORE INTO dismissed_jobs (job_id) VALUES (?)",
+            [(jid,) for jid in job_ids],
+        )
+
+    placeholders = ",".join("?" for _ in job_ids)
+    cur = conn.execute(f"DELETE FROM seen_jobs WHERE job_id IN ({placeholders})", job_ids)
+    conn.commit()
+    return cur.rowcount
+
+
+def delete_all_jobs(
+    conn: sqlite3.Connection,
+    block_future: bool = True,
+    source: Optional[str] = None,
+    search: Optional[str] = None,
+) -> int:
+    """
+    Delete all jobs matching the optional filter criteria (or all jobs in database).
+    Returns count of deleted rows.
+    """
+    query = "SELECT job_id FROM seen_jobs WHERE 1=1"
+    params: list = []
+
+    if source:
+        query += " AND source = ?"
+        params.append(source)
+    if search:
+        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ?)"
+        term = f"%{search}%"
+        params.extend([term, term, term])
+
+    cur = conn.execute(query, params)
+    matching_ids = [row["job_id"] for row in cur.fetchall()]
+    if not matching_ids:
+        return 0
+
+    return delete_jobs(conn, matching_ids, block_future=block_future)
 
 
 def get_stats(conn: sqlite3.Connection) -> dict:

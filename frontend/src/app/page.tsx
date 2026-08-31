@@ -140,7 +140,14 @@ export default function Home() {
         {/* Tab Switcher Body */}
         <div className="transition-all duration-200">
           {activeTab === "jobs" && (
-            <JobsTab jobs={jobs} />
+            <JobsTab
+              jobs={jobs}
+              totalTrackedCount={stats.total_jobs}
+              onRefresh={() => {
+                loadJobs();
+                loadStatus();
+              }}
+            />
           )}
 
           {activeTab === "settings" && (
