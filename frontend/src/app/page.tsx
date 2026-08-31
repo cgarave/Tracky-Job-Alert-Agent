@@ -69,9 +69,18 @@ export default function Home() {
     const interval = setInterval(() => {
       loadStatus();
       loadJobs();
+      if (activeTab === "settings") {
+        loadSettings();
+      }
     }, 6000);
     return () => clearInterval(interval);
-  }, [loadStatus, loadJobs, loadSettings]);
+  }, [loadStatus, loadJobs, loadSettings, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "settings") {
+      loadSettings();
+    }
+  }, [activeTab, loadSettings]);
 
   // Actions
   const handleSaveSettings = async (updated: DaemonSettings) => {
