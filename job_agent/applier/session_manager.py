@@ -1,13 +1,14 @@
 """
 Session and Cookie Manager for Job Platforms.
-Enables interactive session sync and persistent cookie storage for automated runs.
+Enables interactive session sync, direct cookie paste/import, and persistent cookie storage for automated runs.
 """
 import json
 import logging
+import re
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,21 +19,25 @@ PLATFORM_URLS = {
     "indeed": {
         "login_url": "https://secure.indeed.com/account/login",
         "home_url": "https://ph.indeed.com",
+        "domain": ".indeed.com",
         "name": "Indeed.ph",
     },
     "jobstreet": {
         "login_url": "https://www.jobstreet.com.ph/login",
         "home_url": "https://www.jobstreet.com.ph",
+        "domain": ".jobstreet.com.ph",
         "name": "JobStreet.ph",
     },
     "linkedin": {
         "login_url": "https://www.linkedin.com/login",
         "home_url": "https://www.linkedin.com/jobs",
+        "domain": ".linkedin.com",
         "name": "LinkedIn.com",
     },
     "onlinejobs": {
         "login_url": "https://www.onlinejobs.ph/jobseekers/login",
-        "home_url": "https://www.onlinejobs.ph",
+        "home_url": "https://www.onlinejobs.ph/jobseekers/job-search",
+        "domain": ".onlinejobs.ph",
         "name": "OnlineJobs.ph",
     },
 }
@@ -71,10 +76,12 @@ def is_session_active(platform: str) -> bool:
         # Check for matching platform auth signatures
         has_auth_cookie = any(sig in name for sig in expected_sigs for name in cookie_names)
         
-        # Filter out guest-only Cloudflare tracking cookies
+        # Filter out guest-only Cloudflare/analytics tracking cookies
         meaningful_cookies = [
             c for c in cookies
-            if not c.get("name", "").startswith("__cf") and not c.get("name", "").startswith("_ga")
+            if not c.get("name", "").startswith("__cf") 
+            and not c.get("name", "").startswith("_ga")
+            and not c.get("name", "").startswith("_gid")
         ]
 
         return has_auth_cookie or len(meaningful_cookies) >= 3
@@ -127,7 +134,7 @@ def get_all_session_statuses() -> dict:
 
 
 def verify_and_save_active_session(platform: str) -> dict:
-    """Verify session cookies and snapshot state."""
+    """Verify session cookies, signal active helper if running, and touch timestamp."""
     plat = platform.lower()
     with _lock:
         session_info = _active_logins.get(plat)
@@ -138,13 +145,25 @@ def verify_and_save_active_session(platform: str) -> dict:
         save_event.set()
         time.sleep(1.2)
 
+    path = get_session_path(plat)
+    if path.exists():
+        try:
+            # Touch file to refresh timestamp to right now
+            path.touch()
+        except Exception:
+            pass
+
     active = is_session_active(plat)
     details = get_session_details(plat)
     return {
         "status": "success" if active else "pending",
         "connected": active,
         "details": details,
-        "message": "Session verified and saved successfully!" if active else "No active authenticated session detected. Please log in on the official website.",
+        "message": (
+            "Session verified and saved successfully!"
+            if active
+            else "No active authenticated session detected. Please log in on the interactive window or paste cookies."
+        ),
     }
 
 
@@ -161,8 +180,110 @@ def cancel_active_login(platform: str) -> dict:
     return {"status": "closed", "platform": plat}
 
 
+def import_raw_cookies(platform: str, raw_input: str) -> dict:
+    """
+    Import cookies from JSON array, JSON object, or key=value string.
+    Saves directly to session_{platform}.json and returns verified status.
+    """
+    plat = platform.lower()
+    if plat not in PLATFORM_URLS:
+        return {"status": "error", "message": f"Unsupported platform: {platform}"}
+
+    plat_info = PLATFORM_URLS[plat]
+    default_domain = plat_info.get("domain", f".{plat}.com")
+    session_path = get_session_path(plat)
+
+    parsed_cookies: List[dict] = []
+    raw_str = raw_input.strip()
+
+    # Try parsing as JSON
+    try:
+        data = json.loads(raw_str)
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and "name" in item and "value" in item:
+                    cookie = {
+                        "name": str(item["name"]),
+                        "value": str(item["value"]),
+                        "domain": item.get("domain", default_domain),
+                        "path": item.get("path", "/"),
+                        "httpOnly": item.get("httpOnly", False),
+                        "secure": item.get("secure", True),
+                        "sameSite": item.get("sameSite", "Lax"),
+                    }
+                    if "expires" in item:
+                        cookie["expires"] = item["expires"]
+                    parsed_cookies.append(cookie)
+        elif isinstance(data, dict):
+            if "cookies" in data and isinstance(data["cookies"], list):
+                parsed_cookies = data["cookies"]
+            else:
+                for k, v in data.items():
+                    parsed_cookies.append({
+                        "name": str(k),
+                        "value": str(v),
+                        "domain": default_domain,
+                        "path": "/",
+                        "httpOnly": False,
+                        "secure": True,
+                        "sameSite": "Lax",
+                    })
+    except Exception:
+        # Fallback to key=value; key2=val2 string parsing
+        for pair in raw_str.split(";"):
+            pair = pair.strip()
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+                if k:
+                    parsed_cookies.append({
+                        "name": k,
+                        "value": v,
+                        "domain": default_domain,
+                        "path": "/",
+                        "httpOnly": False,
+                        "secure": True,
+                        "sameSite": "Lax",
+                    })
+
+    if not parsed_cookies:
+        return {
+            "status": "error",
+            "message": "Could not parse valid cookies. Please paste a valid JSON array or cookie string.",
+        }
+
+    storage_data = {
+        "cookies": parsed_cookies,
+        "origins": [
+            {
+                "origin": plat_info["home_url"],
+                "localStorage": [],
+            }
+        ],
+    }
+
+    try:
+        session_path.write_text(json.dumps(storage_data, indent=2), encoding="utf-8")
+        logger.info(f"Imported {len(parsed_cookies)} cookies for {plat} to {session_path}")
+    except Exception as exc:
+        return {"status": "error", "message": f"Failed to save cookies: {exc}"}
+
+    active = is_session_active(plat)
+    details = get_session_details(plat)
+    return {
+        "status": "success",
+        "connected": active,
+        "details": details,
+        "message": f"Successfully imported {len(parsed_cookies)} cookies for {plat_info['name']}!",
+    }
+
+
 def launch_interactive_login(platform: str) -> dict:
-    """Launch interactive browser helper to snapshot session cookies."""
+    """
+    Launch interactive Playwright browser window to log in and snapshot session cookies.
+    Auto-detects successful login and flushes storage state to disk.
+    """
     plat = platform.lower()
     if plat not in PLATFORM_URLS:
         raise ValueError(f"Unsupported platform: {platform}")
@@ -175,7 +296,7 @@ def launch_interactive_login(platform: str) -> dict:
     except ImportError:
         raise RuntimeError("Playwright is not installed.")
 
-    logger.info(f"Launching login helper for {info['name']}...")
+    logger.info(f"Launching login helper window for {info['name']}...")
 
     save_event = threading.Event()
     close_event = threading.Event()
@@ -186,17 +307,27 @@ def launch_interactive_login(platform: str) -> dict:
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-default-browser-check",
+                "--start-maximized",
             ],
         )
 
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800},
-        )
+        context_kwargs: dict = {
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "viewport": {"width": 1366, "height": 850},
+        }
+
+        # Load existing cookies if present so user might already be authenticated
+        if session_path.exists() and is_session_active(plat):
+            context_kwargs["storage_state"] = str(session_path)
+
+        context = browser.new_context(**context_kwargs)
         page = context.new_page()
 
-        # Stealth mask
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        # Stealth evasion
+        try:
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        except Exception:
+            pass
 
         with _lock:
             _active_logins[plat] = {
@@ -212,18 +343,33 @@ def launch_interactive_login(platform: str) -> dict:
         except Exception as exc:
             logger.warning(f"Initial navigation notice for {info['name']}: {exc}")
 
+        # Monitoring loop: periodically snapshot cookies and check for login completion
+        last_save = 0
         while True:
             try:
                 if not browser.is_connected():
                     break
                 if not context.pages or all(p.is_closed() for p in context.pages):
                     break
-                if save_event.is_set() or close_event.is_set():
+                if close_event.is_set():
                     break
-                time.sleep(0.4)
+
+                now = time.time()
+                # Periodically save storage state every 2 seconds
+                if now - last_save >= 2.0 or save_event.is_set():
+                    try:
+                        context.storage_state(path=str(session_path))
+                        last_save = now
+                    except Exception:
+                        pass
+                    if save_event.is_set():
+                        break
+
+                time.sleep(0.5)
             except Exception:
                 break
 
+        # Final storage snapshot on close
         try:
             context.storage_state(path=str(session_path))
             logger.info(f"Successfully saved session state for {plat} to {session_path}")

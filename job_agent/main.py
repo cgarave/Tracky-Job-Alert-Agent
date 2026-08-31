@@ -226,6 +226,7 @@ def scraper_loop(dry_run: bool = False) -> None:
                         blacklist_companies = [c.lower() for c in auto_cfg.get("blacklisted_companies", []) if c]
                         blacklist_kw = [k.lower() for k in auto_cfg.get("blacklisted_keywords", []) if k]
 
+                        alerted_missing_sessions = set()
                         applied_in_this_scan = 0
                         for job in new_jobs:
                             if applied_in_this_scan >= remaining_quota:
@@ -241,9 +242,27 @@ def scraper_loop(dry_run: bool = False) -> None:
                             if any(b in title for b in blacklist_kw):
                                 continue
 
-                            # Skip if platform requires session and it is not connected
-                            if "onlinejobs" in src and not is_session_active("onlinejobs"):
-                                logger.info(f"Skipping auto-apply for '{job.get('title')}' — OnlineJobs session not connected.")
+                            # Verify active session for supported platforms
+                            target_plat = None
+                            if "indeed" in src:
+                                target_plat = "indeed"
+                            elif "jobstreet" in src:
+                                target_plat = "jobstreet"
+                            elif "onlinejobs" in src:
+                                target_plat = "onlinejobs"
+                            elif "linkedin" in src:
+                                target_plat = "linkedin"
+
+                            if target_plat and not is_session_active(target_plat):
+                                logger.info(
+                                    f"Skipping auto-apply for '{job.get('title')}' — {target_plat.capitalize()} session not connected."
+                                )
+                                if recipient and target_plat not in alerted_missing_sessions:
+                                    alerted_missing_sessions.add(target_plat)
+                                    send_imessage(
+                                        recipient,
+                                        f"⚠️ Session Required for {target_plat.capitalize()}\n\nPlease connect/re-sync your {target_plat.capitalize()} account in the Tracky Dashboard to enable automated submissions."
+                                    )
                                 continue
 
                             logger.info(f"🤖 Auto-applying to: {job.get('title')} @ {job.get('company')}")

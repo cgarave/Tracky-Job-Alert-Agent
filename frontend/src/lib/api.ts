@@ -103,6 +103,18 @@ export async function verifySession(platform: string): Promise<{ status: string;
   return handleResponse<{ status: string; connected: boolean; message: string; details?: PlatformSession }>(res);
 }
 
+export async function importCookies(
+  platform: string,
+  cookies: string
+): Promise<{ status: string; connected: boolean; message: string; details?: PlatformSession }> {
+  const res = await fetch(`${API_BASE}/api/sessions/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platform, cookies }),
+  });
+  return handleResponse<{ status: string; connected: boolean; message: string; details?: PlatformSession }>(res);
+}
+
 export async function cancelSessionLogin(platform: string): Promise<{ status: string; platform: string }> {
   const res = await fetch(`${API_BASE}/api/sessions/cancel`, {
     method: "POST",

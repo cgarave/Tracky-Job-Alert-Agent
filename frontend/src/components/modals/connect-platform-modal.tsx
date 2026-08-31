@@ -12,21 +12,23 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ExternalLink,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  KeyRound,
   Lock,
-  ArrowRight,
   Globe,
   Briefcase,
   Laptop,
+  Play,
+  ClipboardPaste,
+  Code,
 } from "lucide-react";
 import { toast } from "sonner";
-import { verifySession, cancelSessionLogin } from "@/lib/api";
+import { launchLogin, verifySession, importCookies } from "@/lib/api";
 
 interface ConnectPlatformModalProps {
   platformKey: string | null;
@@ -43,7 +45,11 @@ export function ConnectPlatformModal({
   sessions,
   onRefreshSessions,
 }: ConnectPlatformModalProps) {
+  const [activeMode, setActiveMode] = useState<"interactive" | "import">("interactive");
+  const [isLaunching, setIsLaunching] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [cookieInput, setCookieInput] = useState("");
 
   if (!platformKey) return null;
 
@@ -98,16 +104,29 @@ export function ConnectPlatformModal({
   const meta = getPlatformMeta(platformKey);
   const Icon = meta.icon;
 
+  const handleLaunchInteractive = async () => {
+    setIsLaunching(true);
+    try {
+      await launchLogin(platformKey);
+      toast.info(`Interactive window launched for ${meta.name}. Please complete login.`);
+      onRefreshSessions();
+    } catch {
+      toast.error(`Failed to launch browser window for ${meta.name}.`);
+    } finally {
+      setIsLaunching(false);
+    }
+  };
+
   const handleVerifySession = async () => {
     setIsVerifying(true);
     try {
       const res = await verifySession(platformKey);
       if (res.connected) {
-        toast.success(`${meta.name} session authenticated & verified!`);
-        onRefreshSessions();
+        toast.success(`${meta.name} session verified & saved!`);
       } else {
-        toast.error(`No active authenticated session detected for ${meta.name}. Please ensure you are logged in.`);
+        toast.warning(res.message || `No active authenticated session detected for ${meta.name}.`);
       }
+      onRefreshSessions();
     } catch {
       toast.error("Failed to verify session status.");
     } finally {
@@ -115,14 +134,31 @@ export function ConnectPlatformModal({
     }
   };
 
-  const handleOpenLoginTab = () => {
-    window.open(meta.loginUrl, "_blank", "noopener,noreferrer");
-    toast.info(`Opened ${meta.name} login in new tab.`);
+  const handleImportCookies = async () => {
+    if (!cookieInput.trim()) {
+      toast.error("Please paste cookie JSON or string first.");
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const res = await importCookies(platformKey, cookieInput);
+      if (res.status === "success" && res.connected) {
+        toast.success(res.message || "Cookies imported and verified successfully!");
+        setCookieInput("");
+        onRefreshSessions();
+      } else {
+        toast.error(res.message || "Failed to import cookies.");
+      }
+    } catch {
+      toast.error("Error importing cookies.");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg bg-slate-900/95 border-slate-800 text-slate-100 p-6 shadow-2xl backdrop-blur-2xl">
+      <DialogContent className="max-w-xl bg-slate-900/95 border-slate-800 text-slate-100 p-6 shadow-2xl backdrop-blur-2xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -134,13 +170,13 @@ export function ConnectPlatformModal({
                   Connect {meta.name}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Authenticate your session to enable automated application submissions.
+                  Authenticate your session to enable 1-click apply and autonomous submissions.
                 </DialogDescription>
               </div>
             </div>
 
             {session.connected ? (
-              <Badge variant="success" className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+              <Badge variant="success" className="gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-medium">
                 <CheckCircle2 className="w-3 h-3" />
                 <span>Connected</span>
               </Badge>
@@ -153,81 +189,170 @@ export function ConnectPlatformModal({
           </div>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 py-3">
-          {/* Step 1 Card: Open Login Tab */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-400 text-xs font-semibold flex items-center justify-center border border-indigo-500/30">
-                  1
-                </div>
-                <span className="text-xs font-semibold text-white">Log in on Official Website</span>
-              </div>
-              <span className="text-[11px] text-slate-500">Your Default Browser</span>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Open the official {meta.name} portal in a new tab. Log in using your credentials, Apple Passkeys, or Google SSO.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenLoginTab}
-              className="w-full text-xs h-8 gap-2 bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-200"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Open {meta.name} in New Tab</span>
-            </Button>
-          </div>
+        {/* Mode Selector Tabs */}
+        <div className="flex items-center rounded-lg bg-slate-950 p-1 border border-slate-800 mt-2">
+          <button
+            type="button"
+            onClick={() => setActiveMode("interactive")}
+            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeMode === "interactive"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Play className="w-3.5 h-3.5" />
+            <span>Interactive Login Window</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMode("import")}
+            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+              activeMode === "import"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <ClipboardPaste className="w-3.5 h-3.5" />
+            <span>Paste Cookies / JSON</span>
+          </button>
+        </div>
 
-          {/* Step 2 Card: Verify & Save Session */}
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-400 text-xs font-semibold flex items-center justify-center border border-indigo-500/30">
-                  2
+        {activeMode === "interactive" ? (
+          <div className="flex flex-col gap-4 py-3">
+            {/* Step 1: Launch Interactive Login */}
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-400 text-xs font-semibold flex items-center justify-center border border-indigo-500/30">
+                    1
+                  </div>
+                  <span className="text-xs font-semibold text-white">Open Interactive Login Window</span>
                 </div>
-                <span className="text-xs font-semibold text-white">Verify & Save Session</span>
+                <span className="text-[11px] text-indigo-400 font-medium">Automatic Capture</span>
               </div>
-              {session.cookie_count ? (
-                <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                  {session.cookie_count} cookies saved
-                </span>
-              ) : null}
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Opens a focused browser window pointing to {meta.name}. Log in with your credentials or SSO. Tracky automatically captures your session state.
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleLaunchInteractive}
+                  disabled={isLaunching}
+                  className="flex-1 text-xs h-8 gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm"
+                >
+                  <Play className={`w-3.5 h-3.5 ${isLaunching ? "animate-spin" : ""}`} />
+                  <span>{isLaunching ? "Launching Window..." : "Launch Login Window"}</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(meta.loginUrl, "_blank", "noopener,noreferrer")}
+                  className="text-xs h-8 gap-1.5 bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-300"
+                  title="Open official login page in new browser tab"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Open Tab ↗</span>
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Once you have logged in, click below to verify and save the authenticated session for background auto-applying.
-            </p>
+
+            {/* Step 2: Verify & Snapshot Session */}
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-indigo-600/20 text-indigo-400 text-xs font-semibold flex items-center justify-center border border-indigo-500/30">
+                    2
+                  </div>
+                  <span className="text-xs font-semibold text-white">Verify & Save Session</span>
+                </div>
+                {session.cookie_count ? (
+                  <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                    {session.cookie_count} cookies saved
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Click below to verify the session and lock in the refreshed timestamp.
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleVerifySession}
+                disabled={isVerifying}
+                className="w-full text-xs h-8 gap-2 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-200"
+              >
+                {isVerifying ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span>{isVerifying ? "Verifying..." : "Verify & Save Session"}</span>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          /* Mode 2: Direct Paste / Import */
+          <div className="flex flex-col gap-3 py-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cookie-input" className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <Code className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Paste Session JSON / Cookies String</span>
+              </label>
+              <Textarea
+                id="cookie-input"
+                rows={6}
+                value={cookieInput}
+                onChange={(e) => setCookieInput(e.target.value)}
+                placeholder='Paste cookie array [{"name": "li_at", "value": "..."}] or raw string name=value; ...'
+                className="bg-slate-950 border-slate-800 text-xs font-mono text-slate-200 placeholder:text-slate-600 leading-relaxed"
+              />
+              <span className="text-[11px] text-slate-500">
+                You can export cookies using any browser extension (e.g. Cookie-Editor) and paste them here.
+              </span>
+            </div>
+
             <Button
               variant="default"
               size="sm"
-              onClick={handleVerifySession}
-              disabled={isVerifying}
+              onClick={handleImportCookies}
+              disabled={isImporting}
               className="w-full text-xs h-8 gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-sm"
             >
-              {isVerifying ? (
+              {isImporting ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <CheckCircle2 className="w-3.5 h-3.5" />
               )}
-              <span>{isVerifying ? "Verifying Session..." : "Verify & Save Session"}</span>
+              <span>{isImporting ? "Importing..." : "Import & Save Cookies"}</span>
             </Button>
           </div>
+        )}
 
-          {/* Session Details */}
-          {session.connected && (
-            <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between text-xs text-emerald-400">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Session authenticated and ready for 1-click & auto apply.</span>
-              </div>
-            </div>
+        {/* Live Session Metadata & Feedback */}
+        <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <div>
+            Last Synced:{" "}
+            <strong className="text-slate-200 font-mono">
+              {session.updated_at || "Never synced"}
+            </strong>
+          </div>
+          {session.connected ? (
+            <span className="text-emerald-400 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+            </span>
+          ) : (
+            <span className="text-rose-400 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> Login Needed
+            </span>
           )}
         </div>
 
         <DialogFooter className="flex items-center justify-between border-t border-slate-800 pt-3">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
             <Lock className="w-3 h-3 text-slate-500" />
-            <span>Cookies stored securely locally on your Mac.</span>
+            <span>Encrypted local storage on your Mac.</span>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-xs text-slate-400 hover:text-white">
             Done

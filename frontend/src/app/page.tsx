@@ -171,7 +171,9 @@ export default function Home() {
 
     const interval = setInterval(() => {
       loadStatus();
-    }, 10000);
+      loadSessions();
+      loadApplications();
+    }, 5000);
     return () => clearInterval(interval);
   }, [loadStatus, loadJobs, loadProfile, loadSessions, loadApplications, loadSettings]);
 

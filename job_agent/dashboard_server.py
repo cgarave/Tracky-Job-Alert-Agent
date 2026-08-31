@@ -26,6 +26,7 @@ from applier.session_manager import (
     cancel_active_login,
     get_all_session_statuses,
     get_session_details,
+    import_raw_cookies,
 )
 
 
@@ -87,9 +88,14 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
 
         # ── API Routes ──────────────────────────────────────────────────────
         if path == "/api/status":
-            conn = db.get_connection()
-            stats = db.get_application_stats(conn)
-            conn.close()
+            stats = {"total_jobs": 0, "total_applied": 0, "total_failed": 0, "today_applied": 0}
+            try:
+                conn = db.get_connection()
+                stats = db.get_stats(conn)
+                conn.close()
+            except Exception as exc:
+                logger.error(f"Error fetching stats in /api/status: {exc}")
+
             status_data = {}
             if STATUS_PATH.exists():
                 try:
@@ -315,6 +321,16 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 self._send_json({"error": "platform required"}, 400)
                 return
             result = verify_and_save_active_session(platform)
+            self._send_json(result)
+
+        elif path == "/api/sessions/import":
+            body = self._read_body_json()
+            platform = body.get("platform", "").lower()
+            raw_cookies = body.get("cookies", "")
+            if not platform or not raw_cookies:
+                self._send_json({"error": "platform and cookies are required"}, 400)
+                return
+            result = import_raw_cookies(platform, raw_cookies)
             self._send_json(result)
 
         elif path == "/api/sessions/cancel":

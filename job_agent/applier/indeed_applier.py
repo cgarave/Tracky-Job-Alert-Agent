@@ -168,6 +168,22 @@ def apply(
                     break
             target = frame if frame else page
 
+            # Check if login prompt appeared
+            login_prompt = target.query_selector("input[type='password'], button:has-text('Sign in'), a:has-text('Sign in to continue'), form[action*='auth']")
+            if login_prompt or "secure.indeed.com/auth" in page.url:
+                if screenshot_file:
+                    try:
+                        page.screenshot(path=str(screenshot_file))
+                    except Exception:
+                        pass
+                return {
+                    "success": False,
+                    "external": False,
+                    "requires_session": True,
+                    "message": "Indeed requires authentication. Please re-sync your Indeed account under Platform Accounts tab.",
+                    "screenshot": str(screenshot_file) if screenshot_file else None,
+                }
+
             # Navigate through multi-step form
             max_steps = 10
             for step in range(max_steps):

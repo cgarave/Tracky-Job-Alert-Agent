@@ -1,23 +1,28 @@
 # Orchestrator Task Plan
 
-## Current Task: Enterprise Minimal UI/UX Redesign & System Hardening
+## Current Task: Fix Session Sync, Metrics Counters, and Auto-Apply Execution
 
-### Phase 1: Frontend Enterprise Minimal Redesign & View Toggle [COMPLETED]
-- [x] Purge all unicode emojis across `frontend/src/` (15 locations) and replace with standardized Lucide React icons
-- [x] Remove "Default Login Browser" banner, split buttons, and selectors from `sessions-tab.tsx` and `settings-tab.tsx`
-- [x] Streamline `connect-platform-modal.tsx` into a minimal 2-step flow: Open in New Tab ↗ -> Verify Session
-- [x] Add high-density Table View vs Card Grid view toggle in Scraped Jobs tab
-- [x] Modernize cards, tables, badges, and modals to Linear/Raycast dark minimal aesthetic
+### Phase 1: Database & Status API Layer [PENDING APPROVAL]
+- [ ] Add `count_today_applications(conn)` and alias `get_application_stats = get_stats` in `db.py`
+- [ ] Fix timezone-aware `today_applied` query in `db.get_stats()`
+- [ ] Fix `/api/status` in `dashboard_server.py` to call `db.get_stats(conn)`
 
-### Phase 2: Backend System Hardening & Query Fix [COMPLETED]
-- [x] Fix 1-to-many left join duplication in `get_jobs()` in `db.py`
-- [x] Add missing SQLite indexes on `seen_jobs` and `applications`
-- [x] Harden `is_session_active()` in `session_manager.py` to prevent guest cookie false positives
-- [x] Streamline `browser_manager.py` and `dashboard_server.py`
-- [x] Add post-submit confirmation verification in `indeed_applier.py`
+### Phase 2: Session Manager & Interactive Browser Sync [PENDING APPROVAL]
+- [ ] Upgrade `launch_interactive_login()` to auto-detect login completion and immediately flush cookies with updated timestamp
+- [ ] Add `save_raw_cookies(platform, cookies)` for direct cookie sync
+- [ ] Add `/api/sessions/import` endpoint in `dashboard_server.py`
 
-### Phase 3: Cross-Agent Testing & Build Validation [COMPLETED]
-- [x] Run `./scripts/agent-verify.sh` (Python compilation + Next.js static build)
-- [x] Unit test deduplication subquery logic
-- [x] QA Reviewer and Tester verification pass
-- [x] Atomic local commits with developer documentation
+### Phase 3: Auto-Apply Daemon & Applier Resilience [PENDING APPROVAL]
+- [ ] Fix `count_today_applications` call in `main.py` auto-apply loop
+- [ ] Enforce session pre-checks across all platforms in `main.py`
+- [ ] Add explicit login detection and user notices in appliers
+
+### Phase 4: Frontend Connect Modal & Live Status Refresh [PENDING APPROVAL]
+- [ ] Enhance `connect-platform-modal.tsx` with 1-Click Interactive Login Launcher and live polling
+- [ ] Add Cookie Import / Paste tab in modal
+- [ ] Verify live timestamp and cookie count refresh
+
+### Phase 5: Verification & Testing
+- [ ] Execute `./scripts/agent-verify.sh`
+- [ ] Run Python unit tests for `get_stats()`, `count_today_applications()`, and session auth
+- [ ] Create atomic local commits with developer documentation

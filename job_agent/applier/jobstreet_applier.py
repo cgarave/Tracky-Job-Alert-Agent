@@ -117,8 +117,8 @@ def apply(
             page.wait_for_timeout(3000)
 
             # Check if login prompt appeared
-            login_prompt = page.query_selector("input[type='password'], button:has-text('Sign in'), a:has-text('Sign in')")
-            if login_prompt and not (session_path and session_path.exists()):
+            login_prompt = page.query_selector("input[type='password'], button:has-text('Sign in'), a:has-text('Sign in to apply'), form[action*='login']")
+            if login_prompt or "/login" in page.url:
                 if screenshot_file:
                     try:
                         page.screenshot(path=str(screenshot_file))
@@ -128,7 +128,7 @@ def apply(
                     "success": False,
                     "external": False,
                     "requires_session": True,
-                    "message": "JobStreet.ph requires login to apply. Please connect your JobStreet account under Platform Accounts tab.",
+                    "message": "JobStreet.ph requires authentication to apply. Please re-sync your JobStreet account under Platform Accounts tab.",
                     "screenshot": str(screenshot_file) if screenshot_file else None,
                 }
 

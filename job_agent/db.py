@@ -229,19 +229,34 @@ def get_applications(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
     return [dict(row) for row in cur.fetchall()]
 
 
+def count_today_applications(conn: sqlite3.Connection) -> int:
+    """Return count of unique jobs applied to today (timezone resilient)."""
+    cur = conn.execute(
+        """
+        SELECT COUNT(DISTINCT job_id) FROM applications 
+        WHERE status = 'submitted' 
+          AND (
+              date(applied_at, 'localtime') = date('now', 'localtime')
+              OR date(applied_at) = date('now')
+          )
+        """
+    )
+    row = cur.fetchone()
+    return row[0] if row else 0
+
+
 def get_stats(conn: sqlite3.Connection) -> dict:
     """Return dashboard summary stats."""
     total_jobs = total_seen(conn)
     cur = conn.execute("SELECT COUNT(DISTINCT job_id) FROM applications WHERE status = 'submitted'")
-    total_applied = cur.fetchone()[0]
+    row_applied = cur.fetchone()
+    total_applied = row_applied[0] if row_applied else 0
     
     cur = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'failed'")
-    total_failed = cur.fetchone()[0]
+    row_failed = cur.fetchone()
+    total_failed = row_failed[0] if row_failed else 0
 
-    cur = conn.execute(
-        "SELECT COUNT(DISTINCT job_id) FROM applications WHERE status = 'submitted' AND date(applied_at) = date('now')"
-    )
-    today_applied = cur.fetchone()[0]
+    today_applied = count_today_applications(conn)
 
     return {
         "total_jobs": total_jobs,
@@ -249,3 +264,7 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "total_failed": total_failed,
         "today_applied": today_applied,
     }
+
+
+get_application_stats = get_stats
+

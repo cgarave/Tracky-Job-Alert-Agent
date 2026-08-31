@@ -6,8 +6,13 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from db import get_connection, get_job_by_id, record_application
-from profile_manager import get_profile, get_resume_path
+try:
+    from db import get_connection, get_job_by_id, record_application
+    from profile_manager import get_profile, get_resume_path
+except (ImportError, ModuleNotFoundError):
+    from ..db import get_connection, get_job_by_id, record_application
+    from ..profile_manager import get_profile, get_resume_path
+
 from .session_manager import get_session_path, get_all_session_statuses, is_session_active
 from . import indeed_applier, jobstreet_applier, onlinejobs_applier, linkedin_applier
 
