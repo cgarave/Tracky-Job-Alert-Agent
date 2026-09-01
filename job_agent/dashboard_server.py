@@ -97,13 +97,18 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             })
 
         elif path == "/api/jobs":
-            conn = db.get_connection()
-            limit = int(query.get("limit", [100])[0])
-            search = query.get("search", [None])[0]
-            alert_status = query.get("alert_status", [None])[0]
-            jobs = db.get_jobs(conn, limit=limit, search=search, source=source, alert_status=alert_status)
-            conn.close()
-            self._send_json({"jobs": jobs, "total": len(jobs)})
+            try:
+                conn = db.get_connection()
+                limit = int(query.get("limit", [100])[0])
+                search = query.get("search", [None])[0]
+                source = query.get("source", [None])[0]
+                alert_status = query.get("alert_status", [None])[0]
+                jobs = db.get_jobs(conn, limit=limit, search=search, source=source, alert_status=alert_status)
+                conn.close()
+                self._send_json({"jobs": jobs, "total": len(jobs)})
+            except Exception as exc:
+                logger.error(f"Error fetching jobs in /api/jobs: {exc}")
+                self._send_json({"jobs": [], "total": 0, "error": str(exc)}, 500)
 
         elif path == "/api/settings":
             if CONFIG_PATH.exists():
