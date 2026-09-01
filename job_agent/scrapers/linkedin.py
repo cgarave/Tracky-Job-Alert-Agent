@@ -1,6 +1,8 @@
-"""LinkedIn Philippines job scraper using python-jobspy with guest API fallback sorted by newest listings and description extraction."""
+"""LinkedIn Philippines job scraper using python-jobspy + guest API fallback with full description enrichment."""
 import logging
+import re
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 import requests
 
@@ -13,6 +15,29 @@ HEADERS = {
     ),
     "Accept-Language": "en-US,en;q=0.9",
 }
+
+
+def _fetch_linkedin_description(job_url: str) -> str:
+    """Fetch full job description from LinkedIn public guest job posting API."""
+    match = re.search(r"(?:view/|jobs/|jobPosting/|currentJobId=)(\d+)", job_url)
+    if not match:
+        return ""
+    job_id = match.group(1)
+    url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=8)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, "lxml")
+            desc_el = soup.select_one(
+                ".show-more-less-html__markup, .description__text, section.description, .show-more-less-html"
+            )
+            if desc_el:
+                for bad in desc_el.select("script, style"):
+                    bad.decompose()
+                return desc_el.get_text(separator="\n", strip=True)
+    except Exception:
+        pass
+    return ""
 
 
 def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict]:
@@ -66,7 +91,7 @@ def _scrape_fallback(keyword: str, location: str, max_results: int) -> list[dict
 
 def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -> list[dict]:
     """
-    Scrape fresh job listings from LinkedIn Philippines.
+    Scrape fresh job listings from LinkedIn Philippines with full description enrichment.
     Returns list of normalized job dicts: {title, company, url, source, location, salary, apply_type, description}.
     """
     results = []
@@ -114,11 +139,23 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
 
             if results:
                 logger.info(f"[LinkedIn] '{keyword}': {len(results)} fresh results (via JobSpy)")
-                return results[:max_results]
     except Exception as exc:
         logger.warning(f"[LinkedIn] JobSpy failed for '{keyword}': {exc}")
 
-    # 2. Try guest API fallback with date sort
-    results = _scrape_fallback(keyword, location, max_results)
-    logger.info(f"[LinkedIn] '{keyword}': {len(results)} fresh results (via Guest API)")
+    # 2. Try guest API fallback if JobSpy returned nothing
+    if not results:
+        results = _scrape_fallback(keyword, location, max_results)
+        logger.info(f"[LinkedIn] '{keyword}': {len(results)} fresh results (via Guest API)")
+
+    # 3. Enrich missing / empty descriptions via LinkedIn public guest API
+    def _enrich_desc(job: dict) -> None:
+        if not job.get("description") or len(job["description"]) < 50:
+            full_desc = _fetch_linkedin_description(job["url"])
+            if full_desc:
+                job["description"] = full_desc
+
+    if results:
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            executor.map(_enrich_desc, results)
+
     return results[:max_results]
