@@ -8,7 +8,7 @@ Lives as a 🐶 icon in the menu bar. Provides a GUI for:
   • Adding and removing job keywords
   • Changing interval, location, and iMessage recipient
   • Viewing logs
-  • Quitting the menu bar app or stopping everything cleanly
+  • Quitting the menu bar app with automatic scraper pause or stopping everything cleanly
 
 Communicates with the background daemon (main.py) via shared files in the
 same job_agent/ directory:
@@ -17,6 +17,7 @@ same job_agent/ directory:
   daemon.pid     — daemon's PID; used to send SIGUSR1 for instant wake-up
   run_now.flag   — created here as a fallback if SIGUSR1 fails
 """
+import atexit
 import json
 import logging
 import os
@@ -57,6 +58,19 @@ def _load_config() -> dict:
 def _save_config(config: dict) -> None:
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
+
+
+def _pause_agent_on_exit() -> None:
+    """Ensure the background scraper is set to paused state when menu bar app exits."""
+    try:
+        config = _load_config()
+        config["paused"] = True
+        _save_config(config)
+    except Exception:
+        pass
+
+
+atexit.register(_pause_agent_on_exit)
 
 
 def _load_status() -> dict:
@@ -180,8 +194,8 @@ class TrackyApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("📄  View Logs", callback=self._on_view_logs),
             rumps.separator,
-            rumps.MenuItem("Quit Menu Bar", callback=self._on_quit_menubar),
-            rumps.MenuItem("🛑  Stop Agent & Quit All…", callback=self._on_stop_all),
+            rumps.MenuItem("Quit Tracky (Pause & Exit)", callback=self._on_quit_menubar),
+            rumps.MenuItem("🛑  Stop Agent Daemon & Quit All…", callback=self._on_stop_all),
         ]
 
         # First status refresh
@@ -445,11 +459,12 @@ class TrackyApp(rumps.App):
             rumps.alert("No log file found yet.")
 
     def _on_quit_menubar(self, _):
-        """Quit just the menu bar app. The background daemon continues running."""
+        """Pause scraper and quit menu bar app."""
+        _pause_agent_on_exit()
         rumps.quit_application()
 
     def _on_stop_all(self, _):
-        """Prompt user, stop the background daemon, and quit the menu bar app."""
+        """Prompt user, pause scraper, stop the background daemon, and quit the menu bar app."""
         response = rumps.alert(
             title="Stop Tracky?",
             message=(
@@ -461,6 +476,8 @@ class TrackyApp(rumps.App):
         )
         if response != 1:  # 1 is OK button in rumps
             return
+
+        _pause_agent_on_exit()
 
         if PLIST_DAEMON.exists():
             subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], check=False)
