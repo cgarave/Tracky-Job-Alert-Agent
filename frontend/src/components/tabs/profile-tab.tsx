@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { CandidateProfile } from "@/types";
+import { fetchProfile, saveProfile, uploadResume, testGeminiKey } from "@/lib/api";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
+  User,
   FileText,
   Upload,
   Sparkles,
@@ -14,24 +23,23 @@ import {
   Save,
   Plus,
   X,
-  ShieldCheck,
   Briefcase,
-  User,
   DollarSign,
-  Clock,
+  Globe,
   Loader2,
+  Tag,
+  ShieldCheck,
+  Check,
 } from "lucide-react";
-import { CandidateProfile } from "@/types";
-import { fetchProfile, saveProfile, uploadResume, testGeminiKey } from "@/lib/api";
+import { toast } from "sonner";
 
 export function ProfileTab() {
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // API Key & Model testing
+  // Gemini API Key & Model testing
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -51,21 +59,22 @@ export function ProfileTab() {
       setProfile(data);
     } catch (e) {
       console.error("Failed to load profile:", e);
+      toast.error("Failed to load profile.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSave() {
+  async function handleSave(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     if (!profile) return;
     try {
       setSaving(true);
-      setSaveSuccess(false);
       await saveProfile(profile);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3500);
-    } catch (e) {
-      console.error("Failed to save profile:", e);
+      toast.success("Profile & AI settings saved successfully!");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to save profile: ${msg}`);
     } finally {
       setSaving(false);
     }
@@ -82,12 +91,12 @@ export function ProfileTab() {
         const base64 = (reader.result as string).split(",")[1];
         const res = await uploadResume(file.name, base64);
         setProfile(res.profile);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3500);
+        toast.success(`Resume "${file.name}" uploaded & parsed!`);
       };
       reader.readAsDataURL(file);
     } catch (err) {
       console.error("Failed to upload resume:", err);
+      toast.error("Failed to process resume PDF.");
     } finally {
       setUploading(false);
     }
@@ -106,8 +115,14 @@ export function ProfileTab() {
       setTestResult(null);
       const res = await testGeminiKey(apiKey, model);
       setTestResult(res);
+      if (res.success) {
+        toast.success("Gemini API key is valid and connected!");
+      } else {
+        toast.error(`API Key Error: ${res.message}`);
+      }
     } catch (e: any) {
-      setTestResult({ success: false, message: e.message || "Failed to test API key" });
+      setTestResult({ success: false, message: e.message || "Connection failed" });
+      toast.error("Failed to validate Gemini API key.");
     } finally {
       setTestingKey(false);
     }
@@ -115,577 +130,648 @@ export function ProfileTab() {
 
   function handleAddSkill() {
     if (!skillInput.trim() || !profile) return;
-    const trimmed = skillInput.trim();
-    if (!profile.skills.includes(trimmed)) {
-      setProfile({
-        ...profile,
-        skills: [...profile.skills, trimmed],
-      });
+    const tokens = skillInput
+      .split(/[,;\n]/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    const currentSkills = profile.skills || [];
+    const lowerExisting = new Set(currentSkills.map((s) => s.toLowerCase()));
+
+    const newSkills = [...currentSkills];
+    for (const token of tokens) {
+      if (!lowerExisting.has(token.toLowerCase())) {
+        newSkills.push(token);
+        lowerExisting.add(token.toLowerCase());
+      }
     }
+
+    setProfile({ ...profile, skills: newSkills });
     setSkillInput("");
   }
 
-  function handleRemoveSkill(skill: string) {
+  function handleRemoveSkill(skillToRemove: string) {
     if (!profile) return;
     setProfile({
       ...profile,
-      skills: profile.skills.filter((s) => s !== skill),
+      skills: (profile.skills || []).filter((s) => s !== skillToRemove),
     });
   }
+
+  const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      handleAddSkill();
+    } else if (e.key === "Backspace" && !skillInput && (profile?.skills || []).length > 0) {
+      e.preventDefault();
+      handleRemoveSkill(profile!.skills[profile!.skills.length - 1]);
+    }
+  };
 
   if (loading || !profile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
       </div>
     );
   }
 
+  const skills = profile.skills || [];
+
   return (
-    <div className="space-y-8 pb-12 max-w-5xl mx-auto">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <User className="w-6 h-6 text-primary" />
-            Candidate Profile & AI Co-Pilot
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Configure your resume details, Gemini AI screening defaults, and browser extension settings.
-          </p>
-        </div>
+    <form onSubmit={handleSave} className="flex flex-col gap-6">
+      {/* 1. Resume PDF Parser Card */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-indigo-400" />
+              <CardTitle className="text-base font-bold text-white tracking-tight">
+                Resume PDF & Auto-Parser
+              </CardTitle>
+            </div>
+            {profile.resume_filename && (
+              <Badge variant="outline" className="bg-slate-950 border-slate-800 text-slate-300 font-mono text-[11px] gap-1.5 py-1 px-2.5">
+                <Check className="w-3 h-3 text-emerald-400" />
+                <span>{profile.resume_filename}</span>
+              </Badge>
+            )}
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Upload your resume PDF to automatically extract candidate details, skills, and summary.
+          </CardDescription>
+        </CardHeader>
 
-        <div className="flex items-center gap-3">
-          {saveSuccess && (
-            <span className="text-xs font-medium text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-emerald-500/20">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Saved successfully
-            </span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50"
+        <CardContent className="pt-0">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept="application/pdf"
+            className="hidden"
+          />
+
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-950/60 hover:bg-slate-950/90 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save Profile
-          </button>
-        </div>
-      </div>
-
-      {/* Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Resume Upload & Candidate Info (2 cols) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Resume PDF Uploader */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                Resume PDF Parser
-              </h2>
-              {profile.resume_filename && (
-                <span className="text-xs font-medium bg-secondary px-2.5 py-1 rounded-md text-secondary-foreground">
-                  Active: {profile.resume_filename}
-                </span>
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition-transform border border-indigo-500/20">
+              {uploading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Upload className="w-5 h-5" />
               )}
             </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-200">
+                {uploading ? "Extracting profile & skills from resume PDF..." : "Click or drag & drop resume PDF here"}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Supports standard 1-2 page PDF resumes. Text is parsed locally on your Mac.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept="application/pdf"
-              className="hidden"
-            />
+      {/* 2. Candidate Information Card */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Candidate Information
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Primary details used by the AI Auto-Applier when filling contact fields and cover letters.
+          </CardDescription>
+        </CardHeader>
 
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-border hover:border-primary/50 bg-secondary/30 hover:bg-secondary/60 rounded-xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group"
-            >
-              <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-transform">
-                {uploading ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : (
-                  <Upload className="w-6 h-6" />
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  {uploading ? "Extracting skills from resume..." : "Click to upload resume PDF"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Automatically extracts your contact info, work summary, and tech skills.
-                </p>
-              </div>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Full Name</Label>
+              <Input
+                type="text"
+                value={profile.full_name}
+                onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                placeholder="e.g. Juan Dela Cruz"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Current Title / Role</Label>
+              <Input
+                type="text"
+                value={profile.current_title}
+                onChange={(e) => setProfile({ ...profile, current_title: e.target.value })}
+                placeholder="e.g. Senior Full Stack Engineer"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Email Address</Label>
+              <Input
+                type="email"
+                value={profile.email}
+                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                placeholder="juan@example.com"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Phone / Mobile Number</Label>
+              <Input
+                type="text"
+                value={profile.phone}
+                onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                placeholder="+63 917 123 4567"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Location</Label>
+              <Input
+                type="text"
+                value={profile.location}
+                onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                placeholder="Manila, Philippines"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Years of Experience</Label>
+              <Input
+                type="number"
+                min="0"
+                max="40"
+                value={profile.years_of_experience}
+                onChange={(e) => setProfile({ ...profile, years_of_experience: Number(e.target.value) })}
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs font-mono"
+              />
             </div>
           </div>
 
-          {/* Personal Information */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-primary" />
-              Candidate Details
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Full Name</label>
-                <input
-                  type="text"
-                  value={profile.full_name}
-                  onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                  placeholder="e.g. Juan Dela Cruz"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Current Title</label>
-                <input
-                  type="text"
-                  value={profile.current_title}
-                  onChange={(e) => setProfile({ ...profile, current_title: e.target.value })}
-                  placeholder="e.g. Senior Full Stack Engineer"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Email Address</label>
-                <input
-                  type="email"
-                  value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  placeholder="juan@example.com"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Phone / Mobile</label>
-                <input
-                  type="text"
-                  value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  placeholder="+63 917 123 4567"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Location</label>
-                <input
-                  type="text"
-                  value={profile.location}
-                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                  placeholder="Manila, Philippines"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Years of Experience</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="40"
-                  value={profile.years_of_experience}
-                  onChange={(e) => setProfile({ ...profile, years_of_experience: Number(e.target.value) })}
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
+          {/* Social Links */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 mt-4 border-t border-slate-800/60">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-400">LinkedIn Profile URL</Label>
+              <Input
+                type="text"
+                value={profile.linkedin_url || ""}
+                onChange={(e) => setProfile({ ...profile, linkedin_url: e.target.value })}
+                placeholder="https://linkedin.com/in/..."
+                className="bg-slate-950 border-slate-800 text-slate-100 text-xs"
+              />
             </div>
-
-            {/* Profile URLs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">LinkedIn URL</label>
-                <input
-                  type="text"
-                  value={profile.linkedin_url || ""}
-                  onChange={(e) => setProfile({ ...profile, linkedin_url: e.target.value })}
-                  placeholder="https://linkedin.com/in/..."
-                  className="w-full mt-1 px-3 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">GitHub URL</label>
-                <input
-                  type="text"
-                  value={profile.github_url || ""}
-                  onChange={(e) => setProfile({ ...profile, github_url: e.target.value })}
-                  placeholder="https://github.com/..."
-                  className="w-full mt-1 px-3 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Portfolio URL</label>
-                <input
-                  type="text"
-                  value={profile.portfolio_url || ""}
-                  onChange={(e) => setProfile({ ...profile, portfolio_url: e.target.value })}
-                  placeholder="https://myportfolio.dev"
-                  className="w-full mt-1 px-3 py-1.5 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-400">GitHub Profile URL</Label>
+              <Input
+                type="text"
+                value={profile.github_url || ""}
+                onChange={(e) => setProfile({ ...profile, github_url: e.target.value })}
+                placeholder="https://github.com/..."
+                className="bg-slate-950 border-slate-800 text-slate-100 text-xs"
+              />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-400">Portfolio Website</Label>
+              <Input
+                type="text"
+                value={profile.portfolio_url || ""}
+                onChange={(e) => setProfile({ ...profile, portfolio_url: e.target.value })}
+                placeholder="https://myportfolio.dev"
+                className="bg-slate-950 border-slate-800 text-slate-100 text-xs"
+              />
+            </div>
+          </div>
 
-            {/* Skills Badges */}
-            <div className="pt-2">
-              <label className="text-xs font-medium text-muted-foreground">Tech Skills & Badges</label>
-              <div className="flex flex-wrap gap-2 mt-2 p-3 bg-secondary/20 border border-border rounded-lg min-h-[50px]">
-                {profile.skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="inline-flex items-center gap-1.5 bg-primary/15 text-primary text-xs font-medium px-2.5 py-1 rounded-md border border-primary/25"
-                  >
-                    {skill}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSkill(skill)}
-                      className="hover:text-red-400 focus:outline-none"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    value={skillInput}
-                    onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") {
-                        e.preventDefault();
-                        handleAddSkill();
-                      }
-                    }}
-                    placeholder="Add skill..."
-                    className="bg-transparent border-none text-xs text-foreground focus:outline-none w-28 px-1"
-                  />
+          {/* Interactive Skills Pill Box */}
+          <div className="flex flex-col gap-2 pt-4 mt-4 border-t border-slate-800/60">
+            <Label className="text-xs text-slate-300 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Technical Skills & Badges</span>
+              </div>
+              <span className="text-[11px] text-indigo-400 font-mono">
+                {skills.length} active skill{skills.length === 1 ? "" : "s"}
+              </span>
+            </Label>
+
+            <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-indigo-500/80 transition-colors shadow-inner">
+              {skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs font-medium group transition-all hover:border-indigo-400/50"
+                >
+                  <span>{skill}</span>
                   <button
                     type="button"
-                    onClick={handleAddSkill}
-                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => handleRemoveSkill(skill)}
+                    className="text-indigo-400/60 group-hover:text-rose-400 transition-colors focus:outline-none"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <X className="w-3 h-3" />
                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
+                </span>
+              ))}
 
-          {/* Screening Defaults */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-primary" />
-              Screening Question Presets
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              These values are automatically used by Gemini AI when filling platform questionnaires.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Monthly Salary Expectation (PHP)</label>
-                <input
+              <div className="flex items-center gap-1 flex-1 min-w-[140px]">
+                <Input
                   type="text"
-                  value={profile.screening_defaults?.expected_salary_monthly_php || ""}
-                  onChange={(e) =>
-                    setProfile({
-                      ...profile,
-                      screening_defaults: {
-                        ...profile.screening_defaults,
-                        expected_salary_monthly_php: e.target.value,
-                      },
-                    })
-                  }
-                  placeholder="80,000 - 120,000"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={skillInput}
+                  onChange={(e) => setSkillInput(e.target.value)}
+                  onKeyDown={handleSkillKeyDown}
+                  placeholder={skills.length === 0 ? "Type a skill and hit Enter..." : "Add skill..."}
+                  className="h-7 border-none bg-transparent shadow-none focus-visible:ring-0 text-xs text-slate-100 placeholder:text-slate-600 p-0"
                 />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Hourly Rate Expectation (USD)</label>
-                <input
-                  type="text"
-                  value={profile.screening_defaults?.expected_salary_hourly_usd || ""}
-                  onChange={(e) =>
-                    setProfile({
-                      ...profile,
-                      screening_defaults: {
-                        ...profile.screening_defaults,
-                        expected_salary_hourly_usd: e.target.value,
-                      },
-                    })
-                  }
-                  placeholder="25"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Notice Period (weeks)</label>
-                <input
-                  type="text"
-                  value={profile.screening_defaults?.notice_period_weeks || ""}
-                  onChange={(e) =>
-                    setProfile({
-                      ...profile,
-                      screening_defaults: {
-                        ...profile.screening_defaults,
-                        notice_period_weeks: e.target.value,
-                      },
-                    })
-                  }
-                  placeholder="2"
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Legally Authorized to Work?</label>
-                <select
-                  value={profile.screening_defaults?.work_authorization || "Yes"}
-                  onChange={(e) =>
-                    setProfile({
-                      ...profile,
-                      screening_defaults: {
-                        ...profile.screening_defaults,
-                        work_authorization: e.target.value,
-                      },
-                    })
-                  }
-                  className="w-full mt-1.5 px-3.5 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: AI Model Settings & Ghost Cursor (1 col) */}
-        <div className="space-y-6">
-          {/* Gemini AI Settings Card */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              Google Gemini AI Engine
-            </h2>
-
-            {/* API Key */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground flex items-center justify-between">
-                <span>Gemini API Key</span>
-                <span className="text-[10px] text-primary">Required for AI answering</span>
-              </label>
-              <div className="relative mt-1.5">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  value={profile.ai_settings?.gemini_api_key || ""}
-                  onChange={(e) =>
-                    setProfile({
-                      ...profile,
-                      ai_settings: {
-                        ...profile.ai_settings,
-                        gemini_api_key: e.target.value,
-                      },
-                    })
-                  }
-                  placeholder="AIzaSy..."
-                  className="w-full pl-3.5 pr-10 py-2 bg-background border border-border rounded-lg text-sm text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-
-              <div className="mt-2.5 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleTestKey}
-                  disabled={testingKey || !profile.ai_settings?.gemini_api_key}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                >
-                  {testingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
-                  Test Connection
-                </button>
-
-                {testResult && (
-                  <span
-                    className={`text-xs font-medium flex items-center gap-1 ${
-                      testResult.success ? "text-emerald-500" : "text-rose-500"
-                    }`}
+                {skillInput.trim() && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAddSkill}
+                    className="h-6 px-2 text-[11px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 gap-1 rounded-md"
                   >
-                    {testResult.success ? (
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    ) : (
-                      <XCircle className="w-3.5 h-3.5" />
-                    )}
-                    {testResult.success ? "Valid" : "Invalid Key"}
-                  </span>
+                    <Plus className="w-3 h-3" />
+                    <span>Add</span>
+                  </Button>
                 )}
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            {/* Model Selection */}
-            <div className="pt-2 border-t border-border">
-              <label className="text-xs font-medium text-muted-foreground">Select AI Model</label>
-              <div className="space-y-2 mt-2">
-                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border hover:bg-secondary/30 cursor-pointer transition-colors">
-                  <input
-                    type="radio"
-                    name="gemini_model"
-                    value="gemini-3.7-flash"
-                    checked={(profile.ai_settings?.gemini_model || "gemini-3.7-flash") === "gemini-3.7-flash"}
-                    onChange={(e) =>
-                      setProfile({
-                        ...profile,
-                        ai_settings: {
-                          ...profile.ai_settings,
-                          gemini_model: e.target.value,
-                        },
-                      })
-                    }
-                    className="mt-0.5 accent-primary"
-                  />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      gemini-3.7-flash
-                      <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-medium">
-                        Recommended
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Fastest structured reasoning for form filling & cover letters.
-                    </div>
-                  </div>
-                </label>
+      {/* 3. Screening Question Presets */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Screening Question Presets
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Preset values automatically injected into platform screening questionnaires by Gemini AI.
+          </CardDescription>
+        </CardHeader>
 
-                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border hover:bg-secondary/30 cursor-pointer transition-colors">
-                  <input
-                    type="radio"
-                    name="gemini_model"
-                    value="gemini-2.5-flash"
-                    checked={profile.ai_settings?.gemini_model === "gemini-2.5-flash"}
-                    onChange={(e) =>
-                      setProfile({
-                        ...profile,
-                        ai_settings: {
-                          ...profile.ai_settings,
-                          gemini_model: e.target.value,
-                        },
-                      })
-                    }
-                    className="mt-0.5 accent-primary"
-                  />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">gemini-2.5-flash</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      High-accuracy model for detailed screening questionnaires.
-                    </div>
-                  </div>
-                </label>
-              </div>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Monthly Salary Expectation (PHP)</Label>
+              <Input
+                type="text"
+                value={profile.screening_defaults?.expected_salary_monthly_php || ""}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    screening_defaults: {
+                      ...profile.screening_defaults,
+                      expected_salary_monthly_php: e.target.value,
+                    },
+                  })
+                }
+                placeholder="80,000 - 120,000"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 text-xs font-mono"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Hourly Rate Expectation (USD)</Label>
+              <Input
+                type="text"
+                value={profile.screening_defaults?.expected_salary_hourly_usd || ""}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    screening_defaults: {
+                      ...profile.screening_defaults,
+                      expected_salary_hourly_usd: e.target.value,
+                    },
+                  })
+                }
+                placeholder="25"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 text-xs font-mono"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Notice Period (weeks)</Label>
+              <Input
+                type="text"
+                value={profile.screening_defaults?.notice_period_weeks || ""}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    screening_defaults: {
+                      ...profile.screening_defaults,
+                      notice_period_weeks: e.target.value,
+                    },
+                  })
+                }
+                placeholder="2"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 text-xs font-mono"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-slate-300">Legally Authorized to Work in PH?</Label>
+              <select
+                value={profile.screening_defaults?.work_authorization || "Yes"}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    screening_defaults: {
+                      ...profile.screening_defaults,
+                      work_authorization: e.target.value,
+                    },
+                  })
+                }
+                className="h-9 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Visual Ghost Cursor & Mode Card */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <MousePointer className="w-4 h-4 text-primary" />
-              Browser Extension Behavior
-            </h2>
+      {/* 4. Google Gemini AI Engine Card */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Google Gemini AI Engine & API Key
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Reasoning model used to parse custom screening questionnaires and draft tailored cover letters.
+          </CardDescription>
+        </CardHeader>
 
-            {/* Ghost Cursor Toggle */}
-            <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-secondary/30 border border-border">
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold text-foreground">Visual Ghost Cursor</span>
-                <p className="text-[11px] text-muted-foreground">
-                  Glides smoothly to fields with natural typing. Does not meddle with your real mouse clicks.
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={profile.ai_settings?.enable_ghost_cursor ?? true}
+        <CardContent className="pt-0 space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-slate-300 flex items-center justify-between">
+              <span>Gemini API Key</span>
+              <span className="text-[11px] text-slate-500 font-mono">From Google AI Studio</span>
+            </Label>
+            <div className="relative">
+              <Input
+                type={showApiKey ? "text" : "password"}
+                value={profile.ai_settings?.gemini_api_key || ""}
                 onChange={(e) =>
                   setProfile({
                     ...profile,
                     ai_settings: {
                       ...profile.ai_settings,
-                      enable_ghost_cursor: e.target.checked,
+                      gemini_api_key: e.target.value,
                     },
                   })
                 }
-                className="w-4 h-4 mt-1 accent-primary cursor-pointer"
+                placeholder="AIzaSy..."
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 pr-10 text-xs font-mono"
               />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              >
+                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
 
-            {/* Application Mode Toggle */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Submission Mode</label>
-              <div className="space-y-2 mt-2">
-                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border hover:bg-secondary/30 cursor-pointer transition-colors">
-                  <input
-                    type="radio"
-                    name="application_mode"
-                    value="review_before_submit"
-                    checked={(profile.ai_settings?.application_mode || "review_before_submit") === "review_before_submit"}
-                    onChange={(e) =>
-                      setProfile({
-                        ...profile,
-                        ai_settings: {
-                          ...profile.ai_settings,
-                          application_mode: e.target.value as any,
-                        },
-                      })
-                    }
-                    className="mt-0.5 accent-primary"
-                  />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">Review Before Submit (Safe)</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Auto-fills every field and pauses on the final review screen for your 1-click confirmation.
-                    </div>
-                  </div>
-                </label>
+            <div className="flex items-center gap-2 mt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleTestKey}
+                disabled={testingKey || !profile.ai_settings?.gemini_api_key}
+                className="h-7 px-2.5 text-xs bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300 gap-1.5"
+              >
+                {testingKey ? <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> : <Key className="w-3 h-3 text-indigo-400" />}
+                <span>Test Connection</span>
+              </Button>
 
-                <label className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border hover:bg-secondary/30 cursor-pointer transition-colors">
-                  <input
-                    type="radio"
-                    name="application_mode"
-                    value="full_auto"
-                    checked={profile.ai_settings?.application_mode === "full_auto"}
-                    onChange={(e) =>
-                      setProfile({
-                        ...profile,
-                        ai_settings: {
-                          ...profile.ai_settings,
-                          application_mode: e.target.value as any,
-                        },
-                      })
-                    }
-                    className="mt-0.5 accent-primary"
-                  />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">Full Auto Submit</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Completes and submits applications end-to-end automatically.
-                    </div>
-                  </div>
-                </label>
-              </div>
+              {testResult && (
+                <span
+                  className={`text-xs font-medium flex items-center gap-1 ${
+                    testResult.success ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5" />
+                  )}
+                  {testResult.success ? "Valid Key Connected" : testResult.message}
+                </span>
+              )}
             </div>
           </div>
-        </div>
+
+          {/* Model Selection */}
+          <div className="pt-3 border-t border-slate-800/60">
+            <Label className="text-xs text-slate-300 mb-2 block">Select AI Model</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  (profile.ai_settings?.gemini_model || "gemini-3.7-flash") === "gemini-3.7-flash"
+                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gemini_model"
+                  value="gemini-3.7-flash"
+                  checked={(profile.ai_settings?.gemini_model || "gemini-3.7-flash") === "gemini-3.7-flash"}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      ai_settings: {
+                        ...profile.ai_settings,
+                        gemini_model: e.target.value,
+                      },
+                    })
+                  }
+                  className="mt-0.5 accent-indigo-500"
+                />
+                <div>
+                  <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                    gemini-3.7-flash
+                    <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] py-0 px-1.5">
+                      Recommended
+                    </Badge>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Fastest structured reasoning for questionnaire answering and cover letter generation.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  profile.ai_settings?.gemini_model === "gemini-2.5-flash"
+                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gemini_model"
+                  value="gemini-2.5-flash"
+                  checked={profile.ai_settings?.gemini_model === "gemini-2.5-flash"}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      ai_settings: {
+                        ...profile.ai_settings,
+                        gemini_model: e.target.value,
+                      },
+                    })
+                  }
+                  className="mt-0.5 accent-indigo-500"
+                />
+                <div>
+                  <div className="text-xs font-semibold text-white">gemini-2.5-flash</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    High-accuracy model for detailed screening questionnaires.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 5. Browser Extension Automation Controls */}
+      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MousePointer className="w-5 h-5 text-indigo-400" />
+            <CardTitle className="text-base font-bold text-white tracking-tight">
+              Browser Extension Behavior
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400 mt-1">
+            Configure visual navigation and auto-submission preferences inside your browser session.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="pt-0 space-y-4">
+          {/* Ghost Cursor Toggle */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-semibold text-white">Visual Ghost Cursor</span>
+              <span className="text-[11px] text-slate-400">
+                Animates a glowing cursor and simulates natural typing. Non-blocking with zero interference to mouse clicks.
+              </span>
+            </div>
+            <Switch
+              checked={profile.ai_settings?.enable_ghost_cursor ?? true}
+              onCheckedChange={(checked) =>
+                setProfile({
+                  ...profile,
+                  ai_settings: {
+                    ...profile.ai_settings,
+                    enable_ghost_cursor: checked,
+                  },
+                })
+              }
+            />
+          </div>
+
+          {/* Submission Mode */}
+          <div>
+            <Label className="text-xs text-slate-300 mb-2 block">Application Submission Mode</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  (profile.ai_settings?.application_mode || "review_before_submit") === "review_before_submit"
+                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="application_mode"
+                  value="review_before_submit"
+                  checked={(profile.ai_settings?.application_mode || "review_before_submit") === "review_before_submit"}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      ai_settings: {
+                        ...profile.ai_settings,
+                        application_mode: e.target.value as any,
+                      },
+                    })
+                  }
+                  className="mt-0.5 accent-indigo-500"
+                />
+                <div>
+                  <div className="text-xs font-semibold text-white">Review Before Submit (Recommended)</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Auto-fills every form step and pauses on the final review page for your 1-click confirmation.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  profile.ai_settings?.application_mode === "full_auto"
+                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="application_mode"
+                  value="full_auto"
+                  checked={profile.ai_settings?.application_mode === "full_auto"}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      ai_settings: {
+                        ...profile.ai_settings,
+                        application_mode: e.target.value as any,
+                      },
+                    })
+                  }
+                  className="mt-0.5 accent-indigo-500"
+                />
+                <div>
+                  <div className="text-xs font-semibold text-white">Full Auto Submit</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Fills all steps and automatically clicks final submit without pausing.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save Button */}
+      <div className="flex items-center justify-end gap-3 pt-2">
+        <Button
+          type="submit"
+          disabled={saving}
+          className="gap-2 font-medium text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/20 px-5"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          <span>{saving ? "Saving Profile..." : "Save Candidate Profile"}</span>
+        </Button>
       </div>
-    </div>
+    </form>
   );
 }
