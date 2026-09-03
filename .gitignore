@@ -8,8 +8,9 @@ job_agent/daemon.pid
 job_agent/status.json
 job_agent/run_now.flag
 
-# Personal config (contains your phone number / Apple ID)
+# Personal config (contains your phone number / Apple ID / API keys)
 job_agent/config.json
+job_agent/profile.json
 
 # Job history database
 job_agent/seen_jobs.db

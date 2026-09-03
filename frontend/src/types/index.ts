@@ -32,6 +32,11 @@ export interface AISettings {
   gemini_model?: string;
   enable_ghost_cursor?: boolean;
   application_mode?: 'review_before_submit' | 'full_auto';
+  max_applications_per_day?: number;
+  min_match_score?: number;
+  resume_auto_upload?: boolean;
+  enabled_platforms?: string[];
+  show_reasoning_stream?: boolean;
 }
 
 export interface CandidateProfile {
@@ -63,6 +68,27 @@ export interface ApplicationLog {
   mode: string;
   applied_at: string;
   notes?: string;
+}
+
+export interface AISessionLogItem {
+  title: string;
+  company: string;
+  source: string;
+  match_score: number;
+  status: string;
+  timestamp: string;
+}
+
+export interface AISessionStatus {
+  active: boolean;
+  paused: boolean;
+  mode: string;
+  current_job?: Job | null;
+  session_id: string;
+  started_at: string;
+  daily_max: number;
+  applied_today: number;
+  log: AISessionLogItem[];
 }
 
 export interface DaemonSettings {

@@ -26,30 +26,27 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://www.linkedin.com/*",
-    "https://*.indeed.com/*",
-    "https://*.jobstreet.com.ph/*",
-    "https://www.onlinejobs.ph/*",
+    "<all_urls>",
     "http://127.0.0.1:5050/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://www.linkedin.com/*",
-        "https://*.indeed.com/*",
-        "https://*.jobstreet.com.ph/*",
-        "https://www.onlinejobs.ph/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "js": [
         "lib/dom-utils.js",
         "lib/api-bridge.js",
         "content-scripts/ghost-cursor.js",
+        "content-scripts/overlay.js",
         "content-scripts/adapters/linkedin.js",
         "content-scripts/adapters/onlinejobs.js",
         "content-scripts/adapters/indeed.js",
         "content-scripts/adapters/jobstreet.js",
-        "content-scripts/form-detector.js",
-        "content-scripts/overlay.js"
+        "content-scripts/form-schema-extractor.js",
+        "content-scripts/ai-navigator.js",
+        "content-scripts/form-detector.js"
       ],
       "css": [
         "content-scripts/ghost-cursor.css",

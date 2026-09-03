@@ -579,7 +579,7 @@ export function ProfileTab() {
           {/* Model Selection */}
           <div className="pt-3 border-t border-slate-100">
             <Label className="text-xs text-slate-700 font-medium mb-2 block">Select AI Model</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <label
                 className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
                   (profile.ai_settings?.gemini_model || "gemini-3.7-flash") === "gemini-3.7-flash"
@@ -611,14 +611,14 @@ export function ProfileTab() {
                     </Badge>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                    Fastest structured reasoning for questionnaire answering and cover letter generation.
+                    Multimodal vision & agentic reasoning.
                   </div>
                 </div>
               </label>
 
               <label
                 className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                  profile.ai_settings?.gemini_model === "gemini-2.5-flash"
+                  profile.ai_settings?.gemini_model === "gemini-3.6-flash"
                     ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
                     : "bg-slate-50 border-slate-200 hover:border-slate-300"
                 }`}
@@ -626,8 +626,8 @@ export function ProfileTab() {
                 <input
                   type="radio"
                   name="gemini_model"
-                  value="gemini-2.5-flash"
-                  checked={profile.ai_settings?.gemini_model === "gemini-2.5-flash"}
+                  value="gemini-3.6-flash"
+                  checked={profile.ai_settings?.gemini_model === "gemini-3.6-flash"}
                   onChange={(e) =>
                     setProfile({
                       ...profile,
@@ -640,9 +640,40 @@ export function ProfileTab() {
                   className="mt-0.5 accent-blue-600"
                 />
                 <div>
-                  <div className="text-xs font-bold text-slate-900">gemini-2.5-flash</div>
+                  <div className="text-xs font-bold text-slate-900">gemini-3.6-flash</div>
                   <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                    High-accuracy model for detailed screening questionnaires.
+                    High-performance workhorse model.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  profile.ai_settings?.gemini_model === "gemini-3.5-flash-lite"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gemini_model"
+                  value="gemini-3.5-flash-lite"
+                  checked={profile.ai_settings?.gemini_model === "gemini-3.5-flash-lite"}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      ai_settings: {
+                        ...profile.ai_settings,
+                        gemini_model: e.target.value,
+                      },
+                    })
+                  }
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-900">gemini-3.5-flash-lite</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    Fast & lightweight screening answers.
                   </div>
                 </div>
               </label>

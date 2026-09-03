@@ -1,5 +1,5 @@
 {
-  "full_name": "Juan Dela Cruz",
+  "full_name": "",
   "email": "",
   "phone": "",
   "location": "Philippines",
@@ -7,18 +7,12 @@
   "github_url": "",
   "portfolio_url": "",
   "summary": "",
-  "skills": [
-    "React",
-    "TypeScript",
-    "Python",
-    "FastAPI",
-    "Next.js"
-  ],
+  "skills": [],
   "years_of_experience": 3,
-  "current_title": "Senior AI & Full Stack Engineer",
+  "current_title": "",
   "screening_defaults": {
-    "expected_salary_monthly_php": "80,000 - 120,000",
-    "expected_salary_hourly_usd": "25",
+    "expected_salary_monthly_php": "50,000",
+    "expected_salary_hourly_usd": "10",
     "notice_period_weeks": "2",
     "work_authorization": "Yes",
     "require_sponsorship": "No",

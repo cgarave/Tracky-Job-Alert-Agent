@@ -66,5 +66,118 @@ window.TrackyAPI = {
     } catch (e) {
       console.warn('[Tracky] Failed to record application:', e);
     }
+  },
+
+  async navigateStep(payload, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/navigate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (!resp.ok) {
+        return {
+          action: 'stuck',
+          reason: `Server responded with status ${resp.status}`,
+          reasoning: 'Failed to communicate with Tracky AI local backend.'
+        };
+      }
+      return await resp.json();
+    } catch (e) {
+      clearTimeout(timer);
+      const isTimeout = e.name === 'AbortError';
+      console.warn('[Tracky] Navigation step error/timeout:', isTimeout ? 'Timed out (8s)' : e.message);
+      return {
+        action: 'stuck',
+        reason: isTimeout ? 'AI response timed out (8s)' : (e.message || 'Network connection failed'),
+        reasoning: isTimeout
+          ? "I'm pausing here — can you answer this field or help me continue?"
+          : 'Cannot reach local Tracky backend at http://127.0.0.1:5050'
+      };
+    }
+  },
+
+  async scoreJob(jobDetails) {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/score-job`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_details: jobDetails })
+      });
+      if (!resp.ok) return 75;
+      const data = await resp.json();
+      return data.match_score ?? 75;
+    } catch (e) {
+      return 75;
+    }
+  },
+
+  async getSessionStatus() {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/session/status`);
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async getNextBatchJob() {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/session/next-job`);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data.job || null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async recordSessionJob(payload) {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/session/record-job`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return resp.ok;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  async startSession(mode = 'batch', job = null) {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/session/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, job })
+      });
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async stopSession() {
+    try {
+      await fetch(`${this.baseUrl}/api/ai/session/stop`, { method: 'POST' });
+    } catch (e) {}
+  },
+
+  async getSessionSettings() {
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/ai/session-settings`);
+      if (!resp.ok) return {};
+      return await resp.json();
+    } catch (e) {
+      return {};
+    }
   }
 };

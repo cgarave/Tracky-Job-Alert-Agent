@@ -42,12 +42,18 @@ window.TrackyDOM = {
     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await this.sleep(150);
 
-    // Trigger focus and mouse events
+    // Trigger focus and mouse events (for event-listener based frameworks)
     element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     element.focus();
     element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    // Also call native .click() — React/LinkedIn/Indeed may require this
+    // to trigger href navigation or controlled-component event handlers
+    if (typeof element.click === 'function') {
+      element.click();
+    }
     return true;
   },
 

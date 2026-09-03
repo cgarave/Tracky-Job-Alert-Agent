@@ -8,7 +8,8 @@ import {
   Zap, 
   Radio,
   User,
-  BookOpen
+  BookOpen,
+  Bot
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ export function Sidebar({
 }: SidebarProps) {
   const navItems = [
     { id: "jobs", label: "Jobs Feed", icon: Search, badge: totalJobs },
+    { id: "ai-agent", label: "AI Agent", icon: Bot },
     { id: "profile", label: "Profile & Resume", icon: User },
     { id: "tutorial", label: "How-To Guide", icon: BookOpen },
     { id: "settings", label: "Alert Settings", icon: Settings },

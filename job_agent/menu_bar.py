@@ -297,18 +297,45 @@ class TrackyApp(rumps.App):
 
     def _on_open_dashboard(self, _):
         """Open Tracky Web GUI Control Center in default browser."""
-        webbrowser.open("http://127.0.0.1:5050")
+        # Use subprocess 'open' — webbrowser module can fail in launchd agent context
+        try:
+            subprocess.Popen(["open", "http://127.0.0.1:5050"])
+        except Exception:
+            webbrowser.open("http://127.0.0.1:5050")
 
     def _on_run_now(self, _):
         if not _is_daemon_running():
             rumps.alert("The background agent is stopped. Start it first before running a scan.")
             return
 
+        config = _load_config()
+        was_paused = config.get("paused", False)
+
+        if was_paused:
+            # Temporarily unpause so daemon will execute the scan
+            config["paused"] = False
+            _save_config(config)
+
         _trigger_run_now()
+
+        if was_paused:
+            # Re-pause after a short delay so the triggered scan still runs
+            import threading
+            def _re_pause():
+                import time
+                time.sleep(3)
+                try:
+                    cfg = _load_config()
+                    cfg["paused"] = True
+                    _save_config(cfg)
+                except Exception:
+                    pass
+            threading.Thread(target=_re_pause, daemon=True).start()
+
         rumps.notification(
             title="Tracky",
             subtitle="",
-            message="Scan triggered — new jobs will arrive as iMessages.",
+            message="Scan triggered — new jobs will arrive shortly.",
             sound=False,
         )
 
@@ -324,6 +351,8 @@ class TrackyApp(rumps.App):
         config = _load_config()
         config["paused"] = not config.get("paused", False)
         _save_config(config)
+        # Wake daemon so it picks up the new paused state immediately
+        _trigger_run_now()
         self._refresh_status()
 
     def _on_add_keyword(self, _):
@@ -458,12 +487,27 @@ class TrackyApp(rumps.App):
             rumps.alert("No log file found yet.")
 
     def _on_quit_tracky(self, _):
-        """Stop all background daemons, pause state, and quit menu bar app completely."""
+        """Stop all background daemons and quit menu bar app completely."""
         _pause_agent_on_exit()
 
-        if PLIST_DAEMON.exists():
-            subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], check=False)
+        uid = os.getuid()
 
+        # Stop & disable the background daemon LaunchAgent (bootout prevents KeepAlive respawn)
+        if PLIST_DAEMON.exists():
+            subprocess.run(
+                ["launchctl", "bootout", f"gui/{uid}", str(PLIST_DAEMON)],
+                check=False
+            )
+
+        # Stop the menu bar's own LaunchAgent so it doesn't restart after we quit
+        PLIST_MENUBAR = Path.home() / "Library" / "LaunchAgents" / "com.jobagent.menubar.plist"
+        if PLIST_MENUBAR.exists():
+            subprocess.run(
+                ["launchctl", "bootout", f"gui/{uid}", str(PLIST_MENUBAR)],
+                check=False
+            )
+
+        # Kill daemon process directly
         pid = _daemon_pid()
         if pid:
             try:
@@ -471,6 +515,7 @@ class TrackyApp(rumps.App):
             except Exception:
                 pass
 
+        # Kill dashboard server
         try:
             subprocess.run(["pkill", "-f", "job_agent/dashboard_server.py"], check=False)
         except Exception:

@@ -1,42 +1,33 @@
 /**
  * Main form detector and application runner for Tracky Extension.
+ * Directs execution to TrackyAINavigator (Vision AI co-pilot).
  */
 window.TrackyFormDetector = {
-  adapters: [
-    window.TrackyLinkedInAdapter,
-    window.TrackyOnlineJobsAdapter,
-    window.TrackyIndeedAdapter,
-    window.TrackyJobStreetAdapter
-  ],
-
-  getActiveAdapter() {
-    return this.adapters.find((a) => a && a.isApplicable());
+  isSupportedSite() {
+    const host = window.location.hostname.toLowerCase();
+    return (
+      host.includes('linkedin.com') ||
+      host.includes('indeed.com') ||
+      host.includes('onlinejobs.ph') ||
+      host.includes('jobstreet.com.ph') ||
+      host.includes('greenhouse.io') ||
+      host.includes('lever.co') ||
+      host.includes('workday.com') ||
+      host.includes('myworkdayjobs.com') ||
+      host.includes('smartrecruiters.com') ||
+      document.querySelector('button[id*="apply"], button[class*="apply"], a[id*="apply"], a[class*="apply"]') !== null
+    );
   },
 
-  async runAutoApply() {
-    const adapter = this.getActiveAdapter();
-    if (!adapter) {
-      window.TrackyOverlay.showError('Platform not supported for direct auto-apply.');
-      return;
+  async runAutoApply(customContext = null) {
+    if (window.TrackyAINavigator) {
+      await window.TrackyAINavigator.start(customContext);
     }
-
-    const profile = await window.TrackyAPI.getProfile();
-    if (!profile) {
-      window.TrackyOverlay.showError('Please configure your profile in Tracky Dashboard.');
-      return;
-    }
-
-    const enableGhostCursor = profile.ai_settings?.enable_ghost_cursor ?? true;
-    const mode = profile.ai_settings?.application_mode || 'review_before_submit';
-    window.TrackyCursor.setEnabled(enableGhostCursor);
-
-    await adapter.apply(profile, mode);
   },
 
   init() {
-    const adapter = this.getActiveAdapter();
-    if (adapter) {
-      window.TrackyOverlay.init();
+    if (this.isSupportedSite()) {
+      window.TrackyOverlay?.init();
     }
   }
 };
@@ -45,7 +36,7 @@ window.TrackyFormDetector = {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'TRIGGER_AUTO_APPLY') {
     (async () => {
-      await window.TrackyFormDetector.runAutoApply();
+      await window.TrackyFormDetector.runAutoApply(message.jobContext);
       sendResponse({ status: 'started' });
     })();
     return true; // Keep message channel open for async response

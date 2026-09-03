@@ -5,6 +5,7 @@ import {
   Job,
   DaemonSettings,
   SystemStatus,
+  CandidateProfile,
 } from "@/types";
 import * as api from "@/lib/api";
 import { Sidebar } from "@/components/sidebar";
@@ -12,6 +13,7 @@ import { StatsRibbon } from "@/components/stats-ribbon";
 import { JobsTab } from "@/components/tabs/jobs-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
 import { ProfileTab } from "@/components/tabs/profile-tab";
+import { AiAgentTab } from "@/components/tabs/ai-agent-tab";
 import { TutorialTab } from "@/components/tabs/tutorial-tab";
 import { Toaster, toast } from "sonner";
 
@@ -27,6 +29,8 @@ export default function Home() {
     recipient: "",
   });
   const [statusData, setStatusData] = useState<SystemStatus | null>(null);
+
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
 
   // Loading States
   const [isScanning, setIsScanning] = useState<boolean>(false);
@@ -51,6 +55,15 @@ export default function Home() {
     }
   }, []);
 
+  const loadProfile = useCallback(async () => {
+    try {
+      const data = await api.fetchProfile();
+      setProfile(data);
+    } catch (e) {
+      console.error("Profile load error:", e);
+    }
+  }, []);
+
   const loadSettings = useCallback(async () => {
     setIsLoadingSettings(true);
     try {
@@ -67,6 +80,7 @@ export default function Home() {
     loadStatus();
     loadJobs();
     loadSettings();
+    loadProfile();
 
     const interval = setInterval(() => {
       loadStatus();
@@ -76,13 +90,15 @@ export default function Home() {
       }
     }, 6000);
     return () => clearInterval(interval);
-  }, [loadStatus, loadJobs, loadSettings, activeTab]);
+  }, [loadStatus, loadJobs, loadSettings, loadProfile, activeTab]);
 
   useEffect(() => {
     if (activeTab === "settings") {
       loadSettings();
+    } else if (activeTab === "profile" || activeTab === "ai-agent") {
+      loadProfile();
     }
-  }, [activeTab, loadSettings]);
+  }, [activeTab, loadSettings, loadProfile]);
 
   // Actions
   const handleSaveSettings = async (updated: DaemonSettings) => {
@@ -117,6 +133,7 @@ export default function Home() {
 
   const tabTitles: Record<string, { heading: string; subtitle: string }> = {
     jobs: { heading: "Jobs Discovery Feed", subtitle: "Real-time listings aggregated across Indeed, JobStreet, and OnlineJobs." },
+    "ai-agent": { heading: "AI Auto-Apply Agent Co-Pilot", subtitle: "Gemini Vision multimodal perception, batch application sessions, and ATS navigation." },
     profile: { heading: "Candidate Profile & AI Co-Pilot", subtitle: "Resume parsing, screening answer defaults, and Gemini AI key management." },
     tutorial: { heading: "AI Auto-Applier How-To Guide", subtitle: "Step-by-step setup instructions for Chrome Extension, Gemini AI, and authentic session auto-applying." },
     settings: { heading: "Search & Alert Configuration", subtitle: "Target keywords, search location, scrape frequency, and iMessage notification destination." },
@@ -160,6 +177,13 @@ export default function Home() {
                 loadJobs();
                 loadStatus();
               }}
+            />
+          )}
+
+          {activeTab === "ai-agent" && (
+            <AiAgentTab
+              profile={profile}
+              onProfileUpdate={(updated) => setProfile(updated)}
             />
           )}
 

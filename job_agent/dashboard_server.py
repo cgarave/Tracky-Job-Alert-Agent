@@ -11,9 +11,11 @@ import signal
 import sys
 import threading
 import urllib.parse
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from datetime import datetime
+import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import db
 import profile_manager
@@ -26,6 +28,18 @@ CONFIG_PATH = BASE_DIR / "config.json"
 STATUS_PATH = BASE_DIR / "status.json"
 RUN_NOW_FLAG = BASE_DIR / "run_now.flag"
 STATIC_DIR = BASE_DIR.parent / "frontend" / "out"
+
+AI_SESSION_STATE: Dict[str, Any] = {
+    "active": False,
+    "paused": False,
+    "mode": "batch",
+    "current_job": None,
+    "session_id": "",
+    "started_at": "",
+    "daily_max": 10,
+    "applied_today": 0,
+    "log": []
+}
 
 
 class DashboardAPIHandler(SimpleHTTPRequestHandler):
@@ -138,6 +152,36 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 logger.error(f"Error fetching applications: {exc}")
                 self._send_json({"applications": [], "total": 0, "error": str(exc)}, 500)
+
+        elif path == "/api/ai/session/status":
+            try:
+                conn = db.get_connection()
+                applied_today = db.count_today_applications(conn)
+                conn.close()
+                AI_SESSION_STATE["applied_today"] = applied_today
+            except Exception:
+                pass
+            self._send_json(AI_SESSION_STATE)
+
+        elif path == "/api/ai/session/next-job":
+            try:
+                conn = db.get_connection()
+                profile = profile_manager.load_profile()
+                ai_settings = profile.get("ai_settings", {})
+                min_score = int(ai_settings.get("min_match_score", 60))
+                pending = db.get_pending_jobs(conn, limit=1, min_match_score=min_score)
+                conn.close()
+                if pending:
+                    self._send_json({"job": pending[0]})
+                else:
+                    self._send_json({"job": None, "message": "No pending jobs matching score threshold."})
+            except Exception as exc:
+                logger.error(f"Error getting next batch job: {exc}")
+                self._send_json({"job": None, "error": str(exc)}, 500)
+
+        elif path == "/api/ai/session-settings":
+            prof = profile_manager.load_profile()
+            self._send_json(prof.get("ai_settings", {}))
 
         else:
             # Serve Static Assets (HTML/CSS/JS/Images)
@@ -273,6 +317,108 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             )
             self._send_json({"cover_letter": letter})
 
+        elif path == "/api/ai/navigate":
+            body = self._read_body_json()
+            screenshot_b64 = body.get("screenshot_b64", "")
+            page_url = body.get("page_url", "")
+            page_title = body.get("page_title", "")
+            history = body.get("history", [])
+            job_context = body.get("job_context", {})
+            dom_snapshot = body.get("dom_snapshot", "")
+            form_schema = body.get("form_schema", None)
+
+            profile = profile_manager.load_profile()
+            api_key = profile.get("ai_settings", {}).get("gemini_api_key", "")
+            model_name = profile.get("ai_settings", {}).get("gemini_model", "gemini-3.7-flash")
+
+            action_data = ai_applier.navigate_browser_step(
+                screenshot_b64=screenshot_b64,
+                page_url=page_url,
+                page_title=page_title,
+                history=history,
+                profile_data=profile,
+                job_context=job_context,
+                api_key=api_key,
+                model_name=model_name,
+                dom_snapshot=dom_snapshot,
+                form_schema=form_schema
+            )
+            self._send_json(action_data)
+
+        elif path == "/api/ai/score-job":
+            body = self._read_body_json()
+            job_details = body.get("job_details", {})
+            profile = profile_manager.load_profile()
+            api_key = profile.get("ai_settings", {}).get("gemini_api_key", "")
+            model_name = profile.get("ai_settings", {}).get("gemini_model", "gemini-3.7-flash")
+            score = ai_applier.score_job_match(job_details, profile, api_key, model_name)
+            self._send_json({"match_score": score})
+
+        elif path == "/api/ai/session/start":
+            body = self._read_body_json()
+            mode = body.get("mode", "batch")
+            job = body.get("job", None)
+            AI_SESSION_STATE["active"] = True
+            AI_SESSION_STATE["paused"] = False
+            AI_SESSION_STATE["mode"] = mode
+            AI_SESSION_STATE["current_job"] = job
+            AI_SESSION_STATE["session_id"] = str(int(time.time()))
+            AI_SESSION_STATE["started_at"] = datetime.now().isoformat()
+            self._send_json({"status": "started", "session": AI_SESSION_STATE})
+
+        elif path == "/api/ai/session/pause":
+            AI_SESSION_STATE["paused"] = True
+            self._send_json({"status": "paused", "session": AI_SESSION_STATE})
+
+        elif path == "/api/ai/session/resume":
+            AI_SESSION_STATE["paused"] = False
+            self._send_json({"status": "resumed", "session": AI_SESSION_STATE})
+
+        elif path == "/api/ai/session/stop":
+            AI_SESSION_STATE["active"] = False
+            AI_SESSION_STATE["paused"] = False
+            AI_SESSION_STATE["current_job"] = None
+            self._send_json({"status": "stopped", "session": AI_SESSION_STATE})
+
+        elif path == "/api/ai/session/record-job":
+            body = self._read_body_json()
+            try:
+                conn = db.get_connection()
+                app_id = db.record_application(conn, body)
+                applied_today = db.count_today_applications(conn)
+                conn.close()
+                AI_SESSION_STATE["applied_today"] = applied_today
+            except Exception as exc:
+                logger.error(f"Error recording session job: {exc}")
+                app_id = 0
+
+            log_entry = {
+                "title": body.get("title", "Unknown Role"),
+                "company": body.get("company", "Unknown"),
+                "source": body.get("source", "Web"),
+                "match_score": body.get("match_score", 85),
+                "status": body.get("status", "applied"),
+                "timestamp": datetime.now().strftime("%I:%M %p")
+            }
+            AI_SESSION_STATE["log"].insert(0, log_entry)
+            if len(AI_SESSION_STATE["log"]) > 50:
+                AI_SESSION_STATE["log"] = AI_SESSION_STATE["log"][:50]
+
+            self._send_json({"status": "recorded", "application_id": app_id, "session": AI_SESSION_STATE})
+
+        elif path == "/api/ai/session-settings":
+            body = self._read_body_json()
+            try:
+                profile = profile_manager.load_profile()
+                if "ai_settings" not in profile:
+                    profile["ai_settings"] = {}
+                profile["ai_settings"].update(body)
+                profile_manager.save_profile(profile)
+                self._send_json({"status": "success", "ai_settings": profile["ai_settings"]})
+            except Exception as exc:
+                logger.error(f"Error saving session settings: {exc}")
+                self._send_json({"error": str(exc)}, 500)
+
         elif path == "/api/applications/record":
             body = self._read_body_json()
             try:
@@ -320,9 +466,9 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
         pass
 
 
-def start_dashboard_server(port: int = 5050, background: bool = True) -> HTTPServer:
+def start_dashboard_server(port: int = 5050, background: bool = True) -> ThreadingHTTPServer:
     server_address = ("127.0.0.1", port)
-    httpd = HTTPServer(server_address, DashboardAPIHandler)
+    httpd = ThreadingHTTPServer(server_address, DashboardAPIHandler)
 
     if background:
         thread = threading.Thread(target=httpd.serve_forever, daemon=True, name="dashboard_server")

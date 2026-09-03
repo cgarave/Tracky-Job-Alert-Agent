@@ -192,6 +192,56 @@ def get_application_by_job_id(conn: sqlite3.Connection, job_id: str) -> Optional
     return dict(row) if row else None
 
 
+def count_today_applications(conn: sqlite3.Connection) -> int:
+    """Return count of applications submitted today."""
+    try:
+        cur = conn.execute(
+            """
+            SELECT COUNT(*) FROM applications 
+            WHERE status = 'applied' AND (
+                date(applied_at, 'localtime') = date('now', 'localtime')
+                OR date(applied_at) = date('now')
+            )
+            """
+        )
+        row = cur.fetchone()
+        return row[0] if row else 0
+    except Exception:
+        return 0
+
+
+def get_pending_jobs(
+    conn: sqlite3.Connection,
+    limit: int = 10,
+    min_match_score: int = 0,
+    sources: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """Retrieve unapplied, undismissed jobs for AI batch application ordered by match score."""
+    query = """
+        SELECT s.* FROM seen_jobs s
+        LEFT JOIN applications a ON s.job_id = a.job_id
+        LEFT JOIN dismissed_jobs d ON s.job_id = d.job_id
+        WHERE (a.job_id IS NULL OR a.status != 'applied')
+          AND d.job_id IS NULL
+    """
+    params: list = []
+
+    if min_match_score > 0:
+        query += " AND s.match_score >= ?"
+        params.append(min_match_score)
+
+    if sources:
+        placeholders = ",".join("?" for _ in sources)
+        query += f" AND s.source IN ({placeholders})"
+        params.extend(sources)
+
+    query += " ORDER BY s.match_score DESC, s.seen_at DESC LIMIT ?"
+    params.append(limit)
+
+    cur = conn.execute(query, params)
+    return [dict(row) for row in cur.fetchall()]
+
+
 def total_seen(conn: sqlite3.Connection) -> int:
     """Return the total number of jobs tracked so far."""
     cur = conn.execute("SELECT COUNT(*) FROM seen_jobs")

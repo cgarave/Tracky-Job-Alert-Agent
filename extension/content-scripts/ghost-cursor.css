@@ -1,55 +1,249 @@
-/* Tracky Ghost Cursor & Click Ripple Styles */
+/* Tracky Pure Amber Orange Figma Cursor & Playful DOM Explorer Styles */
 #tracky-ghost-cursor {
   position: fixed;
   top: 0;
   left: 0;
-  width: 24px;
-  height: 24px;
   pointer-events: none !important;
   user-select: none !important;
   z-index: 2147483647;
-  transform: translate(-50%, -50%);
-  transition: transform 0.05s linear;
-  display: none;
+  display: block;
+  transform: translate(0, 0);
+  will-change: transform, left, top;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.2)) drop-shadow(0 0 12px rgba(245, 158, 11, 0.5));
+  transition: opacity 0.2s ease;
 }
 
-#tracky-ghost-cursor .cursor-pointer {
-  width: 18px;
-  height: 18px;
-  background: radial-gradient(circle, #3b82f6 20%, #2563eb 80%);
-  border: 2px solid #ffffff;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  box-shadow: 0 0 14px rgba(37, 99, 235, 0.8), 0 4px 6px rgba(0, 0, 0, 0.3);
+.tracky-cursor-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
+/* Pure Figma Pointer SVG */
+.tracky-figma-arrow {
+  width: 22px;
+  height: 26px;
+  display: block;
+  transform-origin: 0 0;
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Playful curious tilts and animations */
+#tracky-ghost-cursor.curious-tilt .tracky-figma-arrow {
+  transform: rotate(-12deg) scale(1.08);
+}
+
+#tracky-ghost-cursor.flying-swoop .tracky-figma-arrow {
+  transform: rotate(8deg) scale(1.04);
+}
+
+#tracky-ghost-cursor.playful-bounce .tracky-figma-arrow {
+  animation: tracky-puppy-hop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.4) forwards;
+}
+
+@keyframes tracky-puppy-hop {
+  0% { transform: scale(1) translateY(0); }
+  40% { transform: scale(1.15) translateY(-8px) rotate(-6deg); }
+  75% { transform: scale(0.95) translateY(2px) rotate(4deg); }
+  100% { transform: scale(1) translateY(0) rotate(0deg); }
+}
+
+/* Playful Click Ripple in Amber Orange */
 .tracky-click-ripple {
   position: fixed;
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 2px solid #3b82f6;
-  background: rgba(37, 99, 235, 0.3);
+  border: 2.5px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.3);
   pointer-events: none !important;
   user-select: none !important;
   z-index: 2147483646;
   transform: translate(-50%, -50%) scale(0.2);
-  animation: tracky-ripple-anim 0.45s ease-out forwards;
+  animation: tracky-amber-ripple 0.5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
 }
 
-@keyframes tracky-ripple-anim {
+@keyframes tracky-amber-ripple {
   0% {
     transform: translate(-50%, -50%) scale(0.2);
     opacity: 1;
   }
+  60% {
+    opacity: 0.8;
+  }
   100% {
-    transform: translate(-50%, -50%) scale(2.2);
+    transform: translate(-50%, -50%) scale(2.4);
     opacity: 0;
   }
 }
 
+/* Cute Paw Particle Floating Up on Click */
+.tracky-paw-particle {
+  position: fixed;
+  font-size: 14px;
+  pointer-events: none !important;
+  user-select: none !important;
+  z-index: 2147483646;
+  animation: tracky-paw-float 0.75s ease-out forwards;
+}
+
+@keyframes tracky-paw-float {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -60px) scale(1.1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -90px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* Field Highlight */
 .tracky-highlight-field {
-  outline: 2px solid #3b82f6 !important;
+  outline: 2.5px solid #f59e0b !important;
   outline-offset: 2px !important;
-  transition: outline 0.2s ease-in-out;
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+/* Contextual Cursor Speech Bubble */
+#tracky-cursor-bubble {
+  position: fixed;
+  z-index: 2147483647;
+  width: 270px;
+  background: #ffffff;
+  border: 2px solid #f59e0b;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16), 0 0 16px rgba(245, 158, 11, 0.25);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1e293b;
+  pointer-events: auto !important;
+  user-select: auto !important;
+  animation: tracky-bubble-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes tracky-bubble-pop {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Bubble Tail - Left placement (points right towards cursor) */
+#tracky-cursor-bubble.tail-right::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  right: -9px;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 9px solid #f59e0b;
+}
+
+/* Bubble Tail - Right placement (points left towards cursor) */
+#tracky-cursor-bubble.tail-left::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  left: -9px;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 9px solid #f59e0b;
+}
+
+.tracky-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #d97706;
+  margin-bottom: 6px;
+}
+
+.tracky-bubble-msg {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #334155;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.tracky-bubble-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tracky-bubble-input {
+  flex: 1;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  background: #f8fafc;
+  color: #0f172a;
+  transition: border-color 0.15s ease;
+}
+
+.tracky-bubble-input:focus {
+  border-color: #f59e0b;
+  background: #ffffff;
+}
+
+.tracky-bubble-submit-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #f59e0b;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.tracky-bubble-submit-btn:hover {
+  background: #d97706;
+  transform: scale(1.02);
+}
+
+.tracky-bubble-submit-btn:active {
+  transform: scale(0.98);
+}
+
+.tracky-bubble-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.tracky-bubble-sub-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tracky-bubble-sub-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
 }

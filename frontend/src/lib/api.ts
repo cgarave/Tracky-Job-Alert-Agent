@@ -1,4 +1,4 @@
-import { Job, DaemonSettings, SystemStatus, CandidateProfile, ApplicationLog } from "@/types";
+import { Job, DaemonSettings, SystemStatus, CandidateProfile, ApplicationLog, AISessionStatus } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -122,4 +122,42 @@ export async function testGeminiKey(apiKey: string, modelName: string = "gemini-
 export async function fetchApplications(): Promise<{ applications: ApplicationLog[]; total: number }> {
   const res = await fetch(`${API_BASE}/api/applications`);
   return handleResponse<{ applications: ApplicationLog[]; total: number }>(res);
+}
+
+export async function fetchAISessionStatus(): Promise<AISessionStatus> {
+  const res = await fetch(`${API_BASE}/api/ai/session/status`);
+  return handleResponse<AISessionStatus>(res);
+}
+
+export async function startAISession(mode: string = "batch", job: Job | null = null): Promise<{ status: string; session: AISessionStatus }> {
+  const res = await fetch(`${API_BASE}/api/ai/session/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode, job }),
+  });
+  return handleResponse<{ status: string; session: AISessionStatus }>(res);
+}
+
+export async function pauseAISession(): Promise<{ status: string; session: AISessionStatus }> {
+  const res = await fetch(`${API_BASE}/api/ai/session/pause`, { method: "POST" });
+  return handleResponse<{ status: string; session: AISessionStatus }>(res);
+}
+
+export async function resumeAISession(): Promise<{ status: string; session: AISessionStatus }> {
+  const res = await fetch(`${API_BASE}/api/ai/session/resume`, { method: "POST" });
+  return handleResponse<{ status: string; session: AISessionStatus }>(res);
+}
+
+export async function stopAISession(): Promise<{ status: string; session: AISessionStatus }> {
+  const res = await fetch(`${API_BASE}/api/ai/session/stop`, { method: "POST" });
+  return handleResponse<{ status: string; session: AISessionStatus }>(res);
+}
+
+export async function saveAISessionSettings(settings: Partial<CandidateProfile["ai_settings"]>): Promise<{ status: string; ai_settings: CandidateProfile["ai_settings"] }> {
+  const res = await fetch(`${API_BASE}/api/ai/session-settings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  return handleResponse<{ status: string; ai_settings: CandidateProfile["ai_settings"] }>(res);
 }
