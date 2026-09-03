@@ -2,26 +2,27 @@
 # =============================================================================
 #  postinstall — runs AFTER files are copied to /usr/local/share/jobagent/
 #
-#  Steps:
-#    1. Install Python dependencies (includes rumps for menu bar)
-#    2. Install Playwright Chromium browser
-#    3. Show a native dialog asking for the iMessage recipient
-#    4. Write config.json
-#    5. Create and load the daemon LaunchAgent
-#    6. Create and load the menu bar LaunchAgent
-#    7. Send a welcome iMessage
+#  Fast, non-blocking post-installation script for Tracky.
 # =============================================================================
 set -euo pipefail
 
 INSTALL_DIR="/usr/local/share/jobagent"
-CURRENT_USER=$(stat -f "%Su" /dev/console)
-CURRENT_USER_HOME=$(sudo -u "$CURRENT_USER" sh -c 'echo $HOME')
+CURRENT_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "$USER")
+CURRENT_USER_HOME=$(eval echo ~"$CURRENT_USER")
 LOG_FILE="$CURRENT_USER_HOME/Library/Logs/jobagent.log"
 MENUBAR_LOG_FILE="$CURRENT_USER_HOME/Library/Logs/jobagent-menubar.log"
 PLIST_DEST="$CURRENT_USER_HOME/Library/LaunchAgents/com.jobagent.plist"
 MENUBAR_PLIST_DEST="$CURRENT_USER_HOME/Library/LaunchAgents/com.jobagent.menubar.plist"
 
-# Find Python 3.11+
+run_as_user() {
+    if [ "$(id -u)" -eq 0 ]; then
+        sudo -u "$CURRENT_USER" "$@"
+    else
+        "$@"
+    fi
+}
+
+# ── 1. Find Python 3.11+ ─────────────────────────────────────────────────────
 find_python() {
     local candidates=(
         "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
@@ -44,7 +45,7 @@ find_python() {
     done
 
     local shell_py
-    shell_py=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || echo "")
+    shell_py=$(run_as_user which python3 2>/dev/null || echo "")
     if [ -n "$shell_py" ] && [ -x "$shell_py" ]; then
         if "$shell_py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
             echo "$shell_py"
@@ -57,41 +58,23 @@ find_python() {
 
 PYTHON=$(find_python)
 
-# ── Step 1: Install Python dependencies (includes rumps) ─────────────────────
-sudo -u "$CURRENT_USER" "$PYTHON" -m pip install \
-    -r "$INSTALL_DIR/requirements.txt" \
-    --quiet \
-    --user \
-    2>&1 || {
-    osascript -e 'display alert "Dependency Install Failed" message "Could not install required Python packages.\n\nPlease open Terminal and run:\n  pip3 install -r /usr/local/share/jobagent/requirements.txt" as critical buttons {"OK"}'
-    exit 1
-}
-
-# ── Step 2: Install Playwright Chromium ─────────────────────────────────────
-sudo -u "$CURRENT_USER" "$PYTHON" -m playwright install chromium 2>&1 || {
-    echo "Warning: Playwright Chromium install failed. JobStreet.ph scraping will be unavailable."
-}
-
-# ── Step 3: Ask for recipient via native macOS dialog ────────────────────────
-RECIPIENT=$(sudo -u "$CURRENT_USER" osascript <<'APPLESCRIPT'
-set theResult to display dialog "Enter your phone number or Apple ID email to receive iMessage job alerts." & return & return & "Example:  +639171234567  or  you@icloud.com" & return & return & "Messages will be sent to this address from your Mac." default answer "+639" with title "Tracky" buttons {"Cancel", "Set Up"} default button "Set Up" with icon note
-return text returned of theResult
-APPLESCRIPT
-) || {
-    echo "User cancelled setup."
-    exit 0
-}
-
-if [ -z "$RECIPIENT" ]; then
-    echo "No recipient entered. Skipping setup."
-    exit 0
+# ── 2. Install Python dependencies (fast, non-blocking) ──────────────────────
+if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+    run_as_user "$PYTHON" -m pip install \
+        -r "$INSTALL_DIR/requirements.txt" \
+        --quiet \
+        --no-warn-script-location \
+        2>/dev/null || true
 fi
 
-# ── Step 4: Write config.json ────────────────────────────────────────────────
+# ── 3. Initialize config.json (preserve existing config if user already has one)
+CONFIG_FILE="$INSTALL_DIR/job_agent/config.json"
 mkdir -p "$INSTALL_DIR/job_agent"
-cat > "$INSTALL_DIR/job_agent/config.json" <<CONFIG
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    cat > "$CONFIG_FILE" <<CONFIG
 {
-  "recipient": "$RECIPIENT",
+  "recipient": "",
   "keywords": [
     "software engineer",
     "frontend engineer",
@@ -103,13 +86,17 @@ cat > "$INSTALL_DIR/job_agent/config.json" <<CONFIG
   "location": "Philippines",
   "check_interval_minutes": 60,
   "max_results_per_keyword": 10,
-  "paused": true
+  "paused": false
 }
 CONFIG
+fi
 
-chown "$CURRENT_USER" "$INSTALL_DIR/job_agent/config.json"
+if [ "$(id -u)" -eq 0 ]; then
+    chown -R "$CURRENT_USER" "$INSTALL_DIR" 2>/dev/null || true
+    chmod -R 777 "$INSTALL_DIR/job_agent" 2>/dev/null || true
+fi
 
-# ── Step 5: Create and load the daemon LaunchAgent ───────────────────────────
+# ── 4. Create and load Daemon LaunchAgent ─────────────────────────────────────
 mkdir -p "$CURRENT_USER_HOME/Library/LaunchAgents"
 mkdir -p "$CURRENT_USER_HOME/Library/Logs"
 
@@ -140,11 +127,13 @@ cat > "$PLIST_DEST" <<PLIST
 </plist>
 PLIST
 
-chown "$CURRENT_USER" "$PLIST_DEST"
-sudo -u "$CURRENT_USER" launchctl unload "$PLIST_DEST" 2>/dev/null || true
-sudo -u "$CURRENT_USER" launchctl load "$PLIST_DEST"
+if [ "$(id -u)" -eq 0 ]; then
+    chown "$CURRENT_USER" "$PLIST_DEST" 2>/dev/null || true
+fi
+run_as_user launchctl unload "$PLIST_DEST" 2>/dev/null || true
+run_as_user launchctl load "$PLIST_DEST" 2>/dev/null || true
 
-# ── Step 6: Create and load the menu bar LaunchAgent ─────────────────────────
+# ── 5. Create and load Menu Bar LaunchAgent (Fixed XML array) ────────────────
 cat > "$MENUBAR_PLIST_DEST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -157,6 +146,9 @@ cat > "$MENUBAR_PLIST_DEST" <<PLIST
     <array>
         <string>$PYTHON</string>
         <string>$INSTALL_DIR/job_agent/menu_bar.py</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
     <key>RunAtLoad</key>
     <true/>
     <key>WorkingDirectory</key>
@@ -169,13 +161,15 @@ cat > "$MENUBAR_PLIST_DEST" <<PLIST
 </plist>
 PLIST
 
-chown "$CURRENT_USER" "$MENUBAR_PLIST_DEST"
-sudo -u "$CURRENT_USER" launchctl unload "$MENUBAR_PLIST_DEST" 2>/dev/null || true
-sudo -u "$CURRENT_USER" launchctl load "$MENUBAR_PLIST_DEST"
+if [ "$(id -u)" -eq 0 ]; then
+    chown "$CURRENT_USER" "$MENUBAR_PLIST_DEST" 2>/dev/null || true
+fi
+run_as_user launchctl unload "$MENUBAR_PLIST_DEST" 2>/dev/null || true
+run_as_user launchctl load "$MENUBAR_PLIST_DEST" 2>/dev/null || true
 
-# ── Step 7: Create 1-click launcher in ~/Applications ────────────────────────
+# ── 6. Create 1-click launcher in ~/Applications/Tracky.app ──────────────────
 mkdir -p "$CURRENT_USER_HOME/Applications"
-sudo -u "$CURRENT_USER" osacompile -o "$CURRENT_USER_HOME/Applications/Tracky.app" -e '
+run_as_user osacompile -o "$CURRENT_USER_HOME/Applications/Tracky.app" -e '
 set homePath to POSIX path of (path to home folder)
 set daemonPlist to homePath & "Library/LaunchAgents/com.jobagent.plist"
 set menubarPlist to homePath & "Library/LaunchAgents/com.jobagent.menubar.plist"
@@ -184,35 +178,20 @@ do shell script "launchctl load " & quoted form of daemonPlist & " 2>/dev/null |
 
 display notification "Tracky scraper and menu bar are active." with title "Tracky Started" subtitle "🐶 Online"
 ' 2>/dev/null || true
+
 if [ -f "$INSTALL_DIR/Tracky.icns" ]; then
     rm -f "$CURRENT_USER_HOME/Applications/Tracky.app/Contents/Resources/Assets.car" 2>/dev/null || true
     cp "$INSTALL_DIR/Tracky.icns" "$CURRENT_USER_HOME/Applications/Tracky.app/Contents/Resources/applet.icns" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$CURRENT_USER_HOME/Applications/Tracky.app/Contents/Info.plist" 2>/dev/null || true
     touch "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
-    sudo -u "$CURRENT_USER" /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -r "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
+    run_as_user /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -r "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
 fi
-chown -R "$CURRENT_USER" "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
 
-# ── Step 8: Send welcome iMessage ────────────────────────────────────────────
-sleep 3
-sudo -u "$CURRENT_USER" osascript <<APPLESCRIPT
-tell application "Messages"
-    set targetService to 1st account whose service type = iMessage
-    set targetBuddy to participant "$RECIPIENT" of targetService
-    send "👋 Tracky is running!
+if [ "$(id -u)" -eq 0 ]; then
+    chown -R "$CURRENT_USER" "$CURRENT_USER_HOME/Applications/Tracky.app" 2>/dev/null || true
+fi
 
-Text /help to see all commands, or click the 🐶 icon in your menu bar." to targetBuddy
-end tell
-APPLESCRIPT
-
-# ── Done ─────────────────────────────────────────────────────────────────────
-sudo -u "$CURRENT_USER" osascript <<DONE
-display alert "Tracky Installed!" message "The job alert agent and menu bar app are now running.
-
-📱 Check your iPhone — a welcome iMessage should arrive shortly.
-🐶 Look for the 🐶 icon in your Mac menu bar.
-
-⚠️  IMPORTANT: Go to System Settings → Privacy & Security → Full Disk Access and add Python to enable iMessage commands." buttons {"Done"} default button "Done" with icon note
-DONE
+# ── 7. Send non-blocking notification on complete ────────────────────────────
+run_as_user osascript -e 'display notification "Tracky installed successfully! Click the 🐶 icon in your menu bar." with title "Tracky Ready" subtitle "Installation Complete"' 2>/dev/null || true
 
 exit 0
