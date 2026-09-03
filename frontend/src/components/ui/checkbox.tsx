@@ -43,9 +43,9 @@ export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          "peer h-4 w-4 shrink-0 rounded border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center cursor-pointer",
+          "peer h-4 w-4 shrink-0 rounded border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center cursor-pointer",
           isChecked || isIndeterminate
-            ? "bg-indigo-600 border-indigo-600 text-white shadow-sm shadow-indigo-500/30"
+            ? "bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-500/30"
             : "bg-slate-950/80 border-slate-700/80 hover:border-slate-500 text-transparent",
           className
         )}

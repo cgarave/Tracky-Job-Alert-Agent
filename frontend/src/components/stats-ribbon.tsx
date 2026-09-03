@@ -37,7 +37,7 @@ export function StatsRibbon({
 
         <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discovered Today</span>
-          <span className="text-xl font-bold text-indigo-400 mt-0.5 font-mono">{todayNewJobs}</span>
+          <span className="text-xl font-bold text-blue-400 mt-0.5 font-mono">{todayNewJobs}</span>
         </div>
 
         <div className="px-4 py-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl flex flex-col min-w-[105px] shadow-sm">

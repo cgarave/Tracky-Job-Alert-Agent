@@ -26,7 +26,6 @@ import {
   Smartphone,
   Globe,
   Zap,
-  CheckCircle2,
 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils";
 import * as api from "@/lib/api";
@@ -216,7 +215,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
     <div className="flex flex-col gap-5 relative pb-16">
       {/* Controls & Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 backdrop-blur-xl">
-        <div className="flex flex-1 items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 focus-within:border-indigo-500/60 transition-colors">
+        <div className="flex flex-1 items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 focus-within:border-blue-500/60 transition-colors">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             type="text"
@@ -252,8 +251,8 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
               onClick={() => setSelectedAlertFilter("alerted")}
               className={`px-2.5 py-1 rounded-md text-xs transition-all flex items-center gap-1.5 ${
                 selectedAlertFilter === "alerted"
-                  ? "bg-indigo-600 text-white font-medium shadow-sm"
-                  : "text-indigo-400 hover:text-indigo-200"
+                  ? "bg-blue-600 text-white font-medium shadow-sm"
+                  : "text-blue-400 hover:text-blue-200"
               }`}
             >
               <Smartphone className="w-3 h-3" />
@@ -280,7 +279,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                 onClick={() => setSelectedSource(src)}
                 className={`px-2.5 py-1 rounded-md text-xs transition-all ${
                   selectedSource === src
-                    ? "bg-indigo-600 text-white font-medium shadow-sm"
+                    ? "bg-blue-600 text-white font-medium shadow-sm"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
@@ -333,7 +332,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
           </div>
 
           {selectedIds.size > 0 && (
-            <span className="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
+            <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
               {selectedIds.size} selected
             </span>
           )}
@@ -390,7 +389,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       onClick={(e) => handleToggleSelect(job.job_id, e)}
                       className={`transition-colors cursor-pointer ${
                         isSelected
-                          ? "bg-indigo-500/10 hover:bg-indigo-500/15"
+                          ? "bg-blue-500/10 hover:bg-blue-500/15"
                           : "hover:bg-slate-800/30"
                       }`}
                     >
@@ -409,7 +408,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                             e.stopPropagation();
                             setActiveDetailJob(job);
                           }}
-                          className="font-semibold text-white hover:text-indigo-400 transition-colors text-left block truncate"
+                          className="font-semibold text-white hover:text-blue-400 transition-colors text-left block truncate"
                           title="Click to view full description"
                         >
                           {job.title}
@@ -426,8 +425,8 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                             {job.source}
                           </Badge>
                           {isAlerted ? (
-                            <Badge variant="outline" className="text-[10px] bg-indigo-500/15 border-indigo-500/30 text-indigo-300 gap-1 flex items-center">
-                              <Smartphone className="w-2.5 h-2.5 text-indigo-400" />
+                            <Badge variant="outline" className="text-[10px] bg-blue-500/15 border-blue-500/30 text-blue-300 gap-1 flex items-center">
+                              <Smartphone className="w-2.5 h-2.5 text-blue-400" />
                               <span>Alert Sent</span>
                             </Badge>
                           ) : (
@@ -448,7 +447,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
 
                       <td className="py-3 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 font-mono text-[11px] text-emerald-400">
-                          <Banknote className="w-3 h-3 text-emerald-500 shrink-0" />
+                          <Banknote className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                           <span>{job.salary || "Negotiable"}</span>
                         </div>
                       </td>
@@ -466,7 +465,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => setActiveDetailJob(job)}
-                            className="h-7 px-2 text-xs text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 gap-1 rounded-md"
+                            className="h-7 px-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 rounded-md"
                             title="View full description & details"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -477,11 +476,11 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                             variant="outline"
                             size="sm"
                             asChild
-                            className="h-7 px-2.5 text-xs bg-indigo-950/60 border-indigo-850 hover:bg-indigo-600 hover:text-white text-indigo-300 gap-1.5 transition-colors"
+                            className="h-7 px-2.5 text-xs bg-blue-950/60 border-blue-800 hover:bg-blue-600 hover:text-white text-blue-300 gap-1.5 transition-colors"
                             title="Auto-apply with Tracky Extension"
                           >
                             <a href={job.url} target="_blank" rel="noopener noreferrer">
-                              <Zap className="w-3 h-3 text-indigo-400" />
+                              <Zap className="w-3 h-3 text-blue-400" />
                               <span>Apply</span>
                             </a>
                           </Button>
@@ -529,7 +528,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                 onClick={(e) => handleToggleSelect(job.job_id, e)}
                 className={`flex flex-col justify-between transition-all backdrop-blur-xl shadow-lg cursor-pointer ${
                   isSelected
-                    ? "bg-slate-900/90 border-indigo-500/60 ring-1 ring-indigo-500/50"
+                    ? "bg-slate-900/90 border-blue-500/60 ring-1 ring-blue-500/50"
                     : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700/80"
                 }`}
               >
@@ -548,8 +547,8 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       </Badge>
 
                       {isAlerted ? (
-                        <Badge variant="outline" className="text-[10px] bg-indigo-500/15 border-indigo-500/30 text-indigo-300 gap-1 flex items-center">
-                          <Smartphone className="w-2.5 h-2.5 text-indigo-400" />
+                        <Badge variant="outline" className="text-[10px] bg-blue-500/15 border-blue-500/30 text-blue-300 gap-1 flex items-center">
+                          <Smartphone className="w-2.5 h-2.5 text-blue-400" />
                           <span>Alert Sent</span>
                         </Badge>
                       ) : (
@@ -568,7 +567,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       <button
                         type="button"
                         onClick={(e) => handlePromptSingleDelete(job, e)}
-                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors ml-1"
+                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-transition-colors ml-1"
                         title="Delete listing"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -581,7 +580,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       e.stopPropagation();
                       setActiveDetailJob(job);
                     }}
-                    className="text-sm font-bold text-white hover:text-indigo-400 transition-colors line-clamp-2 leading-snug cursor-pointer"
+                    className="text-sm font-bold text-white hover:text-blue-400 transition-colors line-clamp-2 leading-snug cursor-pointer"
                     title="Click to view full description"
                   >
                     {job.title}
@@ -625,11 +624,11 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                         variant="outline"
                         size="sm"
                         asChild
-                        className="flex-1 text-xs h-8 bg-indigo-950/60 border-indigo-850 hover:bg-indigo-600 hover:text-white text-indigo-200 gap-1.5 transition-colors shadow-sm"
+                        className="flex-1 text-xs h-8 bg-blue-950/60 border-blue-800 hover:bg-blue-600 hover:text-white text-blue-200 gap-1.5 transition-colors shadow-sm"
                         title="Auto-apply with Tracky Extension"
                       >
                         <a href={job.url} target="_blank" rel="noopener noreferrer">
-                          <Zap className="w-3.5 h-3.5 text-indigo-400" />
+                          <Zap className="w-3.5 h-3.5 text-blue-400" />
                           <span>Apply</span>
                         </a>
                       </Button>
@@ -640,7 +639,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                         onClick={() => setActiveDetailJob(job)}
                         className="flex-1 text-xs h-8 bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300 gap-1.5 transition-colors shadow-sm"
                       >
-                        <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                        <FileText className="w-3.5 h-3.5 text-blue-400" />
                         <span>Details</span>
                       </Button>
 
@@ -668,10 +667,10 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
       {selectedIds.size > 0 && (
         <aside
           aria-label="Bulk actions toolbar"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 border border-indigo-500/40 text-slate-100 px-4 py-2.5 rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-2xl flex items-center gap-3.5 animate-in fade-in slide-in-from-bottom-5 duration-200"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 border border-blue-500/40 text-slate-100 px-4 py-2.5 rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-2xl flex items-center gap-3.5 animate-in fade-in slide-in-from-bottom-5 duration-200"
         >
           <div className="flex items-center gap-2 pr-2 border-r border-slate-800">
-            <CheckSquare className="w-4 h-4 text-indigo-400" />
+            <CheckSquare className="w-4 h-4 text-blue-400" />
             <span className="text-xs font-semibold text-white font-mono">
               {selectedIds.size} <span className="text-slate-400 font-sans font-normal">selected</span>
             </span>
@@ -682,9 +681,9 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
             <button
               type="button"
               onClick={handleSelectEntireDatabase}
-              className="text-xs text-indigo-300 hover:text-white underline underline-offset-2 flex items-center gap-1 font-medium"
+              className="text-xs text-blue-300 hover:text-white underline underline-offset-2 flex items-center gap-1 font-medium"
             >
-              <Sparkles className="w-3 h-3 text-indigo-400" />
+              <Sparkles className="w-3 h-3 text-blue-400" />
               <span>Select all {totalTrackedCount} in database</span>
             </button>
           )}

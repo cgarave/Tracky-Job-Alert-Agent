@@ -3,20 +3,14 @@
 import React from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   BookOpen,
   Puzzle,
   Key,
   MousePointer,
-  Sparkles,
-  CheckCircle2,
   ExternalLink,
   ShieldCheck,
   Zap,
-  Globe,
-  Check,
-  Layers,
 } from "lucide-react";
 
 export function TutorialTab() {
@@ -27,12 +21,12 @@ export function TutorialTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-indigo-400" />
+              <BookOpen className="w-5 h-5 text-blue-400" />
               <CardTitle className="text-base font-bold text-white tracking-tight">
                 AI Auto-Applier Extension Guide
               </CardTitle>
             </div>
-            <Badge variant="outline" className="bg-indigo-500/15 border-indigo-500/30 text-indigo-300 text-xs font-mono py-0.5 px-2.5">
+            <Badge variant="outline" className="bg-blue-500/15 border-blue-500/30 text-blue-300 text-xs font-mono py-0.5 px-2.5">
               Manifest V3
             </Badge>
           </div>
@@ -48,13 +42,13 @@ export function TutorialTab() {
         <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
                 1
               </div>
               <div className="flex-1 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    <Puzzle className="w-4 h-4 text-indigo-400" />
+                    <Puzzle className="w-4 h-4 text-blue-400" />
                     Load the Tracky Chrome Extension
                   </h3>
                   <span className="text-[11px] text-slate-500 font-mono">One-time setup</span>
@@ -63,7 +57,7 @@ export function TutorialTab() {
                 <ol className="text-xs text-slate-300 space-y-2 list-decimal list-inside leading-relaxed">
                   <li>
                     Open Google Chrome (or Arc / Brave / Edge) and type{" "}
-                    <code className="bg-slate-950 px-2 py-0.5 rounded-md text-indigo-300 font-mono text-[11px] border border-slate-800">
+                    <code className="bg-slate-950 px-2 py-0.5 rounded-md text-blue-300 font-mono text-[11px] border border-slate-800">
                       chrome://extensions
                     </code>{" "}
                     in the address bar.
@@ -75,7 +69,7 @@ export function TutorialTab() {
                     Click the <strong className="text-white">Load unpacked</strong> button in the top-left toolbar.
                   </li>
                   <li>
-                    Select the <code className="bg-slate-950 px-2 py-0.5 rounded-md text-indigo-300 font-mono text-[11px] border border-slate-800">extension</code> folder inside your Tracky project directory:
+                    Select the <code className="bg-slate-950 px-2 py-0.5 rounded-md text-blue-300 font-mono text-[11px] border border-slate-800">extension</code> folder inside your Tracky project directory:
                     <div className="mt-1.5 p-2 rounded-lg bg-slate-950 border border-slate-800/80 font-mono text-[11px] text-slate-400 select-all">
                       /Users/ravforejinoeflores/Documents/antigravity/joyful-bose/extension
                     </div>
@@ -93,13 +87,13 @@ export function TutorialTab() {
         <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
                 2
               </div>
               <div className="flex-1 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    <Key className="w-4 h-4 text-indigo-400" />
+                    <Key className="w-4 h-4 text-blue-400" />
                     Configure Candidate Profile & Gemini AI
                   </h3>
                   <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] py-0 px-2 font-mono">
@@ -120,7 +114,7 @@ export function TutorialTab() {
                       href="https://aistudio.google.com/app/apikey"
                       target="_blank"
                       rel="noreferrer"
-                      className="text-indigo-400 hover:text-indigo-300 underline inline-flex items-center gap-0.5"
+                      className="text-blue-400 hover:text-blue-300 underline inline-flex items-center gap-0.5"
                     >
                       Google AI Studio <ExternalLink className="w-3 h-3" />
                     </a>
@@ -139,16 +133,16 @@ export function TutorialTab() {
         <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
                 3
               </div>
               <div className="flex-1 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-indigo-400" />
+                    <Zap className="w-4 h-4 text-blue-400" />
                     Auto-Apply in Your Authentic Browser Session
                   </h3>
-                  <Badge variant="outline" className="bg-indigo-500/15 text-indigo-300 border-indigo-500/30 text-[10px] py-0 px-2 font-mono">
+                  <Badge variant="outline" className="bg-blue-500/15 text-blue-300 border-blue-500/30 text-[10px] py-0 px-2 font-mono">
                     Zero 2FA Friction
                   </Badge>
                 </div>
@@ -161,13 +155,13 @@ export function TutorialTab() {
                   <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                     <span className="text-xs font-semibold text-white">Option A: 1-Click from Dashboard</span>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Click the <strong className="text-indigo-300">⚡ Apply</strong> button next to any job in the Jobs Feed to open the listing in Chrome.
+                      Click the <strong className="text-blue-300">⚡ Apply</strong> button next to any job in the Jobs Feed to open the listing in Chrome.
                     </p>
                   </div>
                   <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                     <span className="text-xs font-semibold text-white">Option B: In-Page HUD / Side Panel</span>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Navigate to any job on LinkedIn, OnlineJobs, Indeed, or JobStreet and click the floating <strong className="text-indigo-300">⚡ Auto-Apply</strong> pill.
+                      Navigate to any job on LinkedIn, OnlineJobs, Indeed, or JobStreet and click the floating <strong className="text-blue-300">⚡ Auto-Apply</strong> pill.
                     </p>
                   </div>
                 </div>
@@ -180,13 +174,13 @@ export function TutorialTab() {
         <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono font-bold text-sm flex items-center justify-center shrink-0">
                 4
               </div>
               <div className="flex-1 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    <MousePointer className="w-4 h-4 text-indigo-400" />
+                    <MousePointer className="w-4 h-4 text-blue-400" />
                     Visual Ghost Cursor & Safe Review Mode
                   </h3>
                   <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] py-0 px-2 font-mono">
@@ -202,7 +196,7 @@ export function TutorialTab() {
                   <div className="flex items-center gap-2.5 p-3 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-400">
                     <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>
-                      <strong className="text-slate-200">Zero Mouse Interference:</strong> The ghost cursor uses <code className="bg-slate-900 px-1.5 py-0.5 rounded text-indigo-300 font-mono">pointer-events: none</code>. You can move your actual mouse, click anywhere, or switch tabs freely.
+                      <strong className="text-slate-200">Zero Mouse Interference:</strong> The ghost cursor uses <code className="bg-slate-900 px-1.5 py-0.5 rounded text-blue-300 font-mono">pointer-events: none</code>. You can move your actual mouse, click anywhere, or switch tabs freely.
                     </span>
                   </div>
 

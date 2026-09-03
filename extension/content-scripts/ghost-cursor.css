@@ -16,11 +16,11 @@
 #tracky-ghost-cursor .cursor-pointer {
   width: 18px;
   height: 18px;
-  background: radial-gradient(circle, #6366f1 20%, #4f46e5 80%);
+  background: radial-gradient(circle, #3b82f6 20%, #2563eb 80%);
   border: 2px solid #ffffff;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.7), 0 4px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 14px rgba(37, 99, 235, 0.8), 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .tracky-click-ripple {
@@ -28,8 +28,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 2px solid #6366f1;
-  background: rgba(99, 102, 241, 0.3);
+  border: 2px solid #3b82f6;
+  background: rgba(37, 99, 235, 0.3);
   pointer-events: none !important;
   user-select: none !important;
   z-index: 2147483646;
@@ -49,7 +49,7 @@
 }
 
 .tracky-highlight-field {
-  outline: 2px solid #6366f1 !important;
+  outline: 2px solid #3b82f6 !important;
   outline-offset: 2px !important;
   transition: outline 0.2s ease-in-out;
 }

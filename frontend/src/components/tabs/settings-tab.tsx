@@ -118,7 +118,7 @@ export function SettingsTab({
       <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-indigo-400" />
+            <Settings className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base font-bold text-white tracking-tight">
               Search & Alert Configuration
             </CardTitle>
@@ -134,27 +134,27 @@ export function SettingsTab({
             <div className="flex flex-col gap-2 sm:col-span-2">
               <Label htmlFor="keyword-input" className="text-xs text-slate-300 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                  <Sliders className="w-3.5 h-3.5 text-blue-400" />
                   <span>Job Search Keywords</span>
                 </div>
-                <span className="text-[11px] text-indigo-400 font-mono">
+                <span className="text-[11px] text-blue-400 font-mono">
                   {keywords.length} active keyword{keywords.length === 1 ? "" : "s"}
                 </span>
               </Label>
 
               {/* Tag / Pill Box */}
-              <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-indigo-500/80 transition-colors shadow-inner">
+              <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-blue-500/80 transition-colors shadow-inner">
                 {keywords.map((kw, idx) => (
                   <span
                     key={`${kw}-${idx}`}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs font-medium group transition-all hover:border-indigo-400/50"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs font-medium group transition-all hover:border-blue-400/50"
                   >
-                    <Tag className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <Tag className="w-3 h-3 text-blue-400 shrink-0" />
                     <span>{kw}</span>
                     <button
                       type="button"
                       onClick={() => handleRemoveKeyword(idx)}
-                      className="p-0.5 text-indigo-400 hover:text-white hover:bg-indigo-500/30 rounded transition-colors"
+                      className="p-0.5 text-blue-400 hover:text-white hover:bg-blue-500/30 rounded transition-colors"
                       title={`Remove "${kw}"`}
                     >
                       <X className="w-3 h-3" />
@@ -182,7 +182,7 @@ export function SettingsTab({
                     <button
                       type="button"
                       onClick={() => handleAddKeyword()}
-                      className="h-6 px-2 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md flex items-center gap-1 shrink-0 transition-colors"
+                      className="h-6 px-2 text-[11px] font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-md flex items-center gap-1 shrink-0 transition-colors"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Add</span>
@@ -229,7 +229,7 @@ export function SettingsTab({
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="recipient" className="text-xs text-slate-300 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                  <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
                   <span>iMessage Recipients (Broadcast List)</span>
                 </div>
                 <span className="text-[11px] text-slate-500 font-normal">Comma-separated</span>
@@ -238,7 +238,7 @@ export function SettingsTab({
                 id="recipient"
                 value={formData.recipient || ""}
                 onChange={(e) => handleChange("recipient", e.target.value)}
-                className="bg-slate-950 border-slate-800 text-xs text-slate-100 placeholder:text-slate-600 focus:border-indigo-500"
+                className="bg-slate-950 border-slate-800 text-xs text-slate-100 placeholder:text-slate-600 focus:border-blue-500"
                 placeholder="e.g. fravfore@gmail.com, +639171234567, colleague@icloud.com"
               />
               <p className="text-[11px] text-slate-500 mt-0.5">
@@ -249,7 +249,7 @@ export function SettingsTab({
             {/* Daemon State Toggle */}
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800 sm:col-span-2 mt-2">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
                   <Power className={`w-4 h-4 ${formData.paused ? "text-amber-400" : "text-emerald-400"}`} />
                 </div>
                 <div>
@@ -278,7 +278,7 @@ export function SettingsTab({
         <Button
           type="submit"
           disabled={isSaving || isLoading}
-          className="gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 shadow-sm shadow-indigo-600/30"
+          className="gap-2 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs px-5 shadow-sm shadow-blue-600/30"
         >
           {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           <span>{isSaving ? "Saving..." : "Save Settings"}</span>

@@ -126,7 +126,7 @@ export default function Home() {
   const stats = statusData?.stats || { total_jobs: 0, today_new_jobs: 0 };
 
   return (
-    <div className="flex min-h-screen bg-[#020617] text-slate-100 selection:bg-indigo-500 selection:text-white font-sans antialiased">
+    <div className="flex min-h-screen bg-[#030712] text-slate-100 selection:bg-blue-600 selection:text-white font-sans antialiased">
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}

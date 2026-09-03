@@ -23,12 +23,9 @@ import {
   Save,
   Plus,
   X,
-  Briefcase,
   DollarSign,
-  Globe,
   Loader2,
   Tag,
-  ShieldCheck,
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -171,7 +168,7 @@ export function ProfileTab() {
   if (loading || !profile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
       </div>
     );
   }
@@ -185,7 +182,7 @@ export function ProfileTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-indigo-400" />
+              <FileText className="w-5 h-5 text-blue-400" />
               <CardTitle className="text-base font-bold text-white tracking-tight">
                 Resume PDF & Auto-Parser
               </CardTitle>
@@ -213,9 +210,9 @@ export function ProfileTab() {
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border border-dashed border-slate-800 hover:border-indigo-500/60 bg-slate-950/60 hover:bg-slate-950/90 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group"
+            className="border border-dashed border-slate-800 hover:border-blue-500/60 bg-slate-950/60 hover:bg-slate-950/90 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition-transform border border-indigo-500/20">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform border border-blue-500/20">
               {uploading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
@@ -238,7 +235,7 @@ export function ProfileTab() {
       <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-indigo-400" />
+            <User className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base font-bold text-white tracking-tight">
               Candidate Information
             </CardTitle>
@@ -257,7 +254,7 @@ export function ProfileTab() {
                 value={profile.full_name}
                 onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
                 placeholder="e.g. Juan Dela Cruz"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
               />
             </div>
 
@@ -268,7 +265,7 @@ export function ProfileTab() {
                 value={profile.current_title}
                 onChange={(e) => setProfile({ ...profile, current_title: e.target.value })}
                 placeholder="e.g. Senior Full Stack Engineer"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
               />
             </div>
 
@@ -279,7 +276,7 @@ export function ProfileTab() {
                 value={profile.email}
                 onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                 placeholder="juan@example.com"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
               />
             </div>
 
@@ -290,7 +287,7 @@ export function ProfileTab() {
                 value={profile.phone}
                 onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                 placeholder="+63 917 123 4567"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
               />
             </div>
 
@@ -301,7 +298,7 @@ export function ProfileTab() {
                 value={profile.location}
                 onChange={(e) => setProfile({ ...profile, location: e.target.value })}
                 placeholder="Manila, Philippines"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
               />
             </div>
 
@@ -313,7 +310,7 @@ export function ProfileTab() {
                 max="40"
                 value={profile.years_of_experience}
                 onChange={(e) => setProfile({ ...profile, years_of_experience: Number(e.target.value) })}
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-indigo-500/80 focus-visible:ring-indigo-500/20 text-xs font-mono"
+                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs font-mono"
               />
             </div>
           </div>
@@ -356,25 +353,25 @@ export function ProfileTab() {
           <div className="flex flex-col gap-2 pt-4 mt-4 border-t border-slate-800/60">
             <Label className="text-xs text-slate-300 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                <Tag className="w-3.5 h-3.5 text-blue-400" />
                 <span>Technical Skills & Badges</span>
               </div>
-              <span className="text-[11px] text-indigo-400 font-mono">
+              <span className="text-[11px] text-blue-400 font-mono">
                 {skills.length} active skill{skills.length === 1 ? "" : "s"}
               </span>
             </Label>
 
-            <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-indigo-500/80 transition-colors shadow-inner">
+            <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-blue-500/80 transition-colors shadow-inner">
               {skills.map((skill) => (
                 <span
                   key={skill}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs font-medium group transition-all hover:border-indigo-400/50"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs font-medium group transition-all hover:border-blue-400/50"
                 >
                   <span>{skill}</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveSkill(skill)}
-                    className="text-indigo-400/60 group-hover:text-rose-400 transition-colors focus:outline-none"
+                    className="text-blue-400/60 group-hover:text-rose-400 transition-colors focus:outline-none"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -396,7 +393,7 @@ export function ProfileTab() {
                     variant="ghost"
                     size="sm"
                     onClick={handleAddSkill}
-                    className="h-6 px-2 text-[11px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 gap-1 rounded-md"
+                    className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 rounded-md"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Add</span>
@@ -412,7 +409,7 @@ export function ProfileTab() {
       <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-indigo-400" />
+            <DollarSign className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base font-bold text-white tracking-tight">
               Screening Question Presets
             </CardTitle>
@@ -494,7 +491,7 @@ export function ProfileTab() {
                     },
                   })
                 }
-                className="h-9 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="h-9 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
@@ -508,7 +505,7 @@ export function ProfileTab() {
       <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-indigo-400" />
+            <Sparkles className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base font-bold text-white tracking-tight">
               Google Gemini AI Engine & API Key
             </CardTitle>
@@ -558,7 +555,7 @@ export function ProfileTab() {
                 disabled={testingKey || !profile.ai_settings?.gemini_api_key}
                 className="h-7 px-2.5 text-xs bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300 gap-1.5"
               >
-                {testingKey ? <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> : <Key className="w-3 h-3 text-indigo-400" />}
+                {testingKey ? <Loader2 className="w-3 h-3 animate-spin text-blue-400" /> : <Key className="w-3 h-3 text-blue-400" />}
                 <span>Test Connection</span>
               </Button>
 
@@ -586,7 +583,7 @@ export function ProfileTab() {
               <label
                 className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                   (profile.ai_settings?.gemini_model || "gemini-3.7-flash") === "gemini-3.7-flash"
-                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
                     : "bg-slate-950 border-slate-800 hover:border-slate-700"
                 }`}
               >
@@ -604,12 +601,12 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-indigo-500"
+                  className="mt-0.5 accent-blue-500"
                 />
                 <div>
                   <div className="text-xs font-semibold text-white flex items-center gap-1.5">
                     gemini-3.7-flash
-                    <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] py-0 px-1.5">
+                    <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px] py-0 px-1.5">
                       Recommended
                     </Badge>
                   </div>
@@ -622,7 +619,7 @@ export function ProfileTab() {
               <label
                 className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                   profile.ai_settings?.gemini_model === "gemini-2.5-flash"
-                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
                     : "bg-slate-950 border-slate-800 hover:border-slate-700"
                 }`}
               >
@@ -640,7 +637,7 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-indigo-500"
+                  className="mt-0.5 accent-blue-500"
                 />
                 <div>
                   <div className="text-xs font-semibold text-white">gemini-2.5-flash</div>
@@ -658,7 +655,7 @@ export function ProfileTab() {
       <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <MousePointer className="w-5 h-5 text-indigo-400" />
+            <MousePointer className="w-5 h-5 text-blue-400" />
             <CardTitle className="text-base font-bold text-white tracking-tight">
               Browser Extension Behavior
             </CardTitle>
@@ -698,7 +695,7 @@ export function ProfileTab() {
               <label
                 className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                   (profile.ai_settings?.application_mode || "review_before_submit") === "review_before_submit"
-                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
                     : "bg-slate-950 border-slate-800 hover:border-slate-700"
                 }`}
               >
@@ -716,7 +713,7 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-indigo-500"
+                  className="mt-0.5 accent-blue-500"
                 />
                 <div>
                   <div className="text-xs font-semibold text-white">Review Before Submit (Recommended)</div>
@@ -729,7 +726,7 @@ export function ProfileTab() {
               <label
                 className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                   profile.ai_settings?.application_mode === "full_auto"
-                    ? "bg-indigo-500/10 border-indigo-500/50 ring-1 ring-indigo-500/30"
+                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
                     : "bg-slate-950 border-slate-800 hover:border-slate-700"
                 }`}
               >
@@ -747,7 +744,7 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-indigo-500"
+                  className="mt-0.5 accent-blue-500"
                 />
                 <div>
                   <div className="text-xs font-semibold text-white">Full Auto Submit</div>
@@ -766,7 +763,7 @@ export function ProfileTab() {
         <Button
           type="submit"
           disabled={saving}
-          className="gap-2 font-medium text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/20 px-5"
+          className="gap-2 font-medium text-xs h-9 bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/20 px-5"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           <span>{saving ? "Saving Profile..." : "Save Candidate Profile"}</span>

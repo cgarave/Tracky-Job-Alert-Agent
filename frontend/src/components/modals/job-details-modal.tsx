@@ -63,8 +63,8 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
               </Badge>
 
               {isAlerted ? (
-                <Badge variant="outline" className="text-[10px] bg-indigo-500/15 border-indigo-500/30 text-indigo-300 gap-1 flex items-center">
-                  <Smartphone className="w-3 h-3 text-indigo-400" />
+                <Badge variant="outline" className="text-[10px] bg-blue-500/15 border-blue-500/30 text-blue-300 gap-1 flex items-center">
+                  <Smartphone className="w-3 h-3 text-blue-400" />
                   <span>Alert Sent (iMessage)</span>
                 </Badge>
               ) : (
@@ -99,7 +99,7 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
           {/* Quick Meta Pills */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 text-xs">
             <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/90 border border-slate-800">
-              <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <div className="flex flex-col truncate">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider">Location</span>
                 <span className="text-slate-200 truncate font-medium">{job.location || "Philippines"}</span>
@@ -127,7 +127,7 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
         {/* Scrollable Description Body */}
         <div className="flex-1 overflow-y-auto p-6 text-xs leading-relaxed text-slate-300 space-y-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-2">
-            <FileText className="w-4 h-4 text-indigo-400" />
+            <FileText className="w-4 h-4 text-blue-400" />
             <span>Job Description & Requirements</span>
           </div>
 
@@ -189,7 +189,7 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
             <Button
               size="sm"
               asChild
-              className="h-8 px-4 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium gap-1.5 shadow-sm shadow-indigo-600/30"
+              className="h-8 px-4 text-xs bg-blue-600 hover:bg-blue-500 text-white font-medium gap-1.5 shadow-sm shadow-blue-600/30"
             >
               <a href={job.url} target="_blank" rel="noopener noreferrer">
                 <span>Open on {job.source}</span>

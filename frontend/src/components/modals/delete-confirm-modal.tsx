@@ -71,7 +71,7 @@ export function DeleteConfirmModal({
           {/* Ignore in future scans toggle */}
           <div className="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-start gap-2.5">
-              <ShieldAlert className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+              <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <div className="flex flex-col">
                 <span className="text-xs font-semibold text-white">
                   Ignore in future scans
