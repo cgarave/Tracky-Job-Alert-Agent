@@ -1,9 +1,9 @@
-"""SQLite job deduplication, tracking, dismissal, and alert delivery layer."""
+"""SQLite job deduplication, tracking, dismissal, alert delivery, and application logging layer."""
 import hashlib
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +52,41 @@ def get_connection() -> sqlite3.Connection:
         )
     """)
 
+    # 3. Applications history table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS applications (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id       TEXT,
+            title        TEXT,
+            company      TEXT,
+            url          TEXT,
+            source       TEXT,
+            status       TEXT DEFAULT 'applied',
+            mode         TEXT DEFAULT 'ai_extension',
+            applied_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notes        TEXT DEFAULT ''
+        )
+    """)
+
+    # Auto-migration for applications table
+    for col_def in (
+        "title TEXT",
+        "company TEXT",
+        "url TEXT",
+        "source TEXT",
+    ):
+        try:
+            conn.execute(f"ALTER TABLE applications ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
     # Performance Indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_alerted ON seen_jobs(is_alerted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_id ON dismissed_jobs(job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications(job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_applied_at ON applications(applied_at DESC)")
 
     conn.commit()
     return conn
@@ -124,6 +154,44 @@ def mark_jobs_alerted(conn: sqlite3.Connection, job_ids: list[str]) -> int:
     return cur.rowcount
 
 
+def record_application(conn: sqlite3.Connection, app_data: Dict[str, Any]) -> int:
+    """Record a job application attempt and outcome in SQLite."""
+    cur = conn.execute(
+        """
+        INSERT INTO applications (job_id, title, company, url, source, status, mode, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            app_data.get("job_id", ""),
+            app_data.get("title", "Unknown Role"),
+            app_data.get("company", "Unknown Company"),
+            app_data.get("url", ""),
+            app_data.get("source", "Unknown"),
+            app_data.get("status", "applied"),
+            app_data.get("mode", "ai_extension"),
+            app_data.get("notes", ""),
+        )
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_applications(conn: sqlite3.Connection, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    """Retrieve logged applications history."""
+    cur = conn.execute(
+        "SELECT * FROM applications ORDER BY applied_at DESC LIMIT ? OFFSET ?",
+        (limit, offset)
+    )
+    return [dict(row) for row in cur.fetchall()]
+
+
+def get_application_by_job_id(conn: sqlite3.Connection, job_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve application status for a specific job."""
+    cur = conn.execute("SELECT * FROM applications WHERE job_id = ? ORDER BY applied_at DESC LIMIT 1", (job_id,))
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def total_seen(conn: sqlite3.Connection) -> int:
     """Return the total number of jobs tracked so far."""
     cur = conn.execute("SELECT COUNT(*) FROM seen_jobs")
@@ -153,24 +221,29 @@ def get_jobs(
     search: Optional[str] = None,
     alert_status: Optional[str] = None,
 ) -> list[dict]:
-    """Retrieve tracked jobs ordered by discovery time with optional alert status filtering."""
-    query = "SELECT * FROM seen_jobs WHERE 1=1"
+    """Retrieve tracked jobs ordered by discovery time with optional alert status and application flag."""
+    query = """
+        SELECT s.*, a.status as application_status, a.applied_at as application_date
+        FROM seen_jobs s
+        LEFT JOIN applications a ON s.job_id = a.job_id
+        WHERE 1=1
+    """
     params: list = []
 
     if source:
-        query += " AND source = ?"
+        query += " AND s.source = ?"
         params.append(source)
     if alert_status == "alerted":
-        query += " AND is_alerted = 1"
+        query += " AND s.is_alerted = 1"
     elif alert_status == "unalerted":
-        query += " AND (is_alerted = 0 OR is_alerted IS NULL)"
+        query += " AND (s.is_alerted = 0 OR s.is_alerted IS NULL)"
 
     if search:
-        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)"
+        query += " AND (s.title LIKE ? OR s.company LIKE ? OR s.location LIKE ? OR s.description LIKE ?)"
         term = f"%{search}%"
         params.extend([term, term, term, term])
 
-    query += " ORDER BY seen_at DESC LIMIT ? OFFSET ?"
+    query += " ORDER BY s.seen_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     cur = conn.execute(query, params)
@@ -242,6 +315,13 @@ def get_stats(conn: sqlite3.Connection) -> dict:
     cur = conn.execute("SELECT COUNT(*) FROM seen_jobs WHERE is_alerted = 1")
     total_alerted = cur.fetchone()[0]
 
+    # Applications count
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM applications WHERE status = 'applied'")
+        total_applied = cur.fetchone()[0]
+    except Exception:
+        total_applied = 0
+
     # Breakdown by source
     cur = conn.execute("SELECT source, COUNT(*) FROM seen_jobs GROUP BY source")
     source_counts = dict(cur.fetchall())
@@ -250,5 +330,6 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "total_jobs": total_jobs,
         "today_new_jobs": today_new,
         "total_alerted": total_alerted,
+        "total_applied": total_applied,
         "sources": source_counts,
     }

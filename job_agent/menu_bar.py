@@ -194,8 +194,7 @@ class TrackyApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("📄  View Logs", callback=self._on_view_logs),
             rumps.separator,
-            rumps.MenuItem("Quit Tracky (Pause & Exit)", callback=self._on_quit_menubar),
-            rumps.MenuItem("🛑  Stop Agent Daemon & Quit All…", callback=self._on_stop_all),
+            rumps.MenuItem("🛑  Quit Tracky", callback=self._on_quit_tracky),
         ]
 
         # First status refresh
@@ -458,36 +457,24 @@ class TrackyApp(rumps.App):
         else:
             rumps.alert("No log file found yet.")
 
-    def _on_quit_menubar(self, _):
-        """Pause scraper and quit menu bar app."""
-        _pause_agent_on_exit()
-        rumps.quit_application()
-
-    def _on_stop_all(self, _):
-        """Prompt user, pause scraper, stop the background daemon, and quit the menu bar app."""
-        response = rumps.alert(
-            title="Stop Tracky?",
-            message=(
-                "This will stop the background job scanner and close the menu bar app.\n\n"
-                "You will not receive any new job alerts until you start the agent again."
-            ),
-            ok="Stop & Quit",
-            cancel="Cancel",
-        )
-        if response != 1:  # 1 is OK button in rumps
-            return
-
+    def _on_quit_tracky(self, _):
+        """Stop all background daemons, pause state, and quit menu bar app completely."""
         _pause_agent_on_exit()
 
         if PLIST_DAEMON.exists():
             subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], check=False)
-        else:
-            pid = _daemon_pid()
-            if pid:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except Exception:
-                    pass
+
+        pid = _daemon_pid()
+        if pid:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except Exception:
+                pass
+
+        try:
+            subprocess.run(["pkill", "-f", "job_agent/dashboard_server.py"], check=False)
+        except Exception:
+            pass
 
         rumps.quit_application()
 

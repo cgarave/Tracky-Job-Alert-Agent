@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Tracky — AI Job Auto-Applier Co-Pilot",
+  "version": "1.0.0",
+  "description": "AI-powered job application assistant with Google Gemini reasoning, visual ghost cursor, and authentic session automation.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Tracky AI Auto-Applier"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "scripting",
+    "activeTab",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://*.indeed.com/*",
+    "https://*.jobstreet.com.ph/*",
+    "https://www.onlinejobs.ph/*",
+    "http://127.0.0.1:5050/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://*.indeed.com/*",
+        "https://*.jobstreet.com.ph/*",
+        "https://www.onlinejobs.ph/*"
+      ],
+      "js": [
+        "lib/dom-utils.js",
+        "lib/api-bridge.js",
+        "content-scripts/ghost-cursor.js",
+        "content-scripts/adapters/linkedin.js",
+        "content-scripts/adapters/onlinejobs.js",
+        "content-scripts/adapters/indeed.js",
+        "content-scripts/adapters/jobstreet.js",
+        "content-scripts/form-detector.js",
+        "content-scripts/overlay.js"
+      ],
+      "css": [
+        "content-scripts/ghost-cursor.css",
+        "content-scripts/overlay.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

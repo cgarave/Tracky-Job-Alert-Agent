@@ -12,6 +12,57 @@ export interface Job {
   seen_at?: string;
   is_alerted?: boolean | number;
   alerted_at?: string;
+  application_status?: string;
+  application_date?: string;
+}
+
+export interface ScreeningDefaults {
+  expected_salary_monthly_php?: string;
+  expected_salary_hourly_usd?: string;
+  notice_period_weeks?: string;
+  work_authorization?: string;
+  require_sponsorship?: string;
+  willing_to_relocate?: string;
+  remote_preferred?: string;
+  custom_notes?: string;
+}
+
+export interface AISettings {
+  gemini_api_key?: string;
+  gemini_model?: string;
+  enable_ghost_cursor?: boolean;
+  application_mode?: 'review_before_submit' | 'full_auto';
+}
+
+export interface CandidateProfile {
+  full_name: string;
+  email: string;
+  phone: string;
+  location: string;
+  linkedin_url?: string;
+  github_url?: string;
+  portfolio_url?: string;
+  summary?: string;
+  skills: string[];
+  years_of_experience: number;
+  current_title: string;
+  screening_defaults: ScreeningDefaults;
+  ai_settings: AISettings;
+  resume_filename?: string;
+  resume_uploaded_at?: string;
+}
+
+export interface ApplicationLog {
+  id: number;
+  job_id: string;
+  title: string;
+  company: string;
+  url: string;
+  source: string;
+  status: string;
+  mode: string;
+  applied_at: string;
+  notes?: string;
 }
 
 export interface DaemonSettings {
@@ -29,6 +80,7 @@ export interface SystemStatus {
     total_jobs: number;
     today_new_jobs?: number;
     total_alerted?: number;
+    total_applied?: number;
     sources?: Record<string, number>;
   };
   paused: boolean;

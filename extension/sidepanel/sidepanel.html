@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tracky AI Auto-Applier</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo-title">
+      <span class="logo-icon">🐶</span>
+      <span class="logo-text">Tracky AI Co-Pilot</span>
+    </div>
+    <div id="connection-badge" class="badge-offline">Connecting...</div>
+  </div>
+
+  <div class="content">
+    <!-- Active Tab Action Box -->
+    <div class="card action-card">
+      <div class="card-header">
+        <span class="card-title">Active Job Tab</span>
+      </div>
+      <p id="active-tab-title" class="tab-title-text">No supported job page detected</p>
+      <button id="apply-active-btn" class="btn btn-primary" disabled>
+        ⚡ Auto-Apply to This Job
+      </button>
+    </div>
+
+    <!-- Mode & Settings -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">AI Automation Mode</span>
+      </div>
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="app_mode" value="review_before_submit" checked>
+          <span>
+            <strong>Review Before Submit (Recommended)</strong>
+            <small>Fills all form fields and pauses for 1-click confirmation</small>
+          </span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="app_mode" value="full_auto">
+          <span>
+            <strong>Full Auto</strong>
+            <small>Fills and submits automatically</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span>Visual Ghost Cursor Animation</span>
+        <input type="checkbox" id="ghost-cursor-toggle" checked>
+      </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Tracky Control Center</span>
+      </div>
+      <p class="desc-text">Manage your candidate resume, Gemini API key, and scraped listings.</p>
+      <button id="open-dashboard-btn" class="btn btn-secondary">
+        🖥️ Open Web Dashboard
+      </button>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

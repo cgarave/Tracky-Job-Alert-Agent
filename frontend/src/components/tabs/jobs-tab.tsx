@@ -25,6 +25,8 @@ import {
   FileText,
   Smartphone,
   Globe,
+  Zap,
+  CheckCircle2,
 } from "lucide-react";
 import { formatTimeAgo } from "@/lib/utils";
 import * as api from "@/lib/api";
@@ -475,10 +477,23 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                             variant="outline"
                             size="sm"
                             asChild
-                            className="h-7 px-2.5 text-xs bg-slate-950 border-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 gap-1.5 transition-colors"
+                            className="h-7 px-2.5 text-xs bg-indigo-950/60 border-indigo-850 hover:bg-indigo-600 hover:text-white text-indigo-300 gap-1.5 transition-colors"
+                            title="Auto-apply with Tracky Extension"
                           >
                             <a href={job.url} target="_blank" rel="noopener noreferrer">
-                              <span>Link</span>
+                              <Zap className="w-3 h-3 text-indigo-400" />
+                              <span>Apply</span>
+                            </a>
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            asChild
+                            className="h-7 px-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 gap-1 rounded-md"
+                            title="Open direct job URL"
+                          >
+                            <a href={job.url} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           </Button>
@@ -605,7 +620,20 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       </p>
                     )}
 
-                    <div className="mt-2 pt-2 border-t border-slate-800/40 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="mt-2 pt-2 border-t border-slate-800/40 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="flex-1 text-xs h-8 bg-indigo-950/60 border-indigo-850 hover:bg-indigo-600 hover:text-white text-indigo-200 gap-1.5 transition-colors shadow-sm"
+                        title="Auto-apply with Tracky Extension"
+                      >
+                        <a href={job.url} target="_blank" rel="noopener noreferrer">
+                          <Zap className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Apply</span>
+                        </a>
+                      </Button>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -613,18 +641,18 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                         className="flex-1 text-xs h-8 bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300 gap-1.5 transition-colors shadow-sm"
                       >
                         <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Description</span>
+                        <span>Details</span>
                       </Button>
 
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         asChild
-                        className="flex-1 text-xs h-8 bg-slate-950 border-slate-800 hover:bg-indigo-600 hover:text-white text-slate-300 gap-1.5 transition-colors shadow-sm"
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md"
+                        title="Open direct job URL"
                       >
                         <a href={job.url} target="_blank" rel="noopener noreferrer">
-                          <span>Open</span>
-                          <ExternalLink className="w-3 h-3" />
+                          <ExternalLink className="w-3.5 h-3.5" />
                         </a>
                       </Button>
                     </div>

@@ -11,6 +11,8 @@ import { Sidebar } from "@/components/sidebar";
 import { StatsRibbon } from "@/components/stats-ribbon";
 import { JobsTab } from "@/components/tabs/jobs-tab";
 import { SettingsTab } from "@/components/tabs/settings-tab";
+import { ProfileTab } from "@/components/tabs/profile-tab";
+import { TutorialTab } from "@/components/tabs/tutorial-tab";
 import { Toaster, toast } from "sonner";
 
 export default function Home() {
@@ -115,6 +117,8 @@ export default function Home() {
 
   const tabTitles: Record<string, { heading: string; subtitle: string }> = {
     jobs: { heading: "Jobs Discovery Feed", subtitle: "Real-time listings aggregated across Indeed, JobStreet, and OnlineJobs." },
+    profile: { heading: "Candidate Profile & AI Co-Pilot", subtitle: "Resume parsing, screening answer defaults, and Gemini AI key management." },
+    tutorial: { heading: "AI Auto-Applier How-To Guide", subtitle: "Step-by-step setup instructions for Chrome Extension, Gemini AI, and authentic session auto-applying." },
     settings: { heading: "Search & Alert Configuration", subtitle: "Target keywords, search location, scrape frequency, and iMessage notification destination." },
   };
 
@@ -157,6 +161,14 @@ export default function Home() {
                 loadStatus();
               }}
             />
+          )}
+
+          {activeTab === "profile" && (
+            <ProfileTab />
+          )}
+
+          {activeTab === "tutorial" && (
+            <TutorialTab />
           )}
 
           {activeTab === "settings" && (

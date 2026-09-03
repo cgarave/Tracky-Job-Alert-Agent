@@ -1,4 +1,4 @@
-import { Job, DaemonSettings, SystemStatus } from "@/types";
+import { Job, DaemonSettings, SystemStatus, CandidateProfile, ApplicationLog } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -85,4 +85,41 @@ export async function saveSettings(settings: DaemonSettings): Promise<{ status: 
     body: JSON.stringify(settings),
   });
   return handleResponse<{ status: string; settings: DaemonSettings }>(res);
+}
+
+export async function fetchProfile(): Promise<CandidateProfile> {
+  const res = await fetch(`${API_BASE}/api/profile`);
+  return handleResponse<CandidateProfile>(res);
+}
+
+export async function saveProfile(profile: CandidateProfile): Promise<{ status: string; profile: CandidateProfile }> {
+  const res = await fetch(`${API_BASE}/api/profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+  return handleResponse<{ status: string; profile: CandidateProfile }>(res);
+}
+
+export async function uploadResume(filename: string, base64Data: string): Promise<{ status: string; filename: string; parsed_fields: Partial<CandidateProfile>; profile: CandidateProfile }> {
+  const res = await fetch(`${API_BASE}/api/profile/resume-upload`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename, content_base64: base64Data }),
+  });
+  return handleResponse<{ status: string; filename: string; parsed_fields: Partial<CandidateProfile>; profile: CandidateProfile }>(res);
+}
+
+export async function testGeminiKey(apiKey: string, modelName: string = "gemini-3.7-flash"): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/api/ai/test-key`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey, model_name: modelName }),
+  });
+  return handleResponse<{ success: boolean; message: string }>(res);
+}
+
+export async function fetchApplications(): Promise<{ applications: ApplicationLog[]; total: number }> {
+  const res = await fetch(`${API_BASE}/api/applications`);
+  return handleResponse<{ applications: ApplicationLog[]; total: number }>(res);
 }
