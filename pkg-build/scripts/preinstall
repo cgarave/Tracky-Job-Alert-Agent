@@ -5,19 +5,47 @@
 # =============================================================================
 set -euo pipefail
 
-CURRENT_USER=$(stat -f "%Su" /dev/console)
+CURRENT_USER=$(stat -f "%Su" /dev/console 2>/dev/null || echo "$USER")
+CURRENT_USER_HOME=$(eval echo ~"$CURRENT_USER")
 
-# Find python3 as the logged-in user
-PYTHON=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || echo "")
+find_python() {
+    local candidates=(
+        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+        "/opt/homebrew/bin/python3"
+        "/usr/local/bin/python3"
+        "$CURRENT_USER_HOME/.pyenv/shims/python3"
+    )
+
+    for py in "${candidates[@]}"; do
+        if [ -x "$py" ]; then
+            if "$py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+                echo "$py"
+                return 0
+            fi
+        fi
+    done
+
+    # Fallback to which python3 in user's shell
+    local shell_py
+    shell_py=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || which python3 2>/dev/null || echo "")
+    if [ -n "$shell_py" ] && [ -x "$shell_py" ]; then
+        if "$shell_py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+            echo "$shell_py"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+PYTHON=$(find_python || echo "")
 
 if [ -z "$PYTHON" ]; then
-    osascript -e 'display alert "Python 3 Not Found" message "PH Job Alert Agent requires Python 3.11 or later.\n\nDownload it from https://python.org then run the installer again." as critical buttons {"OK"} default button "OK"'
-    exit 1
-fi
-
-PY_VERSION=$(sudo -u "$CURRENT_USER" "$PYTHON" -c "import sys; print(sys.version_info.major * 10 + sys.version_info.minor)" 2>/dev/null || echo "0")
-if [ "$PY_VERSION" -lt 311 ]; then
-    osascript -e 'display alert "Python 3.11+ Required" message "PH Job Alert Agent requires Python 3.11 or later.\n\nPlease update Python from https://python.org" as critical buttons {"OK"} default button "OK"'
+    osascript -e 'display alert "Python 3.11+ Required" message "Tracky requires Python 3.11 or later.\n\nPlease install or update Python from https://python.org then run the installer again." as critical buttons {"OK"} default button "OK"'
     exit 1
 fi
 

@@ -32,10 +32,43 @@ echo "  ╚═══════════════════════
 echo ""
 
 # ── 1. Python check ──────────────────────────────────────────────────────────
-section "Checking Python 3..."
-PYTHON=$(which python3 2>/dev/null || echo "")
+section "Checking Python 3.11+..."
+find_python() {
+  local candidates=(
+    "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+    "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+    "/opt/homebrew/bin/python3"
+    "/usr/local/bin/python3"
+    "$HOME/.pyenv/shims/python3"
+  )
+
+  for py in "${candidates[@]}"; do
+    if [ -x "$py" ]; then
+      if "$py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+        echo "$py"
+        return 0
+      fi
+    fi
+  done
+
+  local shell_py
+  shell_py=$(which python3 2>/dev/null || echo "")
+  if [ -n "$shell_py" ] && [ -x "$shell_py" ]; then
+    if "$shell_py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+      echo "$shell_py"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+PYTHON=$(find_python || echo "")
 if [ -z "$PYTHON" ]; then
-  echo -e "${RED}✘${NC}  python3 not found. Install it from https://python.org and re-run this script."
+  echo -e "${RED}✘${NC}  Python 3.11+ not found. Install it from https://python.org and re-run this script."
   exit 1
 fi
 PY_VERSION=$("$PYTHON" --version 2>&1)

@@ -46,16 +46,19 @@ cp "$SCRIPT_DIR/job_agent/notifier.py"         "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/db.py"               "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/profile_manager.py"  "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/dashboard_server.py" "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/ai_parser.py"       "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/ai_applier.py"       "$INSTALL_DIR/job_agent/"
 
+# Copy Chrome Extension
+mkdir -p "$INSTALL_DIR/extension"
+cp -r "$SCRIPT_DIR/extension/"* "$INSTALL_DIR/extension/"
 
-# Applier module
-mkdir -p "$INSTALL_DIR/job_agent/applier"
-cp -r "$SCRIPT_DIR/job_agent/applier/"* "$INSTALL_DIR/job_agent/applier/"
-
-# Static Web GUI bundle (compiled Next.js + shadcn UI)
+# Static Web GUI bundle (compiled Next.js)
 mkdir -p "$INSTALL_DIR/job_agent/static"
-cp -r "$SCRIPT_DIR/job_agent/static/"* "$INSTALL_DIR/job_agent/static/"
+if [ -d "$SCRIPT_DIR/frontend/out" ]; then
+    cp -r "$SCRIPT_DIR/frontend/out/"* "$INSTALL_DIR/job_agent/static/"
+elif [ -d "$SCRIPT_DIR/job_agent/static" ]; then
+    cp -r "$SCRIPT_DIR/job_agent/static/"* "$INSTALL_DIR/job_agent/static/"
+fi
 
 # Scrapers
 cp "$SCRIPT_DIR/job_agent/scrapers/__init__.py"   "$INSTALL_DIR/job_agent/scrapers/"

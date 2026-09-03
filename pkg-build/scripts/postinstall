@@ -21,8 +21,41 @@ MENUBAR_LOG_FILE="$CURRENT_USER_HOME/Library/Logs/jobagent-menubar.log"
 PLIST_DEST="$CURRENT_USER_HOME/Library/LaunchAgents/com.jobagent.plist"
 MENUBAR_PLIST_DEST="$CURRENT_USER_HOME/Library/LaunchAgents/com.jobagent.menubar.plist"
 
-# Find Python
-PYTHON=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || echo "/usr/bin/python3")
+# Find Python 3.11+
+find_python() {
+    local candidates=(
+        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+        "/opt/homebrew/bin/python3"
+        "/usr/local/bin/python3"
+        "$CURRENT_USER_HOME/.pyenv/shims/python3"
+    )
+
+    for py in "${candidates[@]}"; do
+        if [ -x "$py" ]; then
+            if "$py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+                echo "$py"
+                return 0
+            fi
+        fi
+    done
+
+    local shell_py
+    shell_py=$(sudo -u "$CURRENT_USER" /usr/bin/env which python3 2>/dev/null || echo "")
+    if [ -n "$shell_py" ] && [ -x "$shell_py" ]; then
+        if "$shell_py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+            echo "$shell_py"
+            return 0
+        fi
+    fi
+
+    echo "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+}
+
+PYTHON=$(find_python)
 
 # ── Step 1: Install Python dependencies (includes rumps) ─────────────────────
 sudo -u "$CURRENT_USER" "$PYTHON" -m pip install \
