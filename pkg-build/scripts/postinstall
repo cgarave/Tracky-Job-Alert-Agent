@@ -24,14 +24,25 @@ run_as_user() {
 
 # ── 1. Find Python 3.11+ ─────────────────────────────────────────────────────
 find_python() {
+    # 1. First check active python3 in user environment
+    local shell_py
+    shell_py=$(run_as_user which python3 2>/dev/null || which python3 2>/dev/null || echo "")
+    if [ -n "$shell_py" ] && [ -x "$shell_py" ]; then
+        if "$shell_py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
+            echo "$shell_py"
+            return 0
+        fi
+    fi
+
+    # 2. Check standard Frameworks & Homebrew paths
     local candidates=(
-        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
-        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
-        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
         "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
         "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
         "/opt/homebrew/bin/python3"
         "/usr/local/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
         "$CURRENT_USER_HOME/.pyenv/shims/python3"
     )
 
@@ -43,15 +54,6 @@ find_python() {
             fi
         fi
     done
-
-    local shell_py
-    shell_py=$(run_as_user which python3 2>/dev/null || echo "")
-    if [ -n "$shell_py" ] && [ -x "$shell_py" ]; then
-        if "$shell_py" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
-            echo "$shell_py"
-            return 0
-        fi
-    fi
 
     echo "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
 }

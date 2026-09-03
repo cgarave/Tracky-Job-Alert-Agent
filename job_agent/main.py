@@ -297,11 +297,10 @@ def main() -> None:
 
 
     if not recipient:
-        logger.error(
-            "No recipient configured in config.json. "
-            "Run install.sh again or manually set 'recipient' in job_agent/config.json."
+        logger.warning(
+            "No recipient configured yet in config.json. "
+            "Tracky will remain paused until recipient is configured via Dashboard (http://127.0.0.1:5050) or Menu Bar."
         )
-        sys.exit(1)
 
     # Write PID file so the menu bar app can send SIGUSR1
     _write_pid()
