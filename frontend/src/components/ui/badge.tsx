@@ -8,22 +8,21 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-blue-500/15 text-blue-400 border border-blue-500/30",
+          "bg-blue-50 text-blue-700 border border-blue-200",
         secondary:
-          "border-transparent bg-slate-800 text-slate-300 border border-white/5",
+          "bg-slate-100 text-slate-700 border border-slate-200",
         destructive:
-          "border-transparent bg-rose-500/15 text-rose-400 border border-rose-500/30",
+          "bg-rose-50 text-rose-700 border border-rose-200",
         success:
-          "border-transparent bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+          "bg-emerald-50 text-emerald-700 border border-emerald-200",
         warning:
-          "border-transparent bg-amber-500/15 text-amber-400 border border-amber-500/30",
-        outline: "text-gray-300 border border-white/10",
-        indeed: "bg-blue-500/15 text-blue-400 border border-blue-500/30",
-        jobstreet: "bg-pink-500/15 text-pink-400 border border-pink-500/30",
-        onlinejobs: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
-        linkedin: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
+          "bg-amber-50 text-amber-700 border border-amber-200",
+        outline: "bg-white text-slate-700 border border-slate-200",
+        indeed: "bg-blue-50 text-blue-700 border border-blue-200",
+        jobstreet: "bg-pink-50 text-pink-700 border border-pink-200",
+        onlinejobs: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        linkedin: "bg-sky-50 text-sky-700 border border-sky-200",
       },
-
     },
     defaultVariants: {
       variant: "default",

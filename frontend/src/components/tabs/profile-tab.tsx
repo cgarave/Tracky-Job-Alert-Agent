@@ -168,7 +168,7 @@ export function ProfileTab() {
   if (loading || !profile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -178,23 +178,23 @@ export function ProfileTab() {
   return (
     <form onSubmit={handleSave} className="flex flex-col gap-6">
       {/* 1. Resume PDF Parser Card */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+      <Card className="bg-white border-slate-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-400" />
-              <CardTitle className="text-base font-bold text-white tracking-tight">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <CardTitle className="text-base font-bold text-slate-900 tracking-tight">
                 Resume PDF & Auto-Parser
               </CardTitle>
             </div>
             {profile.resume_filename && (
-              <Badge variant="outline" className="bg-slate-950 border-slate-800 text-slate-300 font-mono text-[11px] gap-1.5 py-1 px-2.5">
-                <Check className="w-3 h-3 text-emerald-400" />
+              <Badge variant="outline" className="bg-slate-50 border-slate-200 text-slate-700 font-mono text-[11px] gap-1.5 py-1 px-2.5">
+                <Check className="w-3 h-3 text-emerald-600" />
                 <span>{profile.resume_filename}</span>
               </Badge>
             )}
           </div>
-          <CardDescription className="text-xs text-slate-400 mt-1">
+          <CardDescription className="text-xs text-slate-500 mt-1">
             Upload your resume PDF to automatically extract candidate details, skills, and summary.
           </CardDescription>
         </CardHeader>
@@ -210,9 +210,9 @@ export function ProfileTab() {
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border border-dashed border-slate-800 hover:border-blue-500/60 bg-slate-950/60 hover:bg-slate-950/90 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group"
+            className="border border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/50 hover:bg-slate-50 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center group-hover:scale-105 transition-transform border border-blue-500/20">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform border border-blue-200">
               {uploading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
@@ -220,7 +220,7 @@ export function ProfileTab() {
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-200">
+              <p className="text-xs font-bold text-slate-900">
                 {uploading ? "Extracting profile & skills from resume PDF..." : "Click or drag & drop resume PDF here"}
               </p>
               <p className="text-[11px] text-slate-500 mt-0.5">
@@ -232,15 +232,15 @@ export function ProfileTab() {
       </Card>
 
       {/* 2. Candidate Information Card */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+      <Card className="bg-white border-slate-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-blue-400" />
-            <CardTitle className="text-base font-bold text-white tracking-tight">
+            <User className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-base font-bold text-slate-900 tracking-tight">
               Candidate Information
             </CardTitle>
           </div>
-          <CardDescription className="text-xs text-slate-400 mt-1">
+          <CardDescription className="text-xs text-slate-500 mt-1">
             Primary details used by the AI Auto-Applier when filling contact fields and cover letters.
           </CardDescription>
         </CardHeader>
@@ -248,130 +248,130 @@ export function ProfileTab() {
         <CardContent className="pt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Full Name</Label>
+              <Label className="text-xs text-slate-700 font-medium">Full Name</Label>
               <Input
                 type="text"
                 value={profile.full_name}
                 onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
                 placeholder="e.g. Juan Dela Cruz"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Current Title / Role</Label>
+              <Label className="text-xs text-slate-700 font-medium">Current Title / Role</Label>
               <Input
                 type="text"
                 value={profile.current_title}
                 onChange={(e) => setProfile({ ...profile, current_title: e.target.value })}
                 placeholder="e.g. Senior Full Stack Engineer"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Email Address</Label>
+              <Label className="text-xs text-slate-700 font-medium">Email Address</Label>
               <Input
                 type="email"
                 value={profile.email}
                 onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                 placeholder="juan@example.com"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Phone / Mobile Number</Label>
+              <Label className="text-xs text-slate-700 font-medium">Phone / Mobile Number</Label>
               <Input
                 type="text"
                 value={profile.phone}
                 onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                 placeholder="+63 917 123 4567"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Location</Label>
+              <Label className="text-xs text-slate-700 font-medium">Location</Label>
               <Input
                 type="text"
                 value={profile.location}
                 onChange={(e) => setProfile({ ...profile, location: e.target.value })}
                 placeholder="Manila, Philippines"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Years of Experience</Label>
+              <Label className="text-xs text-slate-700 font-medium">Years of Experience</Label>
               <Input
                 type="number"
                 min="0"
                 max="40"
                 value={profile.years_of_experience}
                 onChange={(e) => setProfile({ ...profile, years_of_experience: Number(e.target.value) })}
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 focus-visible:border-blue-500/80 focus-visible:ring-blue-500/20 text-xs font-mono"
+                className="bg-white border-slate-200 text-slate-900 font-mono"
               />
             </div>
           </div>
 
           {/* Social Links */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 mt-4 border-t border-slate-800/60">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 mt-4 border-t border-slate-100">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-400">LinkedIn Profile URL</Label>
+              <Label className="text-xs text-slate-600">LinkedIn Profile URL</Label>
               <Input
                 type="text"
                 value={profile.linkedin_url || ""}
                 onChange={(e) => setProfile({ ...profile, linkedin_url: e.target.value })}
                 placeholder="https://linkedin.com/in/..."
-                className="bg-slate-950 border-slate-800 text-slate-100 text-xs"
+                className="bg-white border-slate-200 text-slate-900 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-400">GitHub Profile URL</Label>
+              <Label className="text-xs text-slate-600">GitHub Profile URL</Label>
               <Input
                 type="text"
                 value={profile.github_url || ""}
                 onChange={(e) => setProfile({ ...profile, github_url: e.target.value })}
                 placeholder="https://github.com/..."
-                className="bg-slate-950 border-slate-800 text-slate-100 text-xs"
+                className="bg-white border-slate-200 text-slate-900 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-400">Portfolio Website</Label>
+              <Label className="text-xs text-slate-600">Portfolio Website</Label>
               <Input
                 type="text"
                 value={profile.portfolio_url || ""}
                 onChange={(e) => setProfile({ ...profile, portfolio_url: e.target.value })}
                 placeholder="https://myportfolio.dev"
-                className="bg-slate-950 border-slate-800 text-slate-100 text-xs"
+                className="bg-white border-slate-200 text-slate-900 text-xs"
               />
             </div>
           </div>
 
           {/* Interactive Skills Pill Box */}
-          <div className="flex flex-col gap-2 pt-4 mt-4 border-t border-slate-800/60">
-            <Label className="text-xs text-slate-300 flex items-center justify-between">
+          <div className="flex flex-col gap-2 pt-4 mt-4 border-t border-slate-100">
+            <Label className="text-xs text-slate-700 font-medium flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-blue-400" />
+                <Tag className="w-3.5 h-3.5 text-blue-600" />
                 <span>Technical Skills & Badges</span>
               </div>
-              <span className="text-[11px] text-blue-400 font-mono">
+              <span className="text-[11px] text-blue-600 font-mono font-semibold">
                 {skills.length} active skill{skills.length === 1 ? "" : "s"}
               </span>
             </Label>
 
-            <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-950 border border-slate-800 focus-within:border-blue-500/80 transition-colors shadow-inner">
+            <div className="flex flex-wrap items-center gap-2 p-2.5 min-h-[46px] rounded-xl bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 transition-all shadow-2xs">
               {skills.map((skill) => (
                 <span
                   key={skill}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs font-medium group transition-all hover:border-blue-400/50"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium group transition-all hover:border-blue-300"
                 >
                   <span>{skill}</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveSkill(skill)}
-                    className="text-blue-400/60 group-hover:text-rose-400 transition-colors focus:outline-none"
+                    className="text-blue-400 group-hover:text-rose-600 transition-colors focus:outline-none"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -385,7 +385,7 @@ export function ProfileTab() {
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyDown={handleSkillKeyDown}
                   placeholder={skills.length === 0 ? "Type a skill and hit Enter..." : "Add skill..."}
-                  className="h-7 border-none bg-transparent shadow-none focus-visible:ring-0 text-xs text-slate-100 placeholder:text-slate-600 p-0"
+                  className="h-7 border-none bg-transparent shadow-none focus-visible:ring-0 text-xs text-slate-900 placeholder:text-slate-400 p-0"
                 />
                 {skillInput.trim() && (
                   <Button
@@ -393,7 +393,7 @@ export function ProfileTab() {
                     variant="ghost"
                     size="sm"
                     onClick={handleAddSkill}
-                    className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 rounded-md"
+                    className="h-6 px-2 text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-1 rounded-md"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Add</span>
@@ -406,15 +406,15 @@ export function ProfileTab() {
       </Card>
 
       {/* 3. Screening Question Presets */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+      <Card className="bg-white border-slate-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-blue-400" />
-            <CardTitle className="text-base font-bold text-white tracking-tight">
+            <DollarSign className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-base font-bold text-slate-900 tracking-tight">
               Screening Question Presets
             </CardTitle>
           </div>
-          <CardDescription className="text-xs text-slate-400 mt-1">
+          <CardDescription className="text-xs text-slate-500 mt-1">
             Preset values automatically injected into platform screening questionnaires by Gemini AI.
           </CardDescription>
         </CardHeader>
@@ -422,7 +422,7 @@ export function ProfileTab() {
         <CardContent className="pt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Monthly Salary Expectation (PHP)</Label>
+              <Label className="text-xs text-slate-700 font-medium">Monthly Salary Expectation (PHP)</Label>
               <Input
                 type="text"
                 value={profile.screening_defaults?.expected_salary_monthly_php || ""}
@@ -436,12 +436,12 @@ export function ProfileTab() {
                   })
                 }
                 placeholder="80,000 - 120,000"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 text-xs font-mono"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 font-mono"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Hourly Rate Expectation (USD)</Label>
+              <Label className="text-xs text-slate-700 font-medium">Hourly Rate Expectation (USD)</Label>
               <Input
                 type="text"
                 value={profile.screening_defaults?.expected_salary_hourly_usd || ""}
@@ -455,12 +455,12 @@ export function ProfileTab() {
                   })
                 }
                 placeholder="25"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 text-xs font-mono"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 font-mono"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Notice Period (weeks)</Label>
+              <Label className="text-xs text-slate-700 font-medium">Notice Period (weeks)</Label>
               <Input
                 type="text"
                 value={profile.screening_defaults?.notice_period_weeks || ""}
@@ -474,12 +474,12 @@ export function ProfileTab() {
                   })
                 }
                 placeholder="2"
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 text-xs font-mono"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 font-mono"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-slate-300">Legally Authorized to Work in PH?</Label>
+              <Label className="text-xs text-slate-700 font-medium">Legally Authorized to Work in PH?</Label>
               <select
                 value={profile.screening_defaults?.work_authorization || "Yes"}
                 onChange={(e) =>
@@ -491,7 +491,7 @@ export function ProfileTab() {
                     },
                   })
                 }
-                className="h-9 px-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-9 px-3 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
               >
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
@@ -502,22 +502,22 @@ export function ProfileTab() {
       </Card>
 
       {/* 4. Google Gemini AI Engine Card */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+      <Card className="bg-white border-slate-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-blue-400" />
-            <CardTitle className="text-base font-bold text-white tracking-tight">
+            <Sparkles className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-base font-bold text-slate-900 tracking-tight">
               Google Gemini AI Engine & API Key
             </CardTitle>
           </div>
-          <CardDescription className="text-xs text-slate-400 mt-1">
+          <CardDescription className="text-xs text-slate-500 mt-1">
             Reasoning model used to parse custom screening questionnaires and draft tailored cover letters.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="pt-0 space-y-4">
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-slate-300 flex items-center justify-between">
+            <Label className="text-xs text-slate-700 font-medium flex items-center justify-between">
               <span>Gemini API Key</span>
               <span className="text-[11px] text-slate-500 font-mono">From Google AI Studio</span>
             </Label>
@@ -535,12 +535,12 @@ export function ProfileTab() {
                   })
                 }
                 placeholder="AIzaSy..."
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 pr-10 text-xs font-mono"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 pr-10 font-mono"
               />
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -553,16 +553,16 @@ export function ProfileTab() {
                 size="sm"
                 onClick={handleTestKey}
                 disabled={testingKey || !profile.ai_settings?.gemini_api_key}
-                className="h-7 px-2.5 text-xs bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300 gap-1.5"
+                className="h-8 px-3 text-xs bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700 gap-1.5"
               >
-                {testingKey ? <Loader2 className="w-3 h-3 animate-spin text-blue-400" /> : <Key className="w-3 h-3 text-blue-400" />}
+                {testingKey ? <Loader2 className="w-3 h-3 animate-spin text-blue-600" /> : <Key className="w-3 h-3 text-blue-600" />}
                 <span>Test Connection</span>
               </Button>
 
               {testResult && (
                 <span
-                  className={`text-xs font-medium flex items-center gap-1 ${
-                    testResult.success ? "text-emerald-400" : "text-rose-400"
+                  className={`text-xs font-semibold flex items-center gap-1 ${
+                    testResult.success ? "text-emerald-600" : "text-rose-600"
                   }`}
                 >
                   {testResult.success ? (
@@ -577,14 +577,14 @@ export function ProfileTab() {
           </div>
 
           {/* Model Selection */}
-          <div className="pt-3 border-t border-slate-800/60">
-            <Label className="text-xs text-slate-300 mb-2 block">Select AI Model</Label>
+          <div className="pt-3 border-t border-slate-100">
+            <Label className="text-xs text-slate-700 font-medium mb-2 block">Select AI Model</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label
-                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
                   (profile.ai_settings?.gemini_model || "gemini-3.7-flash") === "gemini-3.7-flash"
-                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
-                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <input
@@ -601,26 +601,26 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-blue-500"
+                  className="mt-0.5 accent-blue-600"
                 />
                 <div>
-                  <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                     gemini-3.7-flash
-                    <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px] py-0 px-1.5">
+                    <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] py-0 px-1.5 font-semibold">
                       Recommended
                     </Badge>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                     Fastest structured reasoning for questionnaire answering and cover letter generation.
                   </div>
                 </div>
               </label>
 
               <label
-                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
                   profile.ai_settings?.gemini_model === "gemini-2.5-flash"
-                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
-                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <input
@@ -637,11 +637,11 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-blue-500"
+                  className="mt-0.5 accent-blue-600"
                 />
                 <div>
-                  <div className="text-xs font-semibold text-white">gemini-2.5-flash</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  <div className="text-xs font-bold text-slate-900">gemini-2.5-flash</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                     High-accuracy model for detailed screening questionnaires.
                   </div>
                 </div>
@@ -652,25 +652,25 @@ export function ProfileTab() {
       </Card>
 
       {/* 5. Browser Extension Automation Controls */}
-      <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl shadow-xl">
+      <Card className="bg-white border-slate-200 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <MousePointer className="w-5 h-5 text-blue-400" />
-            <CardTitle className="text-base font-bold text-white tracking-tight">
+            <MousePointer className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-base font-bold text-slate-900 tracking-tight">
               Browser Extension Behavior
             </CardTitle>
           </div>
-          <CardDescription className="text-xs text-slate-400 mt-1">
+          <CardDescription className="text-xs text-slate-500 mt-1">
             Configure visual navigation and auto-submission preferences inside your browser session.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="pt-0 space-y-4">
           {/* Ghost Cursor Toggle */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-white">Visual Ghost Cursor</span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-xs font-bold text-slate-900">Visual Ghost Cursor</span>
+              <span className="text-[11px] text-slate-500">
                 Animates a glowing cursor and simulates natural typing. Non-blocking with zero interference to mouse clicks.
               </span>
             </div>
@@ -690,13 +690,13 @@ export function ProfileTab() {
 
           {/* Submission Mode */}
           <div>
-            <Label className="text-xs text-slate-300 mb-2 block">Application Submission Mode</Label>
+            <Label className="text-xs text-slate-700 font-medium mb-2 block">Application Submission Mode</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label
-                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
                   (profile.ai_settings?.application_mode || "review_before_submit") === "review_before_submit"
-                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
-                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <input
@@ -713,21 +713,21 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-blue-500"
+                  className="mt-0.5 accent-blue-600"
                 />
                 <div>
-                  <div className="text-xs font-semibold text-white">Review Before Submit (Recommended)</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  <div className="text-xs font-bold text-slate-900">Review Before Submit (Recommended)</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                     Auto-fills every form step and pauses on the final review page for your 1-click confirmation.
                   </div>
                 </div>
               </label>
 
               <label
-                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
                   profile.ai_settings?.application_mode === "full_auto"
-                    ? "bg-blue-500/10 border-blue-500/50 ring-1 ring-blue-500/30"
-                    : "bg-slate-950 border-slate-800 hover:border-slate-700"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <input
@@ -744,11 +744,11 @@ export function ProfileTab() {
                       },
                     })
                   }
-                  className="mt-0.5 accent-blue-500"
+                  className="mt-0.5 accent-blue-600"
                 />
                 <div>
-                  <div className="text-xs font-semibold text-white">Full Auto Submit</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  <div className="text-xs font-bold text-slate-900">Full Auto Submit</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                     Fills all steps and automatically clicks final submit without pausing.
                   </div>
                 </div>
@@ -763,7 +763,7 @@ export function ProfileTab() {
         <Button
           type="submit"
           disabled={saving}
-          className="gap-2 font-medium text-xs h-9 bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/20 px-5"
+          className="gap-2 font-semibold text-xs h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 px-5"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           <span>{saving ? "Saving Profile..." : "Save Candidate Profile"}</span>

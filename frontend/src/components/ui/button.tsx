@@ -4,30 +4,30 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-xl text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
   {
     variants: {
       variant: {
         default:
-          "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/20 hover:from-blue-500 hover:to-blue-600",
+          "bg-blue-600 text-white shadow-xs hover:bg-blue-700",
         destructive:
-          "bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25",
+          "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100",
         outline:
-          "border border-white/10 bg-transparent text-gray-200 hover:bg-white/5 hover:border-white/20",
+          "border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900",
         secondary:
-          "bg-slate-800 text-gray-200 border border-white/5 hover:bg-slate-700/80 hover:text-white",
+          "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200/80 hover:text-slate-900",
         ghost:
-          "text-gray-300 hover:bg-white/5 hover:text-white",
+          "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
         link:
-          "text-blue-400 underline-offset-4 hover:underline p-0 h-auto",
+          "text-blue-600 underline-offset-4 hover:underline p-0 h-auto",
         success:
-          "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25",
+          "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-11 rounded-lg px-6 text-base",
-        icon: "h-9 w-9",
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-lg px-3 text-xs",
+        lg: "h-10 rounded-xl px-5 text-sm",
+        icon: "h-8 w-8",
       },
     },
     defaultVariants: {
