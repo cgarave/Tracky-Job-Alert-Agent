@@ -343,6 +343,18 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 dom_snapshot=dom_snapshot,
                 form_schema=form_schema
             )
+
+            if action_data and action_data.get("reasoning"):
+                if "current_steps" not in AI_SESSION_STATE:
+                    AI_SESSION_STATE["current_steps"] = []
+                AI_SESSION_STATE["current_steps"].append({
+                    "step": len(AI_SESSION_STATE["current_steps"]) + 1,
+                    "action": action_data.get("action", "inspect"),
+                    "reasoning": action_data.get("reasoning", ""),
+                    "fields": action_data.get("fields", []),
+                    "timestamp": datetime.now().strftime("%I:%M:%S %p")
+                })
+
             self._send_json(action_data)
 
         elif path == "/api/ai/score-job":
@@ -362,6 +374,7 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             AI_SESSION_STATE["paused"] = False
             AI_SESSION_STATE["mode"] = mode
             AI_SESSION_STATE["current_job"] = job
+            AI_SESSION_STATE["current_steps"] = []
             AI_SESSION_STATE["session_id"] = str(int(time.time()))
             AI_SESSION_STATE["started_at"] = datetime.now().isoformat()
             self._send_json({"status": "started", "session": AI_SESSION_STATE})
@@ -378,6 +391,7 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             AI_SESSION_STATE["active"] = False
             AI_SESSION_STATE["paused"] = False
             AI_SESSION_STATE["current_job"] = None
+            AI_SESSION_STATE["current_steps"] = []
             self._send_json({"status": "stopped", "session": AI_SESSION_STATE})
 
         elif path == "/api/ai/session/record-job":
@@ -398,9 +412,11 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 "source": body.get("source", "Web"),
                 "match_score": body.get("match_score", 85),
                 "status": body.get("status", "applied"),
+                "reasoning_steps": body.get("reasoning_steps", AI_SESSION_STATE.get("current_steps", [])),
                 "timestamp": datetime.now().strftime("%I:%M %p")
             }
             AI_SESSION_STATE["log"].insert(0, log_entry)
+            AI_SESSION_STATE["current_steps"] = []
             if len(AI_SESSION_STATE["log"]) > 50:
                 AI_SESSION_STATE["log"] = AI_SESSION_STATE["log"][:50]
 

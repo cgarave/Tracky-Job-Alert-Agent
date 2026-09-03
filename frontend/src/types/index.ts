@@ -70,6 +70,14 @@ export interface ApplicationLog {
   notes?: string;
 }
 
+export interface ReasoningStep {
+  step: number;
+  action: string;
+  reasoning: string;
+  fields?: Array<{ selector?: string; label?: string; value?: string; action_type?: string }>;
+  timestamp: string;
+}
+
 export interface AISessionLogItem {
   title: string;
   company: string;
@@ -77,6 +85,7 @@ export interface AISessionLogItem {
   match_score: number;
   status: string;
   timestamp: string;
+  reasoning_steps?: ReasoningStep[];
 }
 
 export interface AISessionStatus {
@@ -84,6 +93,7 @@ export interface AISessionStatus {
   paused: boolean;
   mode: string;
   current_job?: Job | null;
+  current_steps?: ReasoningStep[];
   session_id: string;
   started_at: string;
   daily_max: number;

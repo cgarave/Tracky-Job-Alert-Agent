@@ -17,7 +17,11 @@ import {
   FileText,
   MousePointer,
   Radio,
-  Eye
+  Eye,
+  ChevronDown,
+  ChevronRight,
+  ListTree,
+  CornerDownRight
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AISessionStatus, CandidateProfile } from "@/types";
+import { AISessionStatus, CandidateProfile, ReasoningStep } from "@/types";
 import * as api from "@/lib/api";
 
 interface AiAgentTabProps {
@@ -40,6 +44,7 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     paused: false,
     mode: "batch",
     current_job: null,
+    current_steps: [],
     session_id: "",
     started_at: "",
     daily_max: 10,
@@ -47,9 +52,12 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     log: []
   });
 
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
   const [maxApps, setMaxApps] = useState<number>(profile?.ai_settings?.max_applications_per_day || 10);
   const [minMatch, setMinMatch] = useState<number>(profile?.ai_settings?.min_match_score || 70);
-  const [appMode, setAppMode] = useState<string>(profile?.ai_settings?.application_mode || "review_before_submit");
+  const [appMode, setAppMode] = useState<"review_before_submit" | "full_auto">(
+    (profile?.ai_settings?.application_mode as "review_before_submit" | "full_auto") || "review_before_submit"
+  );
   const [autoResume, setAutoResume] = useState<boolean>(profile?.ai_settings?.resume_auto_upload ?? true);
   const [ghostCursor, setGhostCursor] = useState<boolean>(profile?.ai_settings?.enable_ghost_cursor ?? true);
   const [showStream, setShowStream] = useState<boolean>(profile?.ai_settings?.show_reasoning_stream ?? true);
@@ -78,7 +86,7 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
 
   useEffect(() => {
     pollSession();
-    const interval = setInterval(pollSession, 4000);
+    const interval = setInterval(pollSession, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -100,9 +108,10 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     try {
       const res = await api.pauseAISession();
       setSessionStatus(res.session);
-      toast.info("AI Session paused.");
-    } catch (e) {
-      toast.error("Failed to pause session.");
+      toast.info("AI Batch Session paused.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Failed to pause: ${msg}`);
     }
   };
 
@@ -110,9 +119,10 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     try {
       const res = await api.resumeAISession();
       setSessionStatus(res.session);
-      toast.success("AI Session resumed.");
-    } catch (e) {
-      toast.error("Failed to resume session.");
+      toast.success("AI Batch Session resumed.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Failed to resume: ${msg}`);
     }
   };
 
@@ -120,9 +130,10 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     try {
       const res = await api.stopAISession();
       setSessionStatus(res.session);
-      toast.warning("AI Session stopped.");
-    } catch (e) {
-      toast.error("Failed to stop session.");
+      toast.info("AI Batch Session stopped.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Failed to stop: ${msg}`);
     }
   };
 
@@ -130,13 +141,13 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     setIsSaving(true);
     try {
       const updatedAiSettings = {
-        ...profile?.ai_settings,
-        max_applications_per_day: Number(maxApps),
-        min_match_score: Number(minMatch),
-        application_mode: appMode as 'review_before_submit' | 'full_auto',
+        ...(profile?.ai_settings || { gemini_api_key: "", gemini_model: "gemini-3.7-flash" }),
+        max_applications_per_day: maxApps,
+        min_match_score: minMatch,
+        application_mode: appMode,
         resume_auto_upload: autoResume,
         enable_ghost_cursor: ghostCursor,
-        show_reasoning_stream: showStream,
+        show_reasoning_stream: showStream
       };
 
       const res = await api.saveAISessionSettings(updatedAiSettings);
@@ -155,6 +166,10 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     }
   };
 
+  const toggleRowExpanded = (idx: number) => {
+    setExpandedRows((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Top Banner: Session Live Status & Quick Action Controls */}
@@ -170,11 +185,11 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
                   <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
                     AI Auto-Apply Agent Co-Pilot
                     <Badge variant="outline" className="font-mono text-xs bg-white text-blue-700 border-blue-200 shadow-2xs">
-                      Gemini Vision
+                      Gemini 3.x
                     </Badge>
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Multimodal vision browser perception, natural typing cadence, and autonomous ATS navigation.
+                    Hybrid DOM-First perception, structured reasoning steps, and human-like form navigation.
                   </p>
                 </div>
               </div>
@@ -274,11 +289,66 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
 
             <span className="text-xs text-slate-500 ml-auto flex items-center gap-1.5">
               <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-              Tip: You can also click ⚡ Auto-Apply on any specific job card.
+              Tip: You can backtrack reasoning steps in the extension HUD anytime.
             </span>
           </div>
         </CardContent>
       </Card>
+
+      {/* Active Job Live Reasoning Stream Section (if active) */}
+      {sessionStatus.active && (
+        <Card className="border-amber-200/90 shadow-sm bg-amber-50/20 overflow-hidden">
+          <CardHeader className="pb-3 border-b border-amber-100 bg-amber-50/50">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-amber-500 animate-pulse" />
+                Active Job Reasoning Stream
+              </CardTitle>
+              <Badge variant="outline" className="bg-amber-100/70 text-amber-800 border-amber-300 font-mono text-xs">
+                Live Perception
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-slate-600">
+              {sessionStatus.current_job ? `${sessionStatus.current_job.title} @ ${sessionStatus.current_job.company}` : "Active navigation session in progress..."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            {(!sessionStatus.current_steps || sessionStatus.current_steps.length === 0) ? (
+              <div className="p-4 text-center text-slate-500 text-xs italic">
+                Inspecting form structure and computing optimal actions...
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {sessionStatus.current_steps.map((st, i) => (
+                  <div key={i} className="p-3 rounded-xl bg-white border border-amber-200/70 shadow-2xs flex items-start gap-3">
+                    <span className="font-mono text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                      Step {st.step}
+                    </span>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-[10px] font-semibold bg-slate-50 text-slate-700">
+                          {st.action}
+                        </Badge>
+                        <span className="text-[10px] font-mono text-slate-400">{st.timestamp}</span>
+                      </div>
+                      <p className="text-xs text-slate-800 leading-relaxed font-medium">{st.reasoning}</p>
+                      {st.fields && st.fields.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {st.fields.map((f, fi) => (
+                            <span key={fi} className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md">
+                              ✍️ {f.label || f.selector}: &quot;{f.value || 'selected'}&quot;
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Configuration Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -385,7 +455,7 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
                   Auto-Upload Stored Resume
                 </label>
                 <p className="text-[11px] text-slate-500">
-                  Automatically attaches resume PDF when job aligns with profile.
+                  Automatically attaches resume PDF when upload fields are detected.
                 </p>
               </div>
               <Switch checked={autoResume} onCheckedChange={setAutoResume} />
@@ -394,11 +464,11 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
               <div className="space-y-0.5 pr-4">
                 <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  <MousePointer className="w-3.5 h-3.5 text-indigo-600" />
-                  Smooth Ghost Cursor
+                  <MousePointer className="w-3.5 h-3.5 text-amber-500" />
+                  Figma Amber Orange Ghost Cursor
                 </label>
                 <p className="text-[11px] text-slate-500">
-                  Animates a visible AI pointer along human trajectories.
+                  Animates a visible AI pointer with autonomous DOM exploration.
                 </p>
               </div>
               <Switch checked={ghostCursor} onCheckedChange={setGhostCursor} />
@@ -430,7 +500,7 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
         </Card>
       </div>
 
-      {/* Today's Application History Log */}
+      {/* Today's Application History Log with Expandable Steps */}
       <Card className="border-slate-200/90 shadow-sm bg-white">
         <CardHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
           <div>
@@ -439,7 +509,7 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
               Today&apos;s Application Session Log
             </CardTitle>
             <CardDescription className="text-xs text-slate-500">
-              Real-time activity recorded during this session.
+              Review full AI reasoning steps and decisions made for each job.
             </CardDescription>
           </div>
           <Badge variant="secondary" className="font-mono text-xs bg-slate-100 text-slate-700">
@@ -460,6 +530,7 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/60 text-slate-500 font-semibold text-[11px]">
+                    <th className="py-2.5 px-4 w-8"></th>
                     <th className="py-2.5 px-4">Job Title</th>
                     <th className="py-2.5 px-4">Company</th>
                     <th className="py-2.5 px-4">Site / Platform</th>
@@ -469,28 +540,97 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {sessionStatus.log.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-2.5 px-4 font-semibold text-slate-900">{item.title}</td>
-                      <td className="py-2.5 px-4 text-slate-600">{item.company}</td>
-                      <td className="py-2.5 px-4">
-                        <Badge variant="outline" className="text-[10px] py-0 px-2 font-mono bg-slate-50 text-slate-600 border-slate-200">
-                          {item.source}
-                        </Badge>
-                      </td>
-                      <td className="py-2.5 px-4 text-center font-mono font-bold text-blue-600">
-                        {item.match_score}%
-                      </td>
-                      <td className="py-2.5 px-4">
-                        <Badge variant="outline" className={`text-[10px] font-semibold py-0.5 px-2 ${item.status === 'applied' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                          {item.status === 'applied' ? '✓ Applied' : item.status}
-                        </Badge>
-                      </td>
-                      <td className="py-2.5 px-4 text-right text-[11px] font-mono text-slate-400">
-                        {item.timestamp}
-                      </td>
-                    </tr>
-                  ))}
+                  {sessionStatus.log.map((item, idx) => {
+                    const isExpanded = !!expandedRows[idx];
+                    const steps = item.reasoning_steps || [];
+
+                    return (
+                      <React.Fragment key={idx}>
+                        <tr
+                          onClick={() => steps.length > 0 && toggleRowExpanded(idx)}
+                          className={`hover:bg-slate-50/70 transition-colors ${steps.length > 0 ? 'cursor-pointer' : ''}`}
+                        >
+                          <td className="py-2.5 px-4 text-slate-400">
+                            {steps.length > 0 ? (
+                              isExpanded ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-blue-600" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                              )
+                            ) : null}
+                          </td>
+                          <td className="py-2.5 px-4 font-semibold text-slate-900 flex items-center gap-1.5">
+                            {item.title}
+                            {steps.length > 0 && (
+                              <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-blue-50 text-blue-700 border-blue-200">
+                                {steps.length} steps
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-600">{item.company}</td>
+                          <td className="py-2.5 px-4">
+                            <Badge variant="outline" className="text-[10px] py-0 px-2 font-mono bg-slate-50 text-slate-600 border-slate-200">
+                              {item.source}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-4 text-center font-mono font-bold text-blue-600">
+                            {item.match_score}%
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <Badge variant="outline" className={`text-[10px] font-semibold py-0.5 px-2 ${item.status === 'applied' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                              {item.status === 'applied' ? '✓ Applied' : item.status}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-4 text-right text-[11px] font-mono text-slate-400">
+                            {item.timestamp}
+                          </td>
+                        </tr>
+
+                        {/* Expanded Reasoning Steps List */}
+                        {isExpanded && steps.length > 0 && (
+                          <tr className="bg-slate-50/50">
+                            <td colSpan={7} className="px-6 py-4 border-t border-b border-slate-100">
+                              <div className="space-y-2">
+                                <div className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5 mb-2">
+                                  <ListTree className="w-3.5 h-3.5 text-blue-600" />
+                                  AI Reasoning Timeline ({steps.length} Steps)
+                                </div>
+                                <div className="space-y-2 pl-2 border-l-2 border-blue-200">
+                                  {steps.map((st, si) => (
+                                    <div key={si} className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono text-[11px] font-bold text-blue-600">
+                                            Step {st.step}
+                                          </span>
+                                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-slate-50 text-slate-700">
+                                            {st.action}
+                                          </Badge>
+                                        </div>
+                                        <span className="text-[10px] font-mono text-slate-400">{st.timestamp}</span>
+                                      </div>
+                                      <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                                        {st.reasoning}
+                                      </p>
+                                      {st.fields && st.fields.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 pt-1">
+                                          {st.fields.map((f, fi) => (
+                                            <span key={fi} className="text-[10px] bg-slate-50 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded">
+                                              ✍️ {f.label || f.selector}: &quot;{f.value || 'selected'}&quot;
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

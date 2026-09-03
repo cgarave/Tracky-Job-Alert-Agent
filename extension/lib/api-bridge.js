@@ -68,8 +68,21 @@ window.TrackyAPI = {
     }
   },
 
+  activeAbortController: null,
+
+  abortCurrentStep() {
+    if (this.activeAbortController) {
+      try {
+        this.activeAbortController.abort();
+      } catch (e) {}
+      this.activeAbortController = null;
+    }
+  },
+
   async navigateStep(payload, timeoutMs = 8000) {
+    this.abortCurrentStep();
     const controller = new AbortController();
+    this.activeAbortController = controller;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -80,6 +93,7 @@ window.TrackyAPI = {
         signal: controller.signal
       });
       clearTimeout(timer);
+      this.activeAbortController = null;
 
       if (!resp.ok) {
         return {
@@ -91,13 +105,14 @@ window.TrackyAPI = {
       return await resp.json();
     } catch (e) {
       clearTimeout(timer);
+      this.activeAbortController = null;
       const isTimeout = e.name === 'AbortError';
-      console.warn('[Tracky] Navigation step error/timeout:', isTimeout ? 'Timed out (8s)' : e.message);
+      console.warn('[Tracky] Navigation step error/timeout:', isTimeout ? 'Aborted / Timed out' : e.message);
       return {
         action: 'stuck',
-        reason: isTimeout ? 'AI response timed out (8s)' : (e.message || 'Network connection failed'),
+        reason: isTimeout ? 'Request cancelled or timed out' : (e.message || 'Network connection failed'),
         reasoning: isTimeout
-          ? "I'm pausing here — can you answer this field or help me continue?"
+          ? "Navigation was paused or cancelled."
           : 'Cannot reach local Tracky backend at http://127.0.0.1:5050'
       };
     }

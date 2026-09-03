@@ -1,11 +1,17 @@
 /**
  * Tracky Floating Vision AI Assistant HUD Controller.
- * Manages idle trigger pill and expanded real-time streaming HUD panel.
+ * Manages minimal idle pill, expanded real-time streaming HUD panel,
+ * step backtracking/history review, and immediate cancellation.
  */
 window.TrackyOverlay = {
   idlePillEl: null,
   panelEl: null,
   isExpanded: false,
+
+  // Step Backtracking History
+  stepRecords: [],
+  currentViewIndex: 0,
+  isHistoryDrawerOpen: false,
 
   init() {
     this.createIdlePill();
@@ -19,18 +25,12 @@ window.TrackyOverlay = {
     this.idlePillEl.innerHTML = `
       <div class="tracky-pill-icon">🐶</div>
       <div class="tracky-pill-content">
-        <span class="tracky-pill-title">Tracky AI Co-Pilot</span>
-        <span class="tracky-pill-status" id="tracky-idle-status-text">Ready to auto-apply</span>
+        <span class="tracky-pill-title">Tracky AI</span>
+        <span class="tracky-pill-status" id="tracky-idle-status-text">Ready</span>
       </div>
-      <button class="tracky-pill-btn" id="tracky-idle-apply-btn">⚡ Auto-Apply</button>
     `;
 
     document.body.appendChild(this.idlePillEl);
-
-    document.getElementById('tracky-idle-apply-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.TrackyAINavigator?.start();
-    });
 
     this.idlePillEl.addEventListener('click', () => {
       if (!this.isExpanded) {
@@ -49,25 +49,36 @@ window.TrackyOverlay = {
       <div class="tracky-hud-header">
         <div class="tracky-hud-brand">
           <span class="tracky-hud-icon">🐶</span>
-          <span class="tracky-hud-title">Tracky Vision AI</span>
+          <span class="tracky-hud-title">Tracky AI</span>
           <span class="tracky-hud-status-badge active" id="tracky-hud-badge">Active</span>
         </div>
         <div class="tracky-hud-controls">
+          <button class="tracky-hud-cancel-btn" id="tracky-hud-cancel-btn" title="Cancel Auto-Apply">✕ Cancel</button>
           <button class="tracky-hud-btn-icon" id="tracky-hud-pause-btn" title="Pause/Resume">⏸</button>
           <button class="tracky-hud-btn-icon" id="tracky-hud-min-btn" title="Minimize">−</button>
-          <button class="tracky-hud-btn-icon" id="tracky-hud-stop-btn" title="Stop Application">✕</button>
         </div>
       </div>
       <div class="tracky-hud-body" id="tracky-hud-body-content">
         <div class="tracky-reasoning-card">
-          <div class="tracky-reasoning-label">
-            <span class="tracky-pulsing-dot"></span>
-            <span>AI Reasoning Stream</span>
+          <div class="tracky-stepper-header">
+            <div class="tracky-reasoning-label">
+              <span class="tracky-pulsing-dot"></span>
+              <span>Reasoning Stream</span>
+            </div>
+            <div class="tracky-stepper-controls">
+              <button class="tracky-stepper-btn" id="tracky-step-prev-btn" title="Previous Step" disabled>◀</button>
+              <span class="tracky-step-counter" id="tracky-step-counter-text">Step 1/1</span>
+              <button class="tracky-stepper-btn" id="tracky-step-next-btn" title="Next Step" disabled>▶</button>
+              <button class="tracky-stepper-btn" id="tracky-step-history-toggle-btn" title="Toggle Full Log">📋 Log</button>
+            </div>
           </div>
           <div class="tracky-reasoning-text" id="tracky-hud-reasoning-text">
-            Initializing Gemini Vision navigator...
+            Ready to assist. Click Auto-Apply from the job listing or dashboard.
           </div>
+          <div class="tracky-step-actions-detail" id="tracky-step-actions-detail" style="display: none;"></div>
+          <div class="tracky-full-history-drawer" id="tracky-full-history-drawer" style="display: none;"></div>
         </div>
+
         <div class="tracky-progress-section" id="tracky-hud-progress-row">
           <span id="tracky-hud-step-text">Step 1</span>
           <div class="tracky-progress-track">
@@ -81,12 +92,30 @@ window.TrackyOverlay = {
 
     document.body.appendChild(this.panelEl);
 
+    // Event handlers
     document.getElementById('tracky-hud-min-btn')?.addEventListener('click', () => this.minimize());
     document.getElementById('tracky-hud-pause-btn')?.addEventListener('click', () => {
       window.TrackyAINavigator?.togglePause();
     });
-    document.getElementById('tracky-hud-stop-btn')?.addEventListener('click', () => {
-      window.TrackyAINavigator?.stop();
+    document.getElementById('tracky-hud-cancel-btn')?.addEventListener('click', () => {
+      this.cancelAutoApply();
+    });
+
+    // Stepper buttons
+    document.getElementById('tracky-step-prev-btn')?.addEventListener('click', () => {
+      if (this.currentViewIndex > 0) {
+        this.renderStep(this.currentViewIndex - 1);
+      }
+    });
+
+    document.getElementById('tracky-step-next-btn')?.addEventListener('click', () => {
+      if (this.currentViewIndex < this.stepRecords.length - 1) {
+        this.renderStep(this.currentViewIndex + 1);
+      }
+    });
+
+    document.getElementById('tracky-step-history-toggle-btn')?.addEventListener('click', () => {
+      this.toggleHistoryDrawer();
     });
   },
 
@@ -103,27 +132,142 @@ window.TrackyOverlay = {
     if (this.idlePillEl) this.idlePillEl.style.display = 'flex';
   },
 
-  setStatus(text, isLoading = false) {
+  setStatus(text, isActive = false) {
     this.init();
     const idleStatus = document.getElementById('tracky-idle-status-text');
-    if (idleStatus) idleStatus.textContent = text;
+    if (idleStatus) {
+      idleStatus.textContent = text;
+      idleStatus.className = `tracky-pill-status ${isActive ? 'active' : ''}`;
+    }
+  },
 
-    const btn = document.getElementById('tracky-idle-apply-btn');
-    if (btn) {
-      if (isLoading) {
-        btn.innerHTML = '<div class="tracky-spinner"></div>';
-        btn.disabled = true;
+  cancelAutoApply() {
+    window.TrackyAPI?.abortCurrentStep();
+    window.TrackyAINavigator?.cancel();
+    window.TrackyCursor?.hideSpeechBubble();
+
+    this.setStatus('Cancelled', false);
+    const reasoningEl = document.getElementById('tracky-hud-reasoning-text');
+    if (reasoningEl) {
+      reasoningEl.textContent = 'Auto-apply cancelled by user.';
+    }
+
+    const badge = document.getElementById('tracky-hud-badge');
+    if (badge) {
+      badge.textContent = 'Cancelled';
+      badge.className = 'tracky-hud-status-badge paused';
+    }
+
+    const interactive = document.getElementById('tracky-hud-interactive-area');
+    if (interactive) interactive.innerHTML = '';
+  },
+
+  clearHistory() {
+    this.stepRecords = [];
+    this.currentViewIndex = 0;
+    this._updateStepperUI();
+  },
+
+  addStepRecord(record) {
+    const formatted = {
+      step: record.step || this.stepRecords.length + 1,
+      reasoning: record.reasoning || '',
+      action: record.action || 'inspect',
+      fields: record.fields || [],
+      nextSelector: record.next_selector || '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+
+    this.stepRecords.push(formatted);
+    this.renderStep(this.stepRecords.length - 1);
+  },
+
+  renderStep(index) {
+    if (index < 0 || index >= this.stepRecords.length) return;
+    this.currentViewIndex = index;
+    const item = this.stepRecords[index];
+
+    const reasoningEl = document.getElementById('tracky-hud-reasoning-text');
+    if (reasoningEl) reasoningEl.textContent = item.reasoning;
+
+    const detailEl = document.getElementById('tracky-step-actions-detail');
+    if (detailEl) {
+      if (item.fields && item.fields.length > 0) {
+        detailEl.style.display = 'block';
+        const tags = item.fields
+          .map((f) => `<span class="tracky-step-action-tag">✍️ ${f.label || f.selector}: "${f.value || 'checked'}"</span>`)
+          .join(' ');
+        detailEl.innerHTML = `<div style="margin-bottom: 4px; font-weight: 600;">Planned Actions:</div>${tags}`;
+      } else if (item.action) {
+        detailEl.style.display = 'block';
+        detailEl.innerHTML = `<span class="tracky-step-action-tag">Action: ${item.action}</span>`;
       } else {
-        btn.innerHTML = '⚡ Auto-Apply';
-        btn.disabled = false;
+        detailEl.style.display = 'none';
       }
     }
+
+    this._updateStepperUI();
+    this._renderHistoryDrawer();
+  },
+
+  _updateStepperUI() {
+    const prevBtn = document.getElementById('tracky-step-prev-btn');
+    const nextBtn = document.getElementById('tracky-step-next-btn');
+    const counter = document.getElementById('tracky-step-counter-text');
+
+    const total = Math.max(this.stepRecords.length, 1);
+    const curr = this.stepRecords.length > 0 ? this.currentViewIndex + 1 : 1;
+
+    if (counter) counter.textContent = `Step ${curr}/${total}`;
+    if (prevBtn) prevBtn.disabled = this.currentViewIndex <= 0;
+    if (nextBtn) nextBtn.disabled = this.currentViewIndex >= this.stepRecords.length - 1;
+  },
+
+  toggleHistoryDrawer() {
+    this.isHistoryDrawerOpen = !this.isHistoryDrawerOpen;
+    const drawer = document.getElementById('tracky-full-history-drawer');
+    if (drawer) {
+      drawer.style.display = this.isHistoryDrawerOpen ? 'flex' : 'none';
+    }
+    if (this.isHistoryDrawerOpen) {
+      this._renderHistoryDrawer();
+    }
+  },
+
+  _renderHistoryDrawer() {
+    const drawer = document.getElementById('tracky-full-history-drawer');
+    if (!drawer) return;
+
+    if (this.stepRecords.length === 0) {
+      drawer.innerHTML = '<div style="color: #94a3b8; font-size: 11px; padding: 4px;">No step history recorded yet.</div>';
+      return;
+    }
+
+    drawer.innerHTML = this.stepRecords
+      .map(
+        (rec, idx) => `
+        <div class="tracky-history-item ${idx === this.currentViewIndex ? 'active' : ''}" data-step-idx="${idx}">
+          <div class="tracky-history-item-header">
+            <span>Step ${rec.step} (${rec.action})</span>
+            <span>${rec.timestamp}</span>
+          </div>
+          <div style="color: #334155; line-height: 1.3;">${rec.reasoning}</div>
+        </div>
+      `
+      )
+      .join('');
+
+    drawer.querySelectorAll('.tracky-history-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.getAttribute('data-step-idx') || '0', 10);
+        this.renderStep(idx);
+      });
+    });
   },
 
   showThinking(reasoning, step = 1, maxSteps = 8, platform = 'Auto-Detect') {
     this.expand();
-    const reasoningEl = document.getElementById('tracky-hud-reasoning-text');
-    if (reasoningEl) reasoningEl.textContent = reasoning;
+    this.setStatus('Active', true);
 
     const stepEl = document.getElementById('tracky-hud-step-text');
     if (stepEl) stepEl.textContent = `Step ${step}`;
@@ -238,12 +382,9 @@ window.TrackyOverlay = {
     const summaryText = typeof summary === 'string' ? summary : JSON.stringify(summary, null, 2);
 
     interactive.innerHTML = `
-      <div class="tracky-approval-card">
-        <div class="tracky-approval-title">
-          <span>✓</span>
-          <span>Application Summary</span>
-        </div>
-        <div style="font-size: 11px; color: #166534; white-space: pre-wrap; line-height: 1.4; margin-bottom: 8px;">${summaryText}</div>
+      <div class="tracky-approval-card" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+        <div style="font-weight: 700; color: #166534; font-size: 11px; margin-bottom: 4px;">✓ Application Summary</div>
+        <div style="font-size: 11px; color: #166534; white-space: pre-wrap; line-height: 1.4;">${summaryText}</div>
       </div>
       <div class="tracky-actions-row">
         <button class="tracky-btn tracky-btn-secondary" id="tracky-approval-skip-btn">✗ Skip</button>
@@ -296,6 +437,8 @@ window.TrackyOverlay = {
 
   showSuccess(message = 'Applied successfully!') {
     this.expand();
+    this.setStatus('Applied', false);
+
     const badge = document.getElementById('tracky-hud-badge');
     if (badge) {
       badge.textContent = 'Applied';
@@ -315,6 +458,8 @@ window.TrackyOverlay = {
 
   showError(message = 'Application failed') {
     this.expand();
+    this.setStatus('Failed', false);
+
     const badge = document.getElementById('tracky-hud-badge');
     if (badge) {
       badge.textContent = 'Failed';

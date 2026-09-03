@@ -58,6 +58,10 @@ window.TrackyAINavigator = {
       });
     } catch (e) {}
 
+    // Clear previous step history in overlay
+    window.TrackyOverlay?.clearHistory();
+    this.reasoningSteps = [];
+
     // Begin the vision navigation loop
     await this._navigationLoop();
   },
@@ -106,6 +110,8 @@ window.TrackyAINavigator = {
       };
 
       const decision = await api.navigateStep(payload);
+      if (!this.running) return; // Cancelled during request
+
       if (!decision) {
         overlay.showStuck(
           'No response from AI backend. Please check Tracky server.',
@@ -115,7 +121,19 @@ window.TrackyAINavigator = {
         return;
       }
 
-      // 3. Stream AI reasoning to HUD
+      // 3. Record step for backtracking & dashboard reporting
+      const stepRecord = {
+        step: this.stepCount,
+        reasoning: decision.reasoning || '',
+        action: decision.action || 'inspect',
+        fields: decision.fields || [],
+        next_selector: decision.next_selector || ''
+      };
+      if (!this.reasoningSteps) this.reasoningSteps = [];
+      this.reasoningSteps.push(stepRecord);
+      overlay.addStepRecord(stepRecord);
+
+      // Stream AI reasoning to HUD
       if (decision.reasoning) {
         overlay.showThinking(
           decision.reasoning,
@@ -363,7 +381,8 @@ window.TrackyAINavigator = {
       url: window.location.href,
       source: this._inferPlatformName(),
       status: 'applied',
-      mode: 'ai_vision'
+      mode: 'ai_vision',
+      reasoning_steps: this.reasoningSteps || []
     });
 
     // Notify background worker of completion
@@ -493,12 +512,18 @@ window.TrackyAINavigator = {
     }
   },
 
-  stop() {
+  cancel() {
     this.running = false;
     this.paused = false;
+    window.TrackyAPI?.abortCurrentStep();
+    window.TrackyCursor?.hideSpeechBubble();
     try {
       chrome.runtime.sendMessage({ action: 'CLEAR_APPLY_SESSION' });
     } catch (e) {}
+  },
+
+  stop() {
+    this.cancel();
     window.TrackyOverlay?.minimize();
     window.TrackyCursor?.hide();
   }
