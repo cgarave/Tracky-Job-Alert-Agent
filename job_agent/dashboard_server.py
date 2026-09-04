@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import db
+import notifier
 
 logger = logging.getLogger("dashboard_server")
 
@@ -94,6 +95,8 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 "location": config_data.get("location", "Philippines"),
                 "keywords": config_data.get("keywords", []),
                 "recipient": config_data.get("recipient", ""),
+                "recipients": config_data.get("recipients", []),
+                "telegram_bot_token": config_data.get("telegram_bot_token", ""),
             })
 
         elif path == "/api/jobs":
@@ -113,7 +116,22 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
         elif path == "/api/settings":
             if CONFIG_PATH.exists():
                 try:
-                    self._send_json(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
+                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                    # Auto-populate recipients array if absent but legacy recipient exists
+                    if "recipients" not in cfg:
+                        legacy = notifier.parse_recipients(cfg.get("recipient", ""))
+                        cfg["recipients"] = [
+                            {
+                                "id": f"rec_{i+1}",
+                                "name": f"Recipient {i+1}",
+                                "platform": "imessage",
+                                "destination": dest,
+                                "keywords": cfg.get("keywords", []),
+                                "enabled": True,
+                            }
+                            for i, dest in enumerate(legacy)
+                        ]
+                    self._send_json(cfg)
                 except Exception as e:
                     self._send_json({"error": str(e)}, 500)
             else:
@@ -168,11 +186,42 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
         elif path == "/api/settings":
             body = self._read_body_json()
             try:
+                # Keep legacy recipient string synced from iMessage recipients if present
+                if "recipients" in body and isinstance(body["recipients"], list):
+                    imsg_dests = [
+                        r.get("destination", "").strip()
+                        for r in body["recipients"]
+                        if isinstance(r, dict) and r.get("platform") == "imessage" and r.get("destination")
+                    ]
+                    if imsg_dests:
+                        body["recipient"] = ", ".join(imsg_dests)
+
                 with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                     json.dump(body, f, indent=2)
                 self._send_json({"status": "success", "settings": body})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+
+        elif path == "/api/test-notification":
+            body = self._read_body_json()
+            platform = body.get("platform", "imessage")
+            destination = body.get("destination", "")
+            bot_token = body.get("bot_token", "")
+
+            # If bot_token not provided in payload, fall back to config
+            if not bot_token and CONFIG_PATH.exists():
+                try:
+                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                    bot_token = cfg.get("telegram_bot_token", "")
+                except Exception:
+                    pass
+
+            result = notifier.send_test_notification(
+                platform=platform,
+                destination=destination,
+                bot_token=bot_token,
+            )
+            self._send_json(result, status=200)
 
         else:
             self._send_json({"error": f"Unknown endpoint: {path}"}, 404)

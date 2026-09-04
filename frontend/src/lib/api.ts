@@ -5,7 +5,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Request failed with status ${res.status}`);
+    throw new Error(errData.message || errData.error || errData.detail || `Request failed with status ${res.status}`);
   }
   return res.json();
 }
@@ -86,3 +86,17 @@ export async function saveSettings(settings: DaemonSettings): Promise<{ status: 
   });
   return handleResponse<{ status: string; settings: DaemonSettings }>(res);
 }
+
+export async function testNotification(payload: {
+  platform: string;
+  destination: string;
+  bot_token?: string;
+}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/api/test-notification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<{ success: boolean; message: string }>(res);
+}
+

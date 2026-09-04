@@ -52,11 +52,23 @@ def get_connection() -> sqlite3.Connection:
         )
     """)
 
+    # 3. Per-recipient alert delivery tracking (multi-channel / multi-recipient)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS job_alerts_sent (
+            job_id       TEXT,
+            recipient_id TEXT,
+            platform     TEXT DEFAULT 'unknown',
+            sent_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (job_id, recipient_id)
+        )
+    """)
+
     # Performance Indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_alerted ON seen_jobs(is_alerted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_id ON dismissed_jobs(job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_sent_rec ON job_alerts_sent(recipient_id)")
 
     conn.commit()
     return conn
@@ -112,7 +124,7 @@ def mark_seen(conn: sqlite3.Connection, job: dict) -> None:
 
 
 def mark_jobs_alerted(conn: sqlite3.Connection, job_ids: list[str]) -> int:
-    """Mark job listings as alerted via iMessage with timestamp."""
+    """Mark job listings as alerted with timestamp."""
     if not job_ids:
         return 0
     placeholders = ",".join("?" for _ in job_ids)
@@ -122,6 +134,43 @@ def mark_jobs_alerted(conn: sqlite3.Connection, job_ids: list[str]) -> int:
     )
     conn.commit()
     return cur.rowcount
+
+
+def is_alerted_for_recipient(conn: sqlite3.Connection, job_id: str, recipient_id: str) -> bool:
+    """Return True if this job has already been alerted to this specific recipient."""
+    cur = conn.execute(
+        "SELECT 1 FROM job_alerts_sent WHERE job_id = ? AND recipient_id = ?",
+        (job_id, recipient_id),
+    )
+    return cur.fetchone() is not None
+
+
+def mark_batch_alerted_for_recipient(
+    conn: sqlite3.Connection,
+    job_ids: list[str],
+    recipient_id: str,
+    platform: str = "imessage",
+) -> int:
+    """Record that a batch of job alerts was sent to a specific recipient and update seen_jobs."""
+    if not job_ids:
+        return 0
+
+    rows = [(jid, recipient_id, platform) for jid in job_ids]
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO job_alerts_sent (job_id, recipient_id, platform)
+        VALUES (?, ?, ?)
+        """,
+        rows,
+    )
+
+    placeholders = ",".join("?" for _ in job_ids)
+    conn.execute(
+        f"UPDATE seen_jobs SET is_alerted = 1, alerted_at = CURRENT_TIMESTAMP WHERE job_id IN ({placeholders})",
+        job_ids,
+    )
+    conn.commit()
+    return len(job_ids)
 
 
 def total_seen(conn: sqlite3.Connection) -> int:
