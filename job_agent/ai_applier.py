@@ -8,6 +8,11 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from . import db
+except ImportError:
+    import db
+
 logger = logging.getLogger(__name__)
 
 # Active Gemini 3.x production model family ordered by priority
@@ -101,25 +106,34 @@ def answer_screening_questions(
     Given a list of form questions from a job application modal/page,
     return accurate, structured answers matching the candidate's profile.
     """
-    if not api_key:
-        logger.warning("No Gemini API key provided for answering screening questions.")
-        return []
+    # Load remembered Q&A pairs from local SQLite
+    qa_memory_list = []
+    try:
+        conn = db.get_connection()
+        qa_memory_list = db.get_all_qa_memory(conn)
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not load QA memory: {e}")
 
     system_instruction = (
         "You are an expert AI Job Application Assistant acting on behalf of the candidate. "
         "Your task is to accurately, truthfully, and professionally answer job application screening questions "
         "using the candidate's profile, resume summary, skills, and preset preferences.\n\n"
         "Guidelines:\n"
-        "1. For multiple choice / dropdown / radio questions, select the option that best matches the candidate.\n"
-        "2. For numeric questions (e.g. 'Years of experience with React?'), return a single clean integer or number.\n"
-        "3. For Yes/No questions (e.g. 'Are you legally authorized to work in the Philippines?'), answer truthfully based on profile defaults.\n"
-        "4. For open-ended questions (e.g. 'Why are you a good fit?'), provide a crisp, compelling 2-3 sentence answer tailored to the job description.\n"
-        "5. Output MUST be valid JSON array of objects with keys: 'question_id', 'answer', 'confidence'."
+        "1. For multiple choice / dropdown / radio questions with an 'options' array, you MUST choose an exact string matching one of the options.\n"
+        "2. For numeric questions (e.g. 'Years of experience with React?'), return a single clean integer string (e.g. '3', '5').\n"
+        "3. For Yes/No questions (e.g. 'Are you legally authorized to work in the Philippines?'), answer truthfully based on candidate profile defaults.\n"
+        "4. For salary questions, use the monthly expected salary from the candidate's profile defaults.\n"
+        "5. For open-ended questions (e.g. 'Why are you a good fit?'), provide a crisp 2-3 sentence answer tailored to the job.\n"
+        "6. Output MUST be a valid JSON array of objects with keys: 'question_id', 'answer', 'confidence' ('high' | 'medium' | 'low')."
     )
 
     prompt = {
         "candidate_profile": {
             "name": profile_data.get("full_name"),
+            "email": profile_data.get("email"),
+            "phone": profile_data.get("phone"),
+            "location": profile_data.get("location", "Philippines"),
             "current_title": profile_data.get("current_title"),
             "skills": profile_data.get("skills", []),
             "years_of_experience": profile_data.get("years_of_experience", 3),
@@ -131,6 +145,7 @@ def answer_screening_questions(
             "company": job_details.get("company", ""),
             "description_snippet": job_details.get("description", "")[:1000]
         },
+        "remembered_qa_memory": qa_memory_list[:25],
         "questions_to_answer": questions
     }
 

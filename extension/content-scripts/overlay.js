@@ -14,12 +14,19 @@ window.TrackyOverlay = {
   isHistoryDrawerOpen: false,
 
   init() {
+    if (window !== window.top) return;
     this.createIdlePill();
     this.createPanel();
   },
 
   createIdlePill() {
-    if (this.idlePillEl) return;
+    if (window !== window.top) return;
+    const existing = document.querySelectorAll('#tracky-idle-pill');
+    if (existing.length > 0) {
+      this.idlePillEl = existing[0];
+      for (let i = 1; i < existing.length; i++) existing[i].remove();
+      return;
+    }
     this.idlePillEl = document.createElement('div');
     this.idlePillEl.id = 'tracky-idle-pill';
     this.idlePillEl.innerHTML = `
@@ -40,7 +47,13 @@ window.TrackyOverlay = {
   },
 
   createPanel() {
-    if (this.panelEl) return;
+    if (window !== window.top) return;
+    const existing = document.querySelectorAll('#tracky-overlay-panel');
+    if (existing.length > 0) {
+      this.panelEl = existing[0];
+      for (let i = 1; i < existing.length; i++) existing[i].remove();
+      return;
+    }
     this.panelEl = document.createElement('div');
     this.panelEl.id = 'tracky-overlay-panel';
     this.panelEl.style.display = 'none';

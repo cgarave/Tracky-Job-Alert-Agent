@@ -68,6 +68,25 @@ window.TrackyAPI = {
     }
   },
 
+  async saveQAPair(question, answer, category = 'general') {
+    if (!question || !answer) return false;
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/qa-memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_text: String(question).trim(),
+          answer_value: String(answer).trim(),
+          category: category
+        })
+      });
+      return resp.ok;
+    } catch (e) {
+      console.warn('[Tracky] Failed to save QA memory to database:', e);
+      return false;
+    }
+  },
+
   activeAbortController: null,
 
   abortCurrentStep() {

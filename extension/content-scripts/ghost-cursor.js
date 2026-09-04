@@ -1,10 +1,10 @@
 /**
- * Tracky Pure Figma Amber Orange Cursor & Autonomous Playful DOM Explorer.
+ * Tracky Pure Figma Amber Orange Cursor & Navigation Co-Pilot.
  *
- * 1. Shows a sleek Figma multiplayer cursor in vibrant Amber Orange (no tag).
- * 2. Autonomously wanders and flies across DOM elements on the page when idle.
- * 3. Reacts with curious hops and swoops when the user clicks on the page.
- * 4. Switches into a well-behaved, focused navigation co-pilot during Auto-Apply.
+ * 1. Shows a sleek Figma multiplayer cursor in vibrant Amber Orange.
+ * 2. Purposeful, steady, and calm: only moves when actively executing AI actions.
+ * 3. Never wanders randomly across DOM elements or hijacks user clicks.
+ * 4. Stays locked in focused AI Navigation mode for the entire Auto-Apply session.
  */
 window.TrackyCursor = {
   cursorEl: null,
@@ -20,18 +20,7 @@ window.TrackyCursor = {
   cursorColor: '#F59E0B',
   cursorStyle: 'figma_arrow',
   isAINavigating: false,
-  isExploring: false,
   animFrameId: null,
-  exploreTimerId: null,
-
-  // Playful flight state
-  flightStartTime: 0,
-  flightDuration: 600,
-  flightStartX: 160,
-  flightStartY: 160,
-  flightControlX: 160,
-  flightControlY: 160,
-  isFlightActive: false,
 
   _getCursorSVG(styleType, color) {
     switch (styleType) {
@@ -67,7 +56,19 @@ window.TrackyCursor = {
   },
 
   _ensureCursorDOM() {
-    if (this.cursorEl) return;
+    // Only mount cursor in the top-level browsing context, never in iframes
+    if (window !== window.top) return;
+
+    // Clean up any stale or existing cursor elements
+    const existing = document.querySelectorAll('#tracky-ghost-cursor');
+    if (existing.length > 0) {
+      this.cursorEl = existing[0];
+      for (let i = 1; i < existing.length; i++) {
+        existing[i].remove();
+      }
+      return;
+    }
+
     this.cursorEl = document.createElement('div');
     this.cursorEl.id = 'tracky-ghost-cursor';
     this.cursorEl.innerHTML = `
@@ -78,14 +79,9 @@ window.TrackyCursor = {
 
     document.body.appendChild(this.cursorEl);
 
-    // Initial position on load
-    const initialTarget = this._pickRandomInterestingElement();
-    if (initialTarget) {
-      const rect = initialTarget.getBoundingClientRect();
-      this.currentX = Math.max(40, rect.left + 20);
-      this.currentY = Math.max(40, rect.top + 20);
-    }
-
+    // Initial position parked smoothly on right side
+    this.currentX = Math.max(40, window.innerWidth - 80);
+    this.currentY = Math.max(40, window.innerHeight - 100);
     this.targetX = this.currentX;
     this.targetY = this.currentY;
     this.cursorEl.style.left = `${this.currentX}px`;
@@ -101,9 +97,6 @@ window.TrackyCursor = {
   },
 
   init() {
-    // React to user clicks on the page
-    window.addEventListener('click', (e) => this._onUserClick(e), { passive: true });
-
     // Sync settings from background worker and cache
     this.syncSettings();
 
@@ -154,145 +147,6 @@ window.TrackyCursor = {
     } catch (e) {}
   },
 
-  _onUserClick(e) {
-    if (!this.enabled || this.isAINavigating) return;
-
-    // Playfully fly to the user's click vicinity
-    const offsetAngle = Math.random() * Math.PI * 2;
-    const offsetDist = Math.random() * 25 + 20;
-    const destX = e.clientX + Math.cos(offsetAngle) * offsetDist;
-    const destY = e.clientY + Math.sin(offsetAngle) * offsetDist;
-
-    this._startSwoopFlight(destX, destY, 450);
-
-    // Do an excited playful hop
-    setTimeout(() => {
-      this.cursorEl?.classList.add('playful-bounce');
-      setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
-    }, 450);
-  },
-
-  _startAutonomousExplorer() {
-    const scheduleNextWander = () => {
-      if (!this.enabled) return;
-
-      // Random interval between 3.5s and 6.5s
-      const delay = Math.floor(Math.random() * 3000) + 3500;
-      this.exploreTimerId = setTimeout(() => {
-        if (!this.isAINavigating && this.enabled) {
-          this._exploreRandomDOMElement();
-        }
-        scheduleNextWander();
-      }, delay);
-    };
-
-    scheduleNextWander();
-  },
-
-  _exploreRandomDOMElement() {
-    const el = this._pickRandomInterestingElement();
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
-
-    // Only visit visible elements in current viewport
-    if (rect.bottom < 0 || rect.top > vh || rect.right < 0 || rect.left > vw) {
-      return;
-    }
-
-    // Pick playful corner or edge around element
-    const padding = 15;
-    const destX = Math.min(Math.max(20, rect.left + Math.random() * Math.min(rect.width, 100) + padding), vw - 30);
-    const destY = Math.min(Math.max(20, rect.top + Math.random() * Math.min(rect.height, 60) + padding), vh - 30);
-
-    const duration = Math.floor(Math.random() * 300) + 500; // 500-800ms swoop
-    this._startSwoopFlight(destX, destY, duration);
-
-    // Add curious tilt while hovering
-    setTimeout(() => {
-      if (!this.isAINavigating) {
-        this.cursorEl?.classList.add('curious-tilt');
-        setTimeout(() => this.cursorEl?.classList.remove('curious-tilt'), 800);
-      }
-    }, duration);
-  },
-
-  _pickRandomInterestingElement() {
-    const candidates = Array.from(
-      document.querySelectorAll(
-        'article, .jobsearch-JobComponent, [class*="job"], [class*="card"], button, h1, h2, h3, a[href*="job"], [class*="badge"], [role="button"], img'
-      )
-    ).filter((el) => {
-      const rect = el.getBoundingClientRect();
-      return (
-        rect.width > 20 &&
-        rect.height > 15 &&
-        rect.top >= 20 &&
-        rect.bottom <= window.innerHeight - 20 &&
-        window.getComputedStyle(el).visibility !== 'hidden'
-      );
-    });
-
-    if (candidates.length === 0) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
-  },
-
-  _startSwoopFlight(destX, destY, durationMs = 500) {
-    this.flightStartX = this.currentX;
-    this.flightStartY = this.currentY;
-    this.targetX = destX;
-    this.targetY = destY;
-
-    // Compute Bezier control point for organic swoop arc
-    const midX = (this.flightStartX + destX) / 2;
-    const midY = (this.flightStartY + destY) / 2;
-    const curvature = (Math.random() - 0.5) * 80;
-    this.flightControlX = midX - (destY - this.flightStartY) * 0.2 + curvature;
-    this.flightControlY = midY + (destX - this.flightStartX) * 0.2 - 25;
-
-    this.flightStartTime = performance.now();
-    this.flightDuration = durationMs;
-    this.isFlightActive = true;
-
-    this.cursorEl?.classList.add('flying-swoop');
-  },
-
-  _startRenderLoop() {
-    const loop = (timestamp) => {
-      if (this.enabled && this.cursorEl && !this.isAINavigating) {
-        if (this.isFlightActive) {
-          const elapsed = timestamp - this.flightStartTime;
-          const t = Math.min(elapsed / this.flightDuration, 1);
-
-          // Quadratic Bezier Curve with ease-out cubic progress
-          const ease = 1 - Math.pow(1 - t, 3);
-          const inv = 1 - ease;
-
-          this.currentX =
-            inv * inv * this.flightStartX + 2 * inv * ease * this.flightControlX + ease * ease * this.targetX;
-          this.currentY =
-            inv * inv * this.flightStartY + 2 * inv * ease * this.flightControlY + ease * ease * this.targetY;
-
-          this.cursorEl.style.left = `${this.currentX.toFixed(1)}px`;
-          this.cursorEl.style.top = `${this.currentY.toFixed(1)}px`;
-
-          if (t >= 1) {
-            this.isFlightActive = false;
-            this.cursorEl?.classList.remove('flying-swoop');
-          }
-        }
-      }
-
-      this.animFrameId = requestAnimationFrame(loop);
-    };
-
-    if (!this.animFrameId) {
-      this.animFrameId = requestAnimationFrame(loop);
-    }
-  },
-
   setEnabled(enabled) {
     this.enabled = !!enabled;
     if (this.enabled) {
@@ -300,36 +154,28 @@ window.TrackyCursor = {
       if (this.cursorEl) {
         this.cursorEl.style.display = 'block';
       }
-      this._startRenderLoop();
-      this._startAutonomousExplorer();
     } else {
       if (this.cursorEl) {
         this.cursorEl.style.display = 'none';
         this.cursorEl.remove();
         this.cursorEl = null;
       }
-      if (this.exploreTimerId) {
-        clearTimeout(this.exploreTimerId);
-        this.exploreTimerId = null;
-      }
-      if (this.animFrameId) {
-        cancelAnimationFrame(this.animFrameId);
-        this.animFrameId = null;
-      }
       this.hideSpeechBubble();
     }
   },
 
   /**
-   * Focused Autonomous AI Movement during Auto-Apply.
-   * Well-behaved, smooth, and purposeful.
+   * Focused AI Movement during Auto-Apply.
+   * Smooth, linear, and direct.
    */
-  async moveTo(element, durationMs = 380) {
-    if (!this.enabled || !element) return;
-    this.init();
-    this.isAINavigating = true;
-    this.isFlightActive = false;
-    this.cursorEl?.classList.remove('curious-tilt', 'flying-swoop');
+  async moveTo(element, durationMs = 320) {
+    if (!element) return;
+    if (!this.enabled) {
+      this.setEnabled(true);
+    }
+    this._ensureCursorDOM();
+    if (!this.cursorEl) return;
+    this.cursorEl.style.display = 'block';
 
     try {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -338,8 +184,8 @@ window.TrackyCursor = {
     await new Promise((r) => setTimeout(r, 60));
 
     const rect = element.getBoundingClientRect();
-    const destX = rect.left + Math.min(rect.width / 2, 75);
-    const destY = rect.top + Math.min(rect.height / 2, 22);
+    const destX = rect.left + Math.min(Math.max(rect.width / 2, 10), 60);
+    const destY = rect.top + Math.min(Math.max(rect.height / 2, 8), 24);
 
     const startX = this.currentX;
     const startY = this.currentY;
@@ -350,8 +196,8 @@ window.TrackyCursor = {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / durationMs, 1);
 
-        // Quintic ease-out curve for natural, well-behaved deceleration
-        const ease = 1 - Math.pow(1 - progress, 4);
+        // Quintic ease-out curve for natural deceleration
+        const ease = 1 - Math.pow(1 - progress, 3);
         this.currentX = startX + (destX - startX) * ease;
         this.currentY = startY + (destY - startY) * ease;
 
@@ -376,13 +222,13 @@ window.TrackyCursor = {
   },
 
   /**
-   * AI Click: Amber ripple + playful hop.
+   * AI Click: Amber ripple on targeted button or field.
    */
   async click(element) {
     if (!element) return;
 
     if (this.enabled) {
-      await this.moveTo(element, 300);
+      await this.moveTo(element, 260);
 
       // Amber click ripple
       const ripple = document.createElement('div');
@@ -390,50 +236,35 @@ window.TrackyCursor = {
       ripple.style.left = `${this.currentX}px`;
       ripple.style.top = `${this.currentY}px`;
       document.body.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 500);
-
-      // Playful floating paw
-      const paw = document.createElement('div');
-      paw.className = 'tracky-paw-particle';
-      paw.textContent = '🐾';
-      paw.style.left = `${this.currentX}px`;
-      paw.style.top = `${this.currentY}px`;
-      document.body.appendChild(paw);
-      setTimeout(() => paw.remove(), 750);
+      setTimeout(() => ripple.remove(), 450);
 
       element.classList.add('tracky-highlight-field');
-      setTimeout(() => element.classList.remove('tracky-highlight-field'), 400);
-      await new Promise((r) => setTimeout(r, 90));
+      setTimeout(() => element.classList.remove('tracky-highlight-field'), 350);
+      await new Promise((r) => setTimeout(r, 80));
     }
 
     await window.TrackyDOM.simulateClick(element);
-
-    // Gentle playful hop after completing action
-    this.cursorEl?.classList.add('playful-bounce');
-    setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
-
-    this.isAINavigating = false;
   },
 
   /**
-   * AI Type: Natural typing cadence.
+   * AI Type: Natural typing cadence into input.
    */
   async type(element, text) {
     if (!element || text === undefined || text === null) return;
 
     if (this.enabled) {
-      await this.moveTo(element, 250);
+      await this.moveTo(element, 220);
       element.classList.add('tracky-highlight-field');
       element.focus();
 
       const textStr = text.toString();
-      const animatedLength = Math.min(textStr.length, 30);
+      const animatedLength = Math.min(textStr.length, 25);
       let currentVal = '';
 
       for (let i = 0; i < animatedLength; i++) {
         currentVal += textStr[i];
         window.TrackyDOM.simulateInput(element, currentVal);
-        const delay = Math.floor(Math.random() * 18) + 12;
+        const delay = Math.floor(Math.random() * 15) + 10;
         await new Promise((r) => setTimeout(r, delay));
       }
 
@@ -441,29 +272,26 @@ window.TrackyCursor = {
         window.TrackyDOM.simulateInput(element, textStr);
       }
 
-      setTimeout(() => element.classList.remove('tracky-highlight-field'), 300);
+      setTimeout(() => element.classList.remove('tracky-highlight-field'), 250);
     } else {
       window.TrackyDOM.simulateInput(element, text.toString());
     }
-
-    this.isAINavigating = false;
   },
 
   bubbleEl: null,
 
   showSpeechBubble({ title, message, targetElement, onSubmit, onSkip, onManual }) {
-    this.init();
     this.hideSpeechBubble();
 
     if (targetElement) {
-      this.moveTo(targetElement, 300);
+      this.moveTo(targetElement, 260);
     }
 
     const bubble = document.createElement('div');
     bubble.id = 'tracky-cursor-bubble';
 
     // Calculate smart positioning (adaptive left vs right)
-    const bubbleWidth = 270;
+    const bubbleWidth = 280;
     const isNearLeftEdge = this.currentX < bubbleWidth + 30;
 
     if (isNearLeftEdge) {
@@ -538,7 +366,6 @@ window.TrackyCursor = {
 
   hide() {
     this.isAINavigating = false;
-    this.isFlightActive = false;
     this.hideSpeechBubble();
     if (this.cursorEl) {
       this.cursorEl.style.display = 'none';

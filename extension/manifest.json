@@ -23,7 +23,8 @@
     "tabs",
     "scripting",
     "activeTab",
-    "notifications"
+    "notifications",
+    "webNavigation"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -35,6 +36,7 @@
         "http://*/*",
         "https://*/*"
       ],
+      "all_frames": false,
       "js": [
         "lib/dom-utils.js",
         "lib/api-bridge.js",

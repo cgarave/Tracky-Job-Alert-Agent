@@ -66,6 +66,19 @@ window.TrackyIndeedAdapter = {
 
     overlay.setStatus('Opening Indeed apply form...', true);
 
+    // Register active session for cross-tab tracking before clicking
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'REGISTER_APPLY_SESSION',
+        jobContext: {
+          title: document.title,
+          company: document.querySelector('.jobsearch-JobInfoHeader-companyName, [data-testid="inlineHeader-companyName"]')?.innerText || 'Indeed Employer',
+          url: window.location.href,
+          source: 'Indeed'
+        }
+      });
+    } catch (e) {}
+
     // Listen for new tab before clicking (Indeed opens a new tab)
     const beforeTabIds = await this._getOpenTabIds();
     await cursor.click(applyBtn);
@@ -83,17 +96,28 @@ window.TrackyIndeedAdapter = {
           mode
         });
       } catch (e) {
-        // If messaging fails, the new tab's content script will self-detect via _isApplyPage()
+        // Handled by service worker
       }
       overlay.showSuccess('Apply form opened! Auto-filling in the new tab...');
       return true;
     }
 
-    // No new tab — the form may be inline (modal/iframe on the same page)
-    await dom.sleep(1500);
-    const inlineForm = document.querySelector('.ia-BasePage, .ia-container, [class*="applyContainer"]');
-    if (inlineForm) {
+    // No new tab opened — the page either reloaded or rendered an inline form/modal
+    await dom.sleep(1200);
+    const hasFormElements = document.querySelector('form, [role="dialog"], input:not([type="hidden"]), select, textarea, button[type="submit"]') !== null;
+    if (hasFormElements || this._isApplyPage()) {
       return await this._fillApplyForm(profile, mode);
+    }
+
+    // Fall back to general AI Navigator to inspect the page
+    if (window.TrackyAINavigator) {
+      await window.TrackyAINavigator.start({
+        title: document.title,
+        company: document.querySelector('.jobsearch-JobInfoHeader-companyName, [data-testid="inlineHeader-companyName"]')?.innerText || 'Indeed Employer',
+        url: window.location.href,
+        source: 'Indeed'
+      });
+      return true;
     }
 
     overlay.showError('Could not find apply form. Try clicking Apply manually.');
@@ -104,7 +128,7 @@ window.TrackyIndeedAdapter = {
   async _getOpenTabIds() {
     return new Promise((resolve) => {
       try {
-        chrome.runtime.sendMessage({ action: 'GET_TAB_IDS' }, (resp) => {
+        chrome.runtime.sendMessage({ action: 'GET_ALL_TABS' }, (resp) => {
           resolve(resp?.tabIds || []);
         });
       } catch {
@@ -125,125 +149,23 @@ window.TrackyIndeedAdapter = {
     return null;
   },
 
-  /** Fill out the multi-step Indeed apply form */
+  /** Fill out the multi-step Indeed apply form using Tracky AI Navigator */
   async _fillApplyForm(profile, mode) {
     const overlay = window.TrackyOverlay;
-    const cursor = window.TrackyCursor;
-    const dom = window.TrackyDOM;
+    overlay.setStatus('Analyzing Indeed application form with Tracky AI...', true);
 
-    let stepCount = 0;
-    while (stepCount < 10) {
-      stepCount++;
-      overlay.setStatus(`Filling Indeed step ${stepCount}...`, true);
-      await dom.sleep(800);
-
-      // Fill text inputs
-      const textInputs = document.querySelectorAll(
-        'input[type="text"]:not([readonly]), input[type="tel"]:not([readonly]), ' +
-        'input[type="email"]:not([readonly]), input[type="number"]:not([readonly]), ' +
-        'textarea:not([readonly])'
-      );
-      for (const input of textInputs) {
-        if (input.value || input.closest('[aria-hidden="true"]')) continue;
-        const label =
-          input.closest('div[class]')?.querySelector('label')?.innerText ||
-          input.getAttribute('aria-label') ||
-          input.getAttribute('placeholder') || '';
-        const labelLower = label.toLowerCase();
-
-        if (labelLower.includes('phone') && profile.phone) {
-          await cursor.type(input, profile.phone);
-        } else if ((labelLower.includes('year') || labelLower.includes('experience')) && profile.years_of_experience) {
-          await cursor.type(input, String(profile.years_of_experience));
-        } else if (labelLower.includes('salary') || labelLower.includes('compensation')) {
-          const salary = profile.screening_defaults?.expected_salary_monthly_php || '80000';
-          await cursor.type(input, String(salary));
-        } else if (label) {
-          const answers = await window.TrackyAPI.answerForm(
-            [{ question_id: input.id || label, question: label }],
-            { title: document.title, url: window.location.href }
-          );
-          if (answers && answers[0]?.answer) {
-            await cursor.type(input, answers[0].answer);
-          }
-        }
-      }
-
-      // Handle radio/checkbox questions
-      const fieldsets = document.querySelectorAll('fieldset');
-      for (const fs of fieldsets) {
-        const legend = fs.querySelector('legend')?.innerText?.toLowerCase() || '';
-        const radios = fs.querySelectorAll('input[type="radio"]');
-        if (radios.length > 0 && ![...radios].some((r) => r.checked)) {
-          if (legend.includes('authorized') || legend.includes('commute') || legend.includes('relocate')) {
-            const yes = [...radios].find((r) => (r.nextElementSibling?.innerText || r.value || '').toLowerCase().includes('yes'));
-            if (yes) await cursor.click(yes);
-          } else if (legend.includes('sponsor') || legend.includes('visa')) {
-            const no = [...radios].find((r) => (r.nextElementSibling?.innerText || r.value || '').toLowerCase().includes('no'));
-            if (no) await cursor.click(no);
-          } else {
-            await cursor.click(radios[0]);
-          }
-        }
-      }
-
-      // Selects
-      const selects = document.querySelectorAll('select');
-      for (const sel of selects) {
-        if (sel.value || sel.closest('[aria-hidden="true"]')) continue;
-        if (sel.options.length > 1) {
-          sel.selectedIndex = 1;
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      }
-
-      // Look for navigation buttons
-      const submitBtn = document.querySelector(
-        'button[type="submit"][data-testid="submit-application"], ' +
-        'button[data-testid="IA-SubmitButton"], ' +
-        'button.ia-SubmitButton, ' +
-        'button[aria-label*="Submit"]'
-      );
-      const continueBtn = document.querySelector(
-        'button[data-testid="IA-ContinueButton"], ' +
-        'button.ia-continueButton, ' +
-        'button[data-testid="continue-button"], ' +
-        'button[aria-label*="Continue"]'
-      );
-      const nextBtn = document.querySelector(
-        'button[data-testid="IA-next"], button[aria-label*="Next"]'
-      );
-
-      if (submitBtn) {
-        if (mode === 'review_before_submit') {
-          overlay.showSuccess('Ready! Review your application and click Submit.');
-          await cursor.moveTo(submitBtn);
-          return true;
-        } else {
-          overlay.setStatus('Submitting application...', true);
-          await cursor.click(submitBtn);
-          await dom.sleep(2000);
-          overlay.showSuccess('Submitted via Indeed Apply!');
-          await window.TrackyAPI.recordApplication({
-            title: document.title,
-            company: 'Indeed Employer',
-            url: window.location.href,
-            source: 'Indeed.ph',
-            status: 'applied',
-            mode: 'full_auto'
-          });
-          return true;
-        }
-      } else if (continueBtn) {
-        await cursor.click(continueBtn);
-        await dom.sleep(1200);
-      } else if (nextBtn) {
-        await cursor.click(nextBtn);
-        await dom.sleep(1200);
-      } else {
-        break;
-      }
+    if (window.TrackyAINavigator) {
+      const jobContext = {
+        title: document.title,
+        company: document.querySelector('.jobsearch-JobInfoHeader-companyName, [data-testid="inlineHeader-companyName"]')?.innerText || 'Indeed Employer',
+        url: window.location.href,
+        source: 'Indeed'
+      };
+      await window.TrackyAINavigator.start(jobContext);
+      return true;
     }
-    return true;
+
+    overlay.showError('Tracky AI Navigator is not available.');
+    return false;
   }
 };
