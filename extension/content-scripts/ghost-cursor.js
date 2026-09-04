@@ -4,8 +4,7 @@
  * 1. Shows a sleek Figma multiplayer cursor in vibrant Amber Orange.
  * 2. Expressive personality: flying swoops, curious head-tilts, joyful puppy hops,
  *    floating amber paws, and gentle ambient breathing when resting.
- * 3. Autonomous Idle Explorer: playfully explores visible DOM elements when idle,
- *    then seamlessly switches to 100% focused navigation during Auto-Apply.
+ * 3. 100% continuous, fluid motion: zero coordinate snapping or teleporting.
  * 4. Human-grade movement physics: Fitts' law distance scaling, organic Bezier curves,
  *    natural click press holds, and authentic keystroke cadence.
  */
@@ -24,6 +23,7 @@ window.TrackyCursor = {
   cursorStyle: 'figma_arrow',
   isAINavigating: false,
   idleTimerId: null,
+  activeAnimResolve: null,
 
   _getCursorSVG(styleType, color) {
     switch (styleType) {
@@ -66,6 +66,15 @@ window.TrackyCursor = {
       this.cursorEl = existing[0];
       for (let i = 1; i < existing.length; i++) {
         existing[i].remove();
+      }
+      // Preserve existing coordinate location without snapping
+      const curLeft = parseFloat(this.cursorEl.style.left);
+      const curTop = parseFloat(this.cursorEl.style.top);
+      if (!isNaN(curLeft) && !isNaN(curTop) && curLeft > 0 && curTop > 0) {
+        this.currentX = curLeft;
+        this.currentY = curTop;
+        this.targetX = curLeft;
+        this.targetY = curTop;
       }
       return;
     }
@@ -169,7 +178,7 @@ window.TrackyCursor = {
   },
 
   /**
-   * Playful Idle Explorer: Gently explores visible DOM elements when not in active navigation.
+   * Playful Idle Explorer: Gently explores nearby main content elements when idle.
    */
   _startIdleAutonomousExplorer() {
     if (this.idleTimerId) {
@@ -180,8 +189,7 @@ window.TrackyCursor = {
     const scheduleNextWander = () => {
       if (!this.enabled || this.isAINavigating) return;
 
-      // Random friendly interval between 4.0s and 7.5s
-      const delay = Math.floor(Math.random() * 3500) + 4000;
+      const delay = Math.floor(Math.random() * 3500) + 4500;
       this.idleTimerId = setTimeout(async () => {
         if (this.enabled && !this.isAINavigating) {
           await this._exploreRandomDOMElement();
@@ -201,49 +209,54 @@ window.TrackyCursor = {
     const vh = window.innerHeight;
     const vw = window.innerWidth;
 
-    if (rect.bottom < 40 || rect.top > vh - 40 || rect.right < 40 || rect.left > vw - 40) {
+    if (rect.bottom < 60 || rect.top > vh - 60 || rect.right < 40 || rect.left > vw - 40) {
       return;
     }
 
-    const destX = Math.min(Math.max(30, rect.left + Math.random() * Math.min(rect.width, 100) + 15), vw - 40);
-    const destY = Math.min(Math.max(30, rect.top + Math.random() * Math.min(rect.height, 50) + 10), vh - 40);
+    const destX = Math.min(Math.max(40, rect.left + Math.random() * Math.min(rect.width, 80) + 10), vw - 50);
+    const destY = Math.min(Math.max(40, rect.top + Math.random() * Math.min(rect.height, 40) + 10), vh - 50);
 
-    const duration = Math.floor(Math.random() * 250) + 450;
+    const duration = Math.floor(Math.random() * 200) + 500;
     await this._swoopTo(destX, destY, duration);
 
     if (!this.isAINavigating && this.cursorEl) {
-      // 60% chance curious head-tilt, 40% chance gentle puppy hop
       if (Math.random() < 0.6) {
         this.cursorEl.classList.add('curious-tilt');
-        setTimeout(() => this.cursorEl?.classList.remove('curious-tilt'), 750);
+        setTimeout(() => this.cursorEl?.classList.remove('curious-tilt'), 700);
       } else {
         this.cursorEl.classList.add('playful-bounce');
         setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
       }
 
-      // Resume ambient breathing while resting
       setTimeout(() => {
         if (!this.isAINavigating && this.cursorEl) {
           this.cursorEl.classList.add('tracky-ambient-breathe');
         }
-      }, 800);
+      }, 750);
     }
   },
 
   _pickRandomVisibleElement() {
+    // Strictly search within main content, excluding header, nav, notifications, and alerts
     const candidates = Array.from(
       document.querySelectorAll(
-        'article, .jobsearch-JobComponent, [class*="job"], [class*="card"], button, h1, h2, h3, a[href*="job"], [class*="badge"], [role="button"], img, [class*="heading"]'
+        'main article, .jobsearch-JobComponent, [class*="JobComponent"], [class*="job-card"], [class*="jobsearch-ViewJobLayout"], .jobs-easy-apply-content, [class*="ia-BasePage"], main [class*="card"]'
       )
     ).filter((el) => {
+      // Exclude notification bell, job alert bars, and header/nav elements
+      if (
+        el.closest('header, nav, #gnav, #jobsearch, .jobsearch-JobAlert, [data-testid*="notification" i], [data-testid*="jobalert" i]')
+      ) {
+        return false;
+      }
       const rect = el.getBoundingClientRect();
       return (
-        rect.width > 30 &&
-        rect.height > 18 &&
-        rect.top >= 50 &&
-        rect.bottom <= window.innerHeight - 50 &&
-        rect.left >= 30 &&
-        rect.right <= window.innerWidth - 30 &&
+        rect.width > 40 &&
+        rect.height > 20 &&
+        rect.top >= 70 &&
+        rect.bottom <= window.innerHeight - 70 &&
+        rect.left >= 40 &&
+        rect.right <= window.innerWidth - 40 &&
         window.getComputedStyle(el).visibility !== 'hidden' &&
         window.getComputedStyle(el).display !== 'none'
       );
@@ -263,16 +276,19 @@ window.TrackyCursor = {
 
     const midX = (startX + destX) / 2;
     const midY = (startY + destY) / 2;
-    const arcDeviation = (Math.random() - 0.5) * 50;
+    const arcDeviation = (Math.random() - 0.5) * 40;
     const controlX = midX + arcDeviation;
     const controlY = midY - Math.abs(arcDeviation) * 0.4;
 
     const startTime = performance.now();
 
     return new Promise((resolve) => {
+      this.activeAnimResolve = resolve;
+
       const step = (currentTime) => {
         if (this.isAINavigating) {
           this.cursorEl?.classList.remove('flying-swoop');
+          this.activeAnimResolve = null;
           return resolve();
         }
 
@@ -298,6 +314,7 @@ window.TrackyCursor = {
           this.targetX = destX;
           this.targetY = destY;
           this.cursorEl?.classList.remove('flying-swoop');
+          this.activeAnimResolve = null;
           resolve();
         }
       };
@@ -308,6 +325,7 @@ window.TrackyCursor = {
 
   /**
    * Human-Grade Natural Movement during AI Navigation.
+   * Continuous, fluid interpolation with zero coordinate teleporting.
    */
   async moveTo(element, customDuration = null) {
     if (!element) return;
@@ -318,40 +336,45 @@ window.TrackyCursor = {
     if (!this.cursorEl) return;
     this.cursorEl.style.display = 'block';
 
-    // Clear ambient float / bounce before moving
+    // Cancel any ongoing idle wander immediately
+    if (this.activeAnimResolve) {
+      this.activeAnimResolve();
+      this.activeAnimResolve = null;
+    }
+
     this.cursorEl.classList.remove('tracky-ambient-breathe', 'playful-bounce', 'curious-tilt');
 
-    // Smooth scroll if element is outside viewport
+    // Smooth scroll if element is outside viewport and wait for scroll to fully settle
     await window.TrackyDOM.smoothScrollTo(element);
+    await window.TrackyDOM.sleep(70);
 
     const rect = element.getBoundingClientRect();
 
-    // Natural human landing point (slight human variance of ±3-6px from ideal anchor)
     const varianceX = (Math.random() - 0.5) * 6;
     const varianceY = (Math.random() - 0.5) * 4;
     const destX = rect.left + Math.min(Math.max(rect.width / 2, 10), 60) + varianceX;
     const destY = rect.top + Math.min(Math.max(rect.height / 2, 8), 24) + varianceY;
 
+    // Seamless origin from current continuous coordinates
     const startX = this.currentX;
     const startY = this.currentY;
 
-    // Fitts' Law distance model
     const dist = Math.hypot(destX - startX, destY - startY);
     const durationMs = customDuration || Math.min(Math.max(260, dist * 0.45 + 160), 550) + (Math.random() * 40 - 20);
 
-    // Organic Bezier flight arc
     const midX = (startX + destX) / 2;
     const midY = (startY + destY) / 2;
     const arcDeviation = (Math.random() - 0.5) * Math.min(dist * 0.18, 32);
     const controlX = midX + arcDeviation;
     const controlY = midY - Math.abs(arcDeviation) * 0.5;
 
-    // Expressive flying swoop animation
     this.cursorEl.classList.add('flying-swoop');
 
     const startTime = performance.now();
 
     await new Promise((resolve) => {
+      this.activeAnimResolve = resolve;
+
       const step = (currentTime) => {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / durationMs, 1);
@@ -374,6 +397,7 @@ window.TrackyCursor = {
           this.currentY = destY;
           this.targetX = destX;
           this.targetY = destY;
+          this.activeAnimResolve = null;
           resolve();
         }
       };
@@ -383,11 +407,10 @@ window.TrackyCursor = {
 
     this.cursorEl.classList.remove('flying-swoop');
 
-    // Curious head-tilt on arrival as Tracky inspects the target
+    // Curious head-tilt on arrival
     this.cursorEl.classList.add('curious-tilt');
     setTimeout(() => this.cursorEl?.classList.remove('curious-tilt'), 300);
 
-    // Human micro-pause upon landing (60ms - 110ms)
     await window.TrackyDOM.sleep(Math.floor(Math.random() * 50) + 60);
   },
 
@@ -433,7 +456,6 @@ window.TrackyCursor = {
       setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
     }
 
-    // Post-click observation pause (120ms - 200ms)
     await window.TrackyDOM.sleep(Math.floor(Math.random() * 80) + 120);
   },
 
@@ -451,7 +473,6 @@ window.TrackyCursor = {
         element.focus();
       }
 
-      // Cognitive pause before typing the first letter (120ms - 220ms)
       await window.TrackyDOM.sleep(Math.floor(Math.random() * 100) + 120);
 
       const textStr = text.toString();
@@ -462,7 +483,6 @@ window.TrackyCursor = {
         currentVal += char;
         window.TrackyDOM.simulateInput(element, currentVal);
 
-        // Realistic keystroke cadence (55-90 WPM)
         let delay = Math.floor(Math.random() * 35) + 45;
 
         if (char === ' ') {
@@ -478,13 +498,11 @@ window.TrackyCursor = {
         await window.TrackyDOM.sleep(delay);
       }
 
-      // Happy little hop when done filling the answer!
       if (this.cursorEl) {
         this.cursorEl.classList.add('playful-bounce');
         setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
       }
 
-      // Post-typing review pause (140ms - 220ms)
       await window.TrackyDOM.sleep(Math.floor(Math.random() * 80) + 140);
       setTimeout(() => element.classList.remove('tracky-highlight-field'), 250);
     } else {

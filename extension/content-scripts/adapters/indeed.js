@@ -2,15 +2,13 @@
  * Indeed Apply Adapter for Tracky.
  *
  * Key behaviors:
- *  1. On a job listing page, clicking "Easily Apply" or "Apply now" opens a NEW TAB.
- *  2. This adapter detects the click, waits for the new tab, and injects itself there.
+ *  1. On a job listing page, clicking "Easily Apply" or "Apply now" opens a NEW TAB or in-page form.
+ *  2. Strictly targets legitimate Apply buttons in the job pane, never notification bell or job alerts.
  *  3. On the apply page itself (indeedapply.com or /apply/ URL), it fills the form steps.
  */
 window.TrackyIndeedAdapter = {
   isApplicable() {
     const host = window.location.hostname;
-    const path = window.location.pathname;
-    // Match both job listing pages AND the apply flow pages
     return host.includes('indeed.com') || host.includes('indeedapply.com');
   },
 
@@ -20,7 +18,7 @@ window.TrackyIndeedAdapter = {
     return (
       url.includes('/apply') ||
       url.includes('indeedapply.com') ||
-      url.includes('/viewjob') === false && document.querySelector('button[data-testid="submit-application"]') !== null
+      (url.includes('/viewjob') === false && document.querySelector('button[data-testid="submit-application"], button[data-testid="IA-ContinueButton"]') !== null)
     );
   },
 
@@ -37,25 +35,41 @@ window.TrackyIndeedAdapter = {
     // ── Case B: We're on a job listing — find the Apply button and click it ──
     overlay.setStatus('Detecting Indeed Apply button...', true);
 
-    // Indeed 2024 selectors (in priority order)
+    // Indeed Authentic Apply Selectors (strictly job pane, priority order)
     const applySelectors = [
-      // Easily Apply inline button
       '#indeedApplyButton',
       'button[id^="indeedApply"]',
       'button.ia-IndeedApplyButton',
-      // "Apply now" / "Easily apply" on listing page (2024 redesign)
       'button[data-testid="job-description-visit-apply"]',
       'button[data-testid="apply-button"]',
       'a[data-testid="apply-button"]',
+      'button[data-testid="viewjob-apply-button"]',
       '[class*="IndeedApplyButton"]',
-      // Generic fallbacks
-      'button[aria-label*="Apply"]',
-      'a[aria-label*="Apply"]',
+      '.jobsearch-JobComponent button[aria-label*="Apply" i]:not([aria-label*="filter" i]):not([aria-label*="alert" i])',
+      '#viewJobSSRRoot button[aria-label*="Apply" i]:not([aria-label*="filter" i]):not([aria-label*="alert" i])'
     ];
 
     let applyBtn = null;
     for (const sel of applySelectors) {
-      applyBtn = document.querySelector(sel);
+      const candidates = Array.from(document.querySelectorAll(sel));
+      for (const el of candidates) {
+        // Exclude header, nav, notification bells, job alerts, search forms, and filter pills
+        if (
+          el.closest('header, nav, #gnav, #jobsearch, .jobsearch-JobAlert, [data-testid*="jobalert" i], [data-testid*="notification" i], [id*="notification" i]')
+        ) {
+          continue;
+        }
+
+        const label = (el.innerText || el.value || el.getAttribute('aria-label') || '').toLowerCase();
+        if (label.includes('notification') || label.includes('alert') || label.includes('filter')) {
+          continue;
+        }
+
+        if (el.offsetParent !== null && !el.disabled) {
+          applyBtn = el;
+          break;
+        }
+      }
       if (applyBtn) break;
     }
 
@@ -87,7 +101,6 @@ window.TrackyIndeedAdapter = {
     const newTabUrl = await this._waitForNewTab(beforeTabIds, 6000);
 
     if (newTabUrl) {
-      // New tab opened — send a message to the background to inject into it
       overlay.setStatus('Apply form opened in new tab — injecting auto-filler...', true);
       try {
         chrome.runtime.sendMessage({
@@ -95,21 +108,19 @@ window.TrackyIndeedAdapter = {
           profile,
           mode
         });
-      } catch (e) {
-        // Handled by service worker
-      }
+      } catch (e) {}
       overlay.showSuccess('Apply form opened! Auto-filling in the new tab...');
       return true;
     }
 
-    // No new tab opened — the page either reloaded or rendered an inline form/modal
+    // No new tab opened — page reloaded or rendered an inline form/modal
     await dom.sleep(1200);
-    const hasFormElements = document.querySelector('form, [role="dialog"], input:not([type="hidden"]), select, textarea, button[type="submit"]') !== null;
+    const hasFormElements = document.querySelector('form:not(#jobsearch), [role="dialog"], input:not([type="hidden"]), select, textarea, button[type="submit"]') !== null;
     if (hasFormElements || this._isApplyPage()) {
       return await this._fillApplyForm(profile, mode);
     }
 
-    // Fall back to general AI Navigator to inspect the page
+    // Fall back to general AI Navigator
     if (window.TrackyAINavigator) {
       await window.TrackyAINavigator.start({
         title: document.title,
@@ -124,7 +135,6 @@ window.TrackyIndeedAdapter = {
     return false;
   },
 
-  /** Get all currently open tab IDs via the extension background */
   async _getOpenTabIds() {
     return new Promise((resolve) => {
       try {
@@ -137,7 +147,6 @@ window.TrackyIndeedAdapter = {
     });
   },
 
-  /** Poll for a new tab that wasn't in beforeTabIds */
   async _waitForNewTab(beforeTabIds, timeoutMs) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -149,7 +158,6 @@ window.TrackyIndeedAdapter = {
     return null;
   },
 
-  /** Fill out the multi-step Indeed apply form using Tracky AI Navigator */
   async _fillApplyForm(profile, mode) {
     const overlay = window.TrackyOverlay;
     overlay.setStatus('Analyzing Indeed application form with Tracky AI...', true);

@@ -619,7 +619,7 @@ window.TrackyAINavigator = {
     for (const sel of selectors) {
       const el = document.querySelector(sel);
       if (el && el.offsetParent !== null && !el.disabled) {
-        if (!el.closest('#jobsearch, form[role="search"], header, nav')) {
+        if (!el.closest('#jobsearch, form[role="search"], header, nav, #gnav, .jobsearch-JobAlert, [data-testid*="jobalert" i], [data-testid*="notification" i], [id*="notification" i]')) {
           return el;
         }
       }
@@ -630,7 +630,11 @@ window.TrackyAINavigator = {
       const primary = formSchema.buttons.find((b) => b.is_primary);
       if (primary) {
         const el = this._findElement(primary.selector);
-        if (el && el.offsetParent !== null && !el.disabled) return el;
+        if (el && el.offsetParent !== null && !el.disabled) {
+          if (!el.closest('#jobsearch, form[role="search"], header, nav, #gnav, .jobsearch-JobAlert, [data-testid*="jobalert" i], [data-testid*="notification" i], [id*="notification" i]')) {
+            return el;
+          }
+        }
       }
     }
 
@@ -638,8 +642,13 @@ window.TrackyAINavigator = {
     const allButtons = Array.from(document.querySelectorAll('button, a[role="button"], input[type="submit"]'));
     return (
       allButtons.find((b) => {
-        if (b.closest('#jobsearch, form[role="search"], header, nav, footer')) return false;
+        if (b.closest('#jobsearch, form[role="search"], header, nav, #gnav, footer, .jobsearch-JobAlert, [data-testid*="jobalert" i], [data-testid*="notification" i], [id*="notification" i]')) {
+          return false;
+        }
         const txt = (b.innerText || b.value || b.getAttribute('aria-label') || '').toLowerCase().trim();
+        if (txt.includes('notification') || txt.includes('alert') || txt.includes('filter')) {
+          return false;
+        }
         return (
           (txt.includes('continue') || txt.includes('next') || txt.includes('submit') || txt.includes('review') || txt.includes('apply now')) &&
           !txt.includes('back') &&
