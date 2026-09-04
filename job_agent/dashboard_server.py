@@ -27,7 +27,18 @@ BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
 STATUS_PATH = BASE_DIR / "status.json"
 RUN_NOW_FLAG = BASE_DIR / "run_now.flag"
-STATIC_DIR = BASE_DIR.parent / "frontend" / "out"
+def resolve_static_dir() -> Path:
+    # 1. First check local package static directory
+    pkg_static = BASE_DIR / "static"
+    if pkg_static.exists() and (pkg_static / "index.html").exists():
+        return pkg_static
+    # 2. Workspace dev out directory
+    dev_out = BASE_DIR.parent / "frontend" / "out"
+    if dev_out.exists() and (dev_out / "index.html").exists():
+        return dev_out
+    return pkg_static if pkg_static.exists() else BASE_DIR
+
+STATIC_DIR = resolve_static_dir()
 
 AI_SESSION_STATE: Dict[str, Any] = {
     "active": False,
@@ -44,9 +55,14 @@ AI_SESSION_STATE: Dict[str, Any] = {
 
 class DashboardAPIHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        # Serve from frontend/out if it exists, otherwise project root
-        static_path = STATIC_DIR if STATIC_DIR.exists() else BASE_DIR
+        static_path = resolve_static_dir()
         super().__init__(*args, directory=str(static_path), **kwargs)
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
 
     def _send_json(self, data: Any, status: int = 200) -> None:
         payload = json.dumps(data, indent=2).encode("utf-8")
@@ -183,6 +199,15 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             prof = profile_manager.load_profile()
             self._send_json(prof.get("ai_settings", {}))
 
+        elif path == "/api/qa-memory":
+            query_params = urllib.parse.parse_qs(parsed.query)
+            search = query_params.get("search", [None])[0]
+            category = query_params.get("category", [None])[0]
+            conn = db.get_connection()
+            items = db.get_all_qa_memory(conn, search=search, category=category)
+            conn.close()
+            self._send_json({"items": items})
+
         else:
             # Serve Static Assets (HTML/CSS/JS/Images)
             super().do_GET()
@@ -276,6 +301,16 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 })
             except Exception as exc:
                 logger.error(f"Error processing resume upload: {exc}")
+                self._send_json({"error": str(exc)}, 500)
+
+        elif path == "/api/profile/resume-delete":
+            try:
+                profile = profile_manager.load_profile()
+                profile["resume_filename"] = ""
+                profile_manager.save_profile(profile)
+                self._send_json({"status": "success", "profile": profile})
+            except Exception as exc:
+                logger.error(f"Error deleting resume: {exc}")
                 self._send_json({"error": str(exc)}, 500)
 
         elif path == "/api/ai/test-key":
@@ -446,6 +481,23 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 logger.error(f"Error recording application: {exc}")
                 self._send_json({"error": str(exc)}, 500)
 
+        elif path == "/api/qa-memory":
+            body = self._read_body_json()
+            question_text = body.get("question_text", "").strip()
+            answer_value = body.get("answer_value", "").strip()
+            category = body.get("category", "general").strip()
+            if not question_text or not answer_value:
+                self._send_json({"error": "question_text and answer_value are required"}, 400)
+                return
+            try:
+                conn = db.get_connection()
+                row_id = db.save_qa_memory(conn, question_text, answer_value, category=category)
+                conn.close()
+                self._send_json({"status": "saved", "id": row_id})
+            except Exception as exc:
+                logger.error(f"Error saving QA memory: {exc}")
+                self._send_json({"error": str(exc)}, 500)
+
         else:
             self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
 
@@ -458,7 +510,7 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             # Bulk delete or delete all
             body = self._read_body_json()
             job_ids = body.get("job_ids", [])
-            delete_all = body.get("delete_all", False)
+            delete_all = body.get("delete_all", False) or body.get("all", False)
             block_future = body.get("block_future", True)
             source = body.get("source", None)
             search = body.get("search", None)
@@ -475,6 +527,20 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 "deleted_count": count,
                 "message": f"Successfully deleted {count} job listing(s)."
             })
+        elif path == "/api/qa-memory":
+            body = self._read_body_json()
+            memory_id = body.get("id")
+            if not memory_id:
+                self._send_json({"error": "id is required"}, 400)
+                return
+            try:
+                conn = db.get_connection()
+                ok = db.delete_qa_memory(conn, int(memory_id))
+                conn.close()
+                self._send_json({"status": "deleted", "success": ok})
+            except Exception as exc:
+                logger.error(f"Error deleting QA memory: {exc}")
+                self._send_json({"error": str(exc)}, 500)
         else:
             self._send_json({"error": f"Unknown DELETE endpoint: {path}"}, 404)
 

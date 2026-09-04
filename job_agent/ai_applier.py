@@ -300,12 +300,24 @@ def navigate_browser_step(
     import base64
     from google.genai import types
 
+    # Load remembered Q&A memory pairs from local SQLite
+    qa_memory_list = []
+    try:
+        conn = db.get_connection()
+        qa_memory_list = db.get_all_qa_memory(conn)
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not load QA memory: {e}")
+
     system_instruction = (
-        "You are Tracky AI — an intelligent, human-like job application co-pilot for the user. "
+        "You are Tracky AI — an intelligent, human-like universal job application co-pilot for the user across all professions and career fields. "
         "You receive structured form schemas (or screenshot / DOM structure), page URL, navigation history, "
         "and the candidate's complete profile.\n\n"
-        "Your task: Inspect the form questions and determine the single BEST next action "
-        "to move the job application forward towards completion.\n\n"
+        "ANSWER PRIORITY HIERARCHY (Follow strictly):\n"
+        "1. TIER 1 (AUTHORITATIVE GROUND TRUTH): Candidate Profile & Universal Screening Defaults (Name, Contact, City/Country, Target Salary, Notice Period, Work Authorization, Shift Availability, Education Level, Background Check Consent, Driver License). Always take top priority.\n"
+        "2. TIER 2: Parsed Resume Experience, Skills, Titles & Professional Summary.\n"
+        "3. TIER 3: Persistent Q&A Memory (past answers the user previously provided to custom employer questions).\n"
+        "4. TIER 4 (FALLBACK): Situational reasoning from career summary, or 'ask_user' if an unusual question cannot be reliably inferred.\n\n"
         "AVAILABLE ACTIONS:\n"
         "1. 'fill_step': STRONGLY RECOMMENDED for form steps. When you see one or multiple input fields, radio buttons, checkboxes, or dropdowns to answer on the current step/page.\n"
         "   Required keys:\n"
@@ -320,7 +332,7 @@ def navigate_browser_step(
         "   Required keys: 'direction' ('down' or 'up'), 'reasoning'\n"
         "5. 'upload_resume': When you see a file upload field/dropzone for Resume/CV.\n"
         "   Required keys: 'selector' (input[type='file'] or upload dropzone selector), 'reasoning'\n"
-        "6. 'ask_user': When there is an unusual, custom, or critical question you cannot answer from profile.\n"
+        "6. 'ask_user': When there is an unusual, custom, or critical question you cannot answer from profile or memory.\n"
         "   Required keys: 'question' (clear human-readable question), 'field_selector', 'reasoning'\n"
         "7. 'request_approval': When all form steps are filled and you reach the FINAL Review/Submit step.\n"
         "   Required keys: 'submit_selector', 'summary' (brief bullet summary of what was filled), 'reasoning'\n"
@@ -337,7 +349,6 @@ def navigate_browser_step(
         "- Reason step-by-step. Your 'reasoning' should sound like a smart, friendly co-pilot narrating its thought process to the user in 1-2 concise sentences.\n"
         "- Always prefer precise CSS selectors (e.g. 'button.ia-IndeedApplyButton', 'input[name=\"email\"]', 'button[aria-label*=\"Easy Apply\"]').\n"
         "- Check the 'history' array so you do NOT repeat an action you already performed.\n"
-        "- Answer form fields using candidate profile, skills, and screening defaults.\n"
         "- Return ONLY a single valid JSON object."
     )
 
@@ -347,6 +358,7 @@ def navigate_browser_step(
         "phone": profile_data.get("phone", ""),
         "location": profile_data.get("location", "Philippines"),
         "skills": profile_data.get("skills", []),
+        "languages": profile_data.get("languages", []),
         "years_of_experience": profile_data.get("years_of_experience", 3),
         "current_title": profile_data.get("current_title", ""),
         "screening_defaults": profile_data.get("screening_defaults", {}),
@@ -362,7 +374,8 @@ def navigate_browser_step(
             "company": job_context.get("company", ""),
             "description": job_context.get("description", "")[:800]
         },
-        "candidate_profile": clean_profile
+        "candidate_profile": clean_profile,
+        "remembered_qa_memory": qa_memory_list[:25]
     }
 
     if form_schema:

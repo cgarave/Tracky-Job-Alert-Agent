@@ -133,10 +133,18 @@ window.TrackyAINavigator = {
       this.reasoningSteps.push(stepRecord);
       overlay.addStepRecord(stepRecord);
 
-      // Stream AI reasoning to HUD
-      if (decision.reasoning) {
+      // Stream AI reasoning to HUD (if enabled in settings)
+      const showStream = this.profile?.ai_settings?.show_reasoning_stream ?? true;
+      if (showStream && decision.reasoning) {
         overlay.showThinking(
           decision.reasoning,
+          this.stepCount,
+          this.maxSteps,
+          this._inferPlatformName()
+        );
+      } else if (!showStream) {
+        overlay.showThinking(
+          `Navigating step ${this.stepCount} of ${this.maxSteps}...`,
           this.stepCount,
           this.maxSteps,
           this._inferPlatformName()

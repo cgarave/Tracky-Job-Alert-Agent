@@ -110,6 +110,14 @@ export async function uploadResume(filename: string, base64Data: string): Promis
   return handleResponse<{ status: string; filename: string; parsed_fields: Partial<CandidateProfile>; profile: CandidateProfile }>(res);
 }
 
+export async function deleteResume(): Promise<{ status: string; profile: CandidateProfile }> {
+  const res = await fetch(`${API_BASE}/api/profile/resume-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<{ status: string; profile: CandidateProfile }>(res);
+}
+
 export async function testGeminiKey(apiKey: string, modelName: string = "gemini-3.7-flash"): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE}/api/ai/test-key`, {
     method: "POST",
@@ -160,4 +168,31 @@ export async function saveAISessionSettings(settings: Partial<CandidateProfile["
     body: JSON.stringify(settings),
   });
   return handleResponse<{ status: string; ai_settings: CandidateProfile["ai_settings"] }>(res);
+}
+
+export async function fetchQAMemory(search?: string, category?: string): Promise<{ items: import("@/types").QAMemoryItem[] }> {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (category) params.set("category", category);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/qa-memory${qs}`);
+  return handleResponse<{ items: import("@/types").QAMemoryItem[] }>(res);
+}
+
+export async function saveQAMemory(question_text: string, answer_value: string, category: string = "general"): Promise<{ status: string; id: number }> {
+  const res = await fetch(`${API_BASE}/api/qa-memory`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question_text, answer_value, category }),
+  });
+  return handleResponse<{ status: string; id: number }>(res);
+}
+
+export async function deleteQAMemory(memoryId: number): Promise<{ status: string; success: boolean }> {
+  const res = await fetch(`${API_BASE}/api/qa-memory`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: memoryId }),
+  });
+  return handleResponse<{ status: string; success: boolean }>(res);
 }

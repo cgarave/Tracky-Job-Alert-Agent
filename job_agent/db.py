@@ -80,6 +80,20 @@ def get_connection() -> sqlite3.Connection:
         except sqlite3.OperationalError:
             pass
 
+    # 4. Persistent Q&A Memory table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS qa_memory (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_text TEXT NOT NULL,
+            question_key  TEXT UNIQUE NOT NULL,
+            answer_value  TEXT NOT NULL,
+            category      TEXT DEFAULT 'general',
+            use_count     INTEGER DEFAULT 1,
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Performance Indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
@@ -87,6 +101,8 @@ def get_connection() -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_id ON dismissed_jobs(job_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications(job_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_applied_at ON applications(applied_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qa_memory_key ON qa_memory(question_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_qa_memory_category ON qa_memory(category)")
 
     conn.commit()
     return conn
@@ -227,7 +243,7 @@ def get_pending_jobs(
     params: list = []
 
     if min_match_score > 0:
-        query += " AND s.match_score >= ?"
+        query += " AND (s.match_score >= ? OR s.match_score IS NULL OR s.match_score = 0)"
         params.append(min_match_score)
 
     if sources:
@@ -383,3 +399,76 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "total_applied": total_applied,
         "sources": source_counts,
     }
+
+
+def normalize_question_key(question_text: str) -> str:
+    """Produce a normalized alphanumeric key for fuzzy question matching."""
+    import re
+    cleaned = re.sub(r"[^a-zA-Z0-9\s]", "", question_text.lower())
+    words = [w for w in cleaned.split() if len(w) > 2]
+    return " ".join(words[:12]) if words else question_text.lower().strip()
+
+
+def save_qa_memory(
+    conn: sqlite3.Connection,
+    question_text: str,
+    answer_value: str,
+    category: str = "general"
+) -> int:
+    """Save or update a persistent Q&A memory entry."""
+    q_key = normalize_question_key(question_text)
+    cur = conn.execute(
+        """
+        INSERT INTO qa_memory (question_text, question_key, answer_value, category, use_count, updated_at)
+        VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+        ON CONFLICT(question_key) DO UPDATE SET
+            question_text = excluded.question_text,
+            answer_value = excluded.answer_value,
+            category = excluded.category,
+            use_count = use_count + 1,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (question_text.strip(), q_key, answer_value.strip(), category),
+    )
+    conn.commit()
+    return cur.lastrowid or 0
+
+
+def get_all_qa_memory(
+    conn: sqlite3.Connection,
+    search: Optional[str] = None,
+    category: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Retrieve all saved Q&A memory items."""
+    query = "SELECT * FROM qa_memory WHERE 1=1"
+    params: List[Any] = []
+
+    if category and category != "all":
+        query += " AND category = ?"
+        params.append(category)
+
+    if search:
+        query += " AND (question_text LIKE ? OR answer_value LIKE ?)"
+        term = f"%{search}%"
+        params.extend([term, term])
+
+    query += " ORDER BY use_count DESC, updated_at DESC"
+    cur = conn.execute(query, params)
+    return [dict(row) for row in cur.fetchall()]
+
+
+def delete_qa_memory(conn: sqlite3.Connection, memory_id: int) -> bool:
+    """Delete a remembered Q&A item by ID."""
+    cur = conn.execute("DELETE FROM qa_memory WHERE id = ?", (memory_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def find_matching_qa(conn: sqlite3.Connection, question_text: str) -> Optional[str]:
+    """Find matching answer for a question from memory."""
+    q_key = normalize_question_key(question_text)
+    cur = conn.execute("SELECT answer_value FROM qa_memory WHERE question_key = ?", (q_key,))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    return None

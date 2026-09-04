@@ -20,26 +20,39 @@
   position: relative;
 }
 
-/* Pure Figma Pointer SVG */
+/* Cursor SVGs for all styles */
+.tracky-cursor-svg,
 .tracky-figma-arrow {
-  width: 22px;
-  height: 26px;
   display: block;
   transform-origin: 0 0;
   transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* Playful curious tilts and animations */
+#tracky-ghost-cursor.curious-tilt .tracky-cursor-svg,
 #tracky-ghost-cursor.curious-tilt .tracky-figma-arrow {
   transform: rotate(-12deg) scale(1.08);
 }
 
+#tracky-ghost-cursor.flying-swoop .tracky-cursor-svg,
 #tracky-ghost-cursor.flying-swoop .tracky-figma-arrow {
   transform: rotate(8deg) scale(1.04);
 }
 
+#tracky-ghost-cursor.playful-bounce .tracky-cursor-svg,
 #tracky-ghost-cursor.playful-bounce .tracky-figma-arrow {
   animation: tracky-puppy-hop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.4) forwards;
+}
+
+@keyframes orb-pulse-anim {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.6; }
+}
+
+.orb-pulse {
+  transform-origin: center;
+  animation: orb-pulse-anim 1.8s ease-in-out infinite;
 }
 
 @keyframes tracky-puppy-hop {

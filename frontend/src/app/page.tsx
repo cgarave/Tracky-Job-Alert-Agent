@@ -85,12 +85,9 @@ export default function Home() {
     const interval = setInterval(() => {
       loadStatus();
       loadJobs();
-      if (activeTab === "settings") {
-        loadSettings();
-      }
     }, 6000);
     return () => clearInterval(interval);
-  }, [loadStatus, loadJobs, loadSettings, loadProfile, activeTab]);
+  }, [loadStatus, loadJobs, loadSettings, loadProfile]);
 
   useEffect(() => {
     if (activeTab === "settings") {

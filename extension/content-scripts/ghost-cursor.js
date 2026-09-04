@@ -16,7 +16,9 @@ window.TrackyCursor = {
   targetY: 160,
 
   // State
-  enabled: true,
+  enabled: false,
+  cursorColor: '#F59E0B',
+  cursorStyle: 'figma_arrow',
   isAINavigating: false,
   isExploring: false,
   animFrameId: null,
@@ -31,16 +33,46 @@ window.TrackyCursor = {
   flightControlY: 160,
   isFlightActive: false,
 
-  init() {
-    if (this.cursorEl) return;
+  _getCursorSVG(styleType, color) {
+    switch (styleType) {
+      case 'modern_wedge':
+        return `
+          <svg class="tracky-cursor-svg" viewBox="0 0 18 18" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 6px ${color}80);">
+            <polygon points="1,1 17,7 9,10 6,17" fill="${color}" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        `;
+      case 'glowing_orb':
+        return `
+          <svg class="tracky-cursor-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 0 8px ${color});">
+            <circle cx="12" cy="12" r="6" fill="${color}"/>
+            <circle cx="12" cy="12" r="9.5" stroke="${color}" stroke-width="1.8" stroke-dasharray="3 3" class="orb-pulse"/>
+            <circle cx="12" cy="12" r="2.5" fill="#FFFFFF"/>
+          </svg>
+        `;
+      case 'co_pilot_hand':
+        return `
+          <svg class="tracky-cursor-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 6px ${color}80);">
+            <path d="M7 11V4a2 2 0 0 1 4 0v6M11 7.5a2 2 0 0 1 4 0v3.5M15 9a2 2 0 0 1 4 0v3c0 4.418-3.582 8-8 8H9a6 6 0 0 1-6-6v-2.5a2 2 0 0 1 4 0V11" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 11V4a2 2 0 0 1 4 0v6M11 7.5a2 2 0 0 1 4 0v3.5M15 9a2 2 0 0 1 4 0v3c0 4.418-3.582 8-8 8H9a6 6 0 0 1-6-6v-2.5a2 2 0 0 1 4 0V11" fill="${color}" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `;
+      case 'figma_arrow':
+      default:
+        return `
+          <svg class="tracky-cursor-svg tracky-figma-arrow" viewBox="0 0 17 22" width="22" height="26" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 6px ${color}80);">
+            <path d="M0.5 0.5V19.5L5.5 14.5H12.5L0.5 0.5Z" fill="${color}" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        `;
+    }
+  },
 
+  _ensureCursorDOM() {
+    if (this.cursorEl) return;
     this.cursorEl = document.createElement('div');
     this.cursorEl.id = 'tracky-ghost-cursor';
     this.cursorEl.innerHTML = `
       <div class="tracky-cursor-wrapper">
-        <svg class="tracky-figma-arrow" viewBox="0 0 17 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M0.5 0.5V19.5L5.5 14.5H12.5L0.5 0.5Z" fill="#F59E0B" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/>
-        </svg>
+        ${this._getCursorSVG(this.cursorStyle, this.cursorColor)}
       </div>
     `;
 
@@ -58,15 +90,68 @@ window.TrackyCursor = {
     this.targetY = this.currentY;
     this.cursorEl.style.left = `${this.currentX}px`;
     this.cursorEl.style.top = `${this.currentY}px`;
+  },
 
+  updateCursorAppearance() {
+    if (!this.cursorEl) return;
+    const wrapper = this.cursorEl.querySelector('.tracky-cursor-wrapper');
+    if (wrapper) {
+      wrapper.innerHTML = this._getCursorSVG(this.cursorStyle, this.cursorColor);
+    }
+  },
+
+  init() {
     // React to user clicks on the page
     window.addEventListener('click', (e) => this._onUserClick(e), { passive: true });
 
-    // Start 60fps render loop
-    this._startRenderLoop();
+    // Sync settings from background worker and cache
+    this.syncSettings();
 
-    // Start autonomous DOM exploration loop
-    this._startAutonomousExplorer();
+    // Listen to real-time settings changes across any tab
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.ai_settings) {
+          this.applySettings(changes.ai_settings.newValue);
+        }
+      });
+    }
+  },
+
+  applySettings(settings) {
+    if (!settings) return;
+    if (settings.cursor_color) {
+      this.cursorColor = settings.cursor_color;
+    }
+    if (settings.cursor_style) {
+      this.cursorStyle = settings.cursor_style;
+    }
+    const shouldEnable = !!settings.enable_ghost_cursor;
+    this.setEnabled(shouldEnable);
+    if (shouldEnable) {
+      this.updateCursorAppearance();
+    }
+  },
+
+  async syncSettings() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        const cached = await chrome.storage.local.get(['ai_settings']);
+        if (cached && cached.ai_settings) {
+          this.applySettings(cached.ai_settings);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'GET_AI_SETTINGS' }, (res) => {
+          if (chrome.runtime.lastError) return;
+          if (res && res.settings) {
+            this.applySettings(res.settings);
+          }
+        });
+      }
+    } catch (e) {}
   },
 
   _onUserClick(e) {
@@ -209,9 +294,29 @@ window.TrackyCursor = {
   },
 
   setEnabled(enabled) {
-    this.enabled = enabled;
-    if (this.cursorEl) {
-      this.cursorEl.style.display = enabled ? 'block' : 'none';
+    this.enabled = !!enabled;
+    if (this.enabled) {
+      this._ensureCursorDOM();
+      if (this.cursorEl) {
+        this.cursorEl.style.display = 'block';
+      }
+      this._startRenderLoop();
+      this._startAutonomousExplorer();
+    } else {
+      if (this.cursorEl) {
+        this.cursorEl.style.display = 'none';
+        this.cursorEl.remove();
+        this.cursorEl = null;
+      }
+      if (this.exploreTimerId) {
+        clearTimeout(this.exploreTimerId);
+        this.exploreTimerId = null;
+      }
+      if (this.animFrameId) {
+        cancelAnimationFrame(this.animFrameId);
+        this.animFrameId = null;
+      }
+      this.hideSpeechBubble();
     }
   },
 

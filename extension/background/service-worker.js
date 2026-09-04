@@ -195,6 +195,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }, 2500);
     }
   }
+
+  // 9. Fetch and cache AI settings (bypasses page CSP and mixed-content restrictions)
+  if (message.action === 'GET_AI_SETTINGS') {
+    (async () => {
+      try {
+        const resp = await fetch('http://127.0.0.1:5050/api/ai/session-settings');
+        if (resp.ok) {
+          const data = await resp.json();
+          const settings = data.ai_settings || data;
+          await chrome.storage.local.set({ ai_settings: settings });
+          sendResponse({ settings });
+          return;
+        }
+      } catch (e) {}
+      const cached = await chrome.storage.local.get(['ai_settings']);
+      sendResponse({ settings: cached.ai_settings || { enable_ghost_cursor: false } });
+    })();
+    return true;
+  }
 });
 
 /**
@@ -271,3 +290,29 @@ async function runBatchSessionLoop() {
     batchSessionRunning = false;
   }
 }
+
+// ── Dashboard Session Sync ───────────────────────────────────────────────────
+// Automatically detects when the user starts an AI Batch Session from the Web Dashboard
+setInterval(async () => {
+  try {
+    const resp = await fetch('http://127.0.0.1:5050/api/ai/session/status');
+    if (resp.ok) {
+      const state = await resp.json();
+      if (state.active && !state.paused && !batchSessionRunning && state.mode === 'batch') {
+        console.log('[Tracky Batch] Detected active batch session from dashboard. Launching loop.');
+        batchSessionRunning = true;
+        await runBatchSessionLoop();
+      } else if (!state.active && batchSessionRunning) {
+        batchSessionRunning = false;
+        if (currentBatchTabId) {
+          try {
+            await chrome.tabs.remove(currentBatchTabId);
+          } catch (e) {}
+          currentBatchTabId = null;
+        }
+      }
+    }
+  } catch (e) {
+    // Backend offline or unreachable
+  }
+}, 3500);

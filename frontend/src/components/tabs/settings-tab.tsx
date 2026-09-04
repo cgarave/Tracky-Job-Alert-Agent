@@ -36,12 +36,16 @@ export function SettingsTab({
   const [formData, setFormData] = useState<DaemonSettings>(settings);
   const [keywordInput, setKeywordInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    setFormData(settings);
-  }, [settings]);
+    if (!isDirty) {
+      setFormData(settings);
+    }
+  }, [settings, isDirty]);
 
   const handleChange = (field: string, value: string | number | string[] | boolean) => {
+    setIsDirty(true);
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -101,6 +105,7 @@ export function SettingsTab({
     setIsSaving(true);
     try {
       await onSaveSettings(formData);
+      setIsDirty(false);
       toast.success("Settings saved successfully!");
     } catch {
       toast.error("Failed to save settings.");

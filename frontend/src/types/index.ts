@@ -20,10 +20,16 @@ export interface ScreeningDefaults {
   expected_salary_monthly_php?: string;
   expected_salary_hourly_usd?: string;
   notice_period_weeks?: string;
+  earliest_start_date?: string;
   work_authorization?: string;
   require_sponsorship?: string;
   willing_to_relocate?: string;
   remote_preferred?: string;
+  shift_availability?: string;
+  employment_types?: string[];
+  education_level?: string;
+  background_check_consent?: string;
+  driver_license?: string;
   custom_notes?: string;
 }
 
@@ -31,6 +37,8 @@ export interface AISettings {
   gemini_api_key?: string;
   gemini_model?: string;
   enable_ghost_cursor?: boolean;
+  cursor_color?: string;
+  cursor_style?: 'figma_arrow' | 'modern_wedge' | 'glowing_orb' | 'co_pilot_hand';
   application_mode?: 'review_before_submit' | 'full_auto';
   max_applications_per_day?: number;
   min_match_score?: number;
@@ -49,12 +57,24 @@ export interface CandidateProfile {
   portfolio_url?: string;
   summary?: string;
   skills: string[];
+  languages?: Array<{ language: string; fluency: string }> | string[];
   years_of_experience: number;
   current_title: string;
   screening_defaults: ScreeningDefaults;
   ai_settings: AISettings;
   resume_filename?: string;
   resume_uploaded_at?: string;
+}
+
+export interface QAMemoryItem {
+  id: number;
+  question_text: string;
+  question_key: string;
+  answer_value: string;
+  category: string;
+  use_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApplicationLog {

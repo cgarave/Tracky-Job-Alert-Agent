@@ -21,7 +21,12 @@ import {
   ChevronDown,
   ChevronRight,
   ListTree,
-  CornerDownRight
+  CornerDownRight,
+  Palette,
+  Key,
+  EyeOff,
+  XCircle,
+  Loader2
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +37,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { AISessionStatus, CandidateProfile, ReasoningStep } from "@/types";
 import * as api from "@/lib/api";
+
+const CURSOR_STYLES = [
+  { id: "figma_arrow", label: "Figma Arrow", desc: "Classic multiplayer pointer" },
+  { id: "modern_wedge", label: "Precision Wedge", desc: "Sleek Raycast / Linear wedge" },
+  { id: "glowing_orb", label: "Radar Orb", desc: "Minimal glowing radar orb" },
+  { id: "co_pilot_hand", label: "Co-Pilot Hand", desc: "Friendly pointing indicator" }
+] as const;
+
+const PRESET_COLORS = [
+  { name: "Amber", hex: "#F59E0B" },
+  { name: "Blue", hex: "#3B82F6" },
+  { name: "Emerald", hex: "#10B981" },
+  { name: "Purple", hex: "#8B5CF6" },
+  { name: "Rose", hex: "#EC4899" },
+  { name: "Obsidian", hex: "#0F172A" }
+];
 
 interface AiAgentTabProps {
   profile: CandidateProfile | null;
@@ -59,21 +80,58 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     (profile?.ai_settings?.application_mode as "review_before_submit" | "full_auto") || "review_before_submit"
   );
   const [autoResume, setAutoResume] = useState<boolean>(profile?.ai_settings?.resume_auto_upload ?? true);
-  const [ghostCursor, setGhostCursor] = useState<boolean>(profile?.ai_settings?.enable_ghost_cursor ?? true);
+  const [ghostCursor, setGhostCursor] = useState<boolean>(profile?.ai_settings?.enable_ghost_cursor ?? false);
+  const [cursorColor, setCursorColor] = useState<string>(profile?.ai_settings?.cursor_color || "#F59E0B");
+  const [cursorStyle, setCursorStyle] = useState<"figma_arrow" | "modern_wedge" | "glowing_orb" | "co_pilot_hand">(
+    profile?.ai_settings?.cursor_style || "figma_arrow"
+  );
   const [showStream, setShowStream] = useState<boolean>(profile?.ai_settings?.show_reasoning_stream ?? true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isTriggering, setIsTriggering] = useState<boolean>(false);
 
+  const [apiKey, setApiKey] = useState<string>(profile?.ai_settings?.gemini_api_key || "");
+  const [geminiModel, setGeminiModel] = useState<string>(profile?.ai_settings?.gemini_model || "gemini-3.7-flash");
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [testingKey, setTestingKey] = useState<boolean>(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   useEffect(() => {
     if (profile?.ai_settings) {
+      setApiKey(profile.ai_settings.gemini_api_key || "");
+      setGeminiModel(profile.ai_settings.gemini_model || "gemini-3.7-flash");
       setMaxApps(profile.ai_settings.max_applications_per_day || 10);
       setMinMatch(profile.ai_settings.min_match_score || 70);
       setAppMode(profile.ai_settings.application_mode || "review_before_submit");
       setAutoResume(profile.ai_settings.resume_auto_upload ?? true);
-      setGhostCursor(profile.ai_settings.enable_ghost_cursor ?? true);
+      setGhostCursor(profile.ai_settings.enable_ghost_cursor ?? false);
+      setCursorColor(profile.ai_settings.cursor_color || "#F59E0B");
+      setCursorStyle(profile.ai_settings.cursor_style || "figma_arrow");
       setShowStream(profile.ai_settings.show_reasoning_stream ?? true);
     }
   }, [profile]);
+
+  const handleTestKey = async () => {
+    if (!apiKey) {
+      setTestResult({ success: false, message: "Please enter an API key first." });
+      return;
+    }
+    try {
+      setTestingKey(true);
+      setTestResult(null);
+      const res = await api.testGeminiKey(apiKey, geminiModel);
+      setTestResult(res);
+      if (res.success) {
+        toast.success("Gemini API connection successful!");
+      } else {
+        toast.error(`Key test failed: ${res.message}`);
+      }
+    } catch (err) {
+      setTestResult({ success: false, message: "Connection test failed." });
+      toast.error("Failed to reach Gemini validation service.");
+    } finally {
+      setTestingKey(false);
+    }
+  };
 
   const pollSession = async () => {
     try {
@@ -141,12 +199,16 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
     setIsSaving(true);
     try {
       const updatedAiSettings = {
-        ...(profile?.ai_settings || { gemini_api_key: "", gemini_model: "gemini-3.7-flash" }),
+        ...(profile?.ai_settings || {}),
+        gemini_api_key: apiKey,
+        gemini_model: geminiModel,
         max_applications_per_day: maxApps,
         min_match_score: minMatch,
         application_mode: appMode,
         resume_auto_upload: autoResume,
         enable_ghost_cursor: ghostCursor,
+        cursor_color: cursorColor,
+        cursor_style: cursorStyle,
         show_reasoning_stream: showStream
       };
 
@@ -350,6 +412,162 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
         </Card>
       )}
 
+      {/* Google Gemini AI Engine & API Key */}
+      <Card className="bg-white border-slate-200/90 shadow-sm">
+        <CardHeader className="pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-base font-bold text-slate-900 tracking-tight">
+              Google Gemini AI Engine & API Key
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-500 mt-1">
+            Active multimodal model for parsing ATS application pages, visual form understanding, and authentic answer generation.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="pt-5 space-y-4">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs text-slate-700 font-medium">
+              <label>Gemini API Key</label>
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-blue-600 hover:text-blue-700 font-mono inline-flex items-center gap-0.5"
+              >
+                Get free key from Google AI Studio <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="relative">
+              <Input
+                type={showApiKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 pr-10 font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleTestKey}
+                disabled={testingKey || !apiKey}
+                className="h-8 px-3 text-xs bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700 gap-1.5"
+              >
+                {testingKey ? <Loader2 className="w-3 h-3 animate-spin text-blue-600" /> : <Key className="w-3 h-3 text-blue-600" />}
+                <span>Test Connection</span>
+              </Button>
+
+              {testResult && (
+                <span
+                  className={`text-xs font-semibold flex items-center gap-1 ${
+                    testResult.success ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5" />
+                  )}
+                  {testResult.success ? "Valid Key Connected" : testResult.message}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Model Selection */}
+          <div className="pt-3 border-t border-slate-100">
+            <label className="text-xs text-slate-700 font-medium mb-2 block">Select Active AI Model</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  geminiModel === "gemini-3.7-flash"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gemini_model_tab"
+                  value="gemini-3.7-flash"
+                  checked={geminiModel === "gemini-3.7-flash"}
+                  onChange={(e) => setGeminiModel(e.target.value)}
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    gemini-3.7-flash
+                    <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] py-0 px-1.5 font-semibold">
+                      Recommended
+                    </Badge>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    Multimodal vision & agentic reasoning.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  geminiModel === "gemini-3.6-flash"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gemini_model_tab"
+                  value="gemini-3.6-flash"
+                  checked={geminiModel === "gemini-3.6-flash"}
+                  onChange={(e) => setGeminiModel(e.target.value)}
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-900">gemini-3.6-flash</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    High-performance workhorse model.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  geminiModel === "gemini-3.5-flash-lite"
+                    ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-2xs"
+                    : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gemini_model_tab"
+                  value="gemini-3.5-flash-lite"
+                  checked={geminiModel === "gemini-3.5-flash-lite"}
+                  onChange={(e) => setGeminiModel(e.target.value)}
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-900">gemini-3.5-flash-lite</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    Ultra-low latency screening model.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Configuration Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Session Limits & Thresholds */}
@@ -461,17 +679,123 @@ export function AiAgentTab({ profile, onProfileUpdate }: AiAgentTabProps) {
               <Switch checked={autoResume} onCheckedChange={setAutoResume} />
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
-              <div className="space-y-0.5 pr-4">
-                <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  <MousePointer className="w-3.5 h-3.5 text-amber-500" />
-                  Figma Amber Orange Ghost Cursor
-                </label>
-                <p className="text-[11px] text-slate-500">
-                  Animates a visible AI pointer with autonomous DOM exploration.
-                </p>
+            <div className="rounded-xl bg-slate-50/80 border border-slate-200/80 p-3.5 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5 pr-4">
+                  <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                    <MousePointer className="w-3.5 h-3.5 text-blue-600" />
+                    Autonomous Ghost Cursor
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Animates a visual co-pilot cursor across DOM elements during auto-apply.
+                  </p>
+                </div>
+                <Switch checked={ghostCursor} onCheckedChange={setGhostCursor} />
               </div>
-              <Switch checked={ghostCursor} onCheckedChange={setGhostCursor} />
+
+              {ghostCursor && (
+                <div className="pt-2 border-t border-slate-200/70 space-y-3.5">
+                  {/* Interactive Live Cursor Preview Badge */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">Live Cursor Preview</span>
+                      <span className="text-xs font-semibold text-slate-700">
+                        {CURSOR_STYLES.find(s => s.id === cursorStyle)?.label} &bull; <span className="font-mono text-[11px]" style={{ color: cursorColor }}>{cursorColor}</span>
+                      </span>
+                    </div>
+                    <div className="w-14 h-12 rounded-lg bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center relative overflow-hidden">
+                      {cursorStyle === 'figma_arrow' && (
+                        <svg viewBox="0 0 17 22" className="w-5 h-6 drop-shadow-sm transition-transform duration-200 hover:scale-110" fill="none">
+                          <path d="M0.5 0.5V19.5L5.5 14.5H12.5L0.5 0.5Z" fill={cursorColor} stroke="#FFFFFF" strokeWidth="1.6" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                      {cursorStyle === 'modern_wedge' && (
+                        <svg viewBox="0 0 18 18" className="w-5 h-5 drop-shadow-sm transition-transform duration-200 hover:scale-110" fill="none">
+                          <polygon points="1,1 17,7 9,10 6,17" fill={cursorColor} stroke="#FFFFFF" strokeWidth="1.6" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                      {cursorStyle === 'glowing_orb' && (
+                        <svg viewBox="0 0 24 24" className="w-6 h-6 transition-transform duration-200 hover:scale-110" fill="none">
+                          <circle cx="12" cy="12" r="6" fill={cursorColor}/>
+                          <circle cx="12" cy="12" r="9.5" stroke={cursorColor} strokeWidth="1.8" strokeDasharray="3 3"/>
+                          <circle cx="12" cy="12" r="2.5" fill="#FFFFFF"/>
+                        </svg>
+                      )}
+                      {cursorStyle === 'co_pilot_hand' && (
+                        <svg viewBox="0 0 24 24" className="w-6 h-6 drop-shadow-sm transition-transform duration-200 hover:scale-110" fill="none">
+                          <path d="M7 11V4a2 2 0 0 1 4 0v6M11 7.5a2 2 0 0 1 4 0v3.5M15 9a2 2 0 0 1 4 0v3c0 4.418-3.582 8-8 8H9a6 6 0 0 1-6-6v-2.5a2 2 0 0 1 4 0V11" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M7 11V4a2 2 0 0 1 4 0v6M11 7.5a2 2 0 0 1 4 0v3.5M15 9a2 2 0 0 1 4 0v3c0 4.418-3.582 8-8 8H9a6 6 0 0 1-6-6v-2.5a2 2 0 0 1 4 0V11" fill={cursorColor} stroke={cursorColor} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Cursor Style Options */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Sliders className="w-3 h-3 text-slate-400" />
+                      Cursor Shape & Style
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CURSOR_STYLES.map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setCursorStyle(st.id)}
+                          className={`p-2 rounded-xl border text-left transition-all ${
+                            cursorStyle === st.id
+                              ? "border-blue-500 bg-blue-50/50 shadow-2xs ring-1 ring-blue-500/20"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-xs font-bold text-slate-800 block truncate">{st.label}</span>
+                          <span className="text-[10px] text-slate-500 block truncate">{st.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Cursor Color Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Palette className="w-3 h-3 text-slate-400" />
+                      Cursor Accent Color
+                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {PRESET_COLORS.map((col) => (
+                        <button
+                          key={col.hex}
+                          type="button"
+                          title={col.name}
+                          onClick={() => setCursorColor(col.hex)}
+                          className={`w-6 h-6 rounded-full border-2 transition-all ${
+                            cursorColor.toLowerCase() === col.hex.toLowerCase()
+                              ? "scale-115 ring-2 ring-blue-500 ring-offset-2 border-white"
+                              : "border-transparent hover:scale-105"
+                          }`}
+                          style={{ backgroundColor: col.hex }}
+                        />
+                      ))}
+                      {/* Color Picker Input */}
+                      <div className="flex items-center gap-1.5 ml-1 pl-2 border-l border-slate-200">
+                        <input
+                          type="color"
+                          value={cursorColor}
+                          onChange={(e) => setCursorColor(e.target.value)}
+                          className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
+                          title="Custom Color"
+                        />
+                        <Input
+                          type="text"
+                          value={cursorColor}
+                          onChange={(e) => setCursorColor(e.target.value)}
+                          className="w-20 h-7 text-[11px] font-mono bg-white border-slate-200 px-2 uppercase"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
