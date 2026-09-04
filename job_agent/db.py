@@ -131,12 +131,13 @@ def total_seen(conn: sqlite3.Connection) -> int:
 
 
 def count_today_jobs(conn: sqlite3.Connection) -> int:
-    """Return count of new jobs discovered today."""
+    """Return count of new jobs discovered today in Philippine Standard Time (UTC+8)."""
     cur = conn.execute(
         """
         SELECT COUNT(*) FROM seen_jobs 
         WHERE (
-            date(seen_at, 'localtime') = date('now', 'localtime')
+            date(seen_at, '+8 hours') = date('now', '+8 hours')
+            OR date(seen_at, 'localtime') = date('now', 'localtime')
             OR date(seen_at) = date('now')
         )
         """
