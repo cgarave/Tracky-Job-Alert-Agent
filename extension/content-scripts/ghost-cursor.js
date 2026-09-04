@@ -1,10 +1,11 @@
 /**
- * Tracky Pure Figma Amber Orange Cursor & Human-Grade Navigation Co-Pilot.
+ * Tracky Pure Figma Amber Orange Cursor & Expressive Co-Pilot.
  *
  * 1. Shows a sleek Figma multiplayer cursor in vibrant Amber Orange.
- * 2. Simulates authentic human physics: Fitts' law distance-adaptive movement,
- *    curved Bezier paths, micro-pauses, realistic click hold, and natural typing cadence.
- * 3. Never wanders or jerks randomly; focused strictly on current form task.
+ * 2. Expressive personality: flying swoops, curious head-tilts, joyful puppy hops,
+ *    floating amber paws, and gentle ambient breathing when resting.
+ * 3. Human-grade movement physics: Fitts' law distance scaling, organic Bezier curves,
+ *    natural click press holds, and authentic keystroke cadence.
  */
 window.TrackyCursor = {
   cursorEl: null,
@@ -68,6 +69,7 @@ window.TrackyCursor = {
 
     this.cursorEl = document.createElement('div');
     this.cursorEl.id = 'tracky-ghost-cursor';
+    this.cursorEl.className = 'tracky-ambient-breathe';
     this.cursorEl.innerHTML = `
       <div class="tracky-cursor-wrapper">
         ${this._getCursorSVG(this.cursorStyle, this.cursorColor)}
@@ -159,7 +161,7 @@ window.TrackyCursor = {
   },
 
   /**
-   * Human-Grade Natural Movement (Fitts' Law + Organic Bezier Flight).
+   * Human-Grade Natural Movement (Fitts' Law + Organic Bezier Swoop).
    */
   async moveTo(element, customDuration = null) {
     if (!element) return;
@@ -169,6 +171,9 @@ window.TrackyCursor = {
     this._ensureCursorDOM();
     if (!this.cursorEl) return;
     this.cursorEl.style.display = 'block';
+
+    // Clear ambient float / bounce before moving
+    this.cursorEl.classList.remove('tracky-ambient-breathe', 'playful-bounce', 'curious-tilt');
 
     // Smooth scroll if element is outside viewport
     await window.TrackyDOM.smoothScrollTo(element);
@@ -184,16 +189,19 @@ window.TrackyCursor = {
     const startX = this.currentX;
     const startY = this.currentY;
 
-    // Fitts' Law distance model: further elements take proportionally longer
+    // Fitts' Law distance model
     const dist = Math.hypot(destX - startX, destY - startY);
     const durationMs = customDuration || Math.min(Math.max(260, dist * 0.45 + 160), 550) + (Math.random() * 40 - 20);
 
-    // Organic Bezier control point (human hand naturally arcs slightly)
+    // Organic Bezier flight arc
     const midX = (startX + destX) / 2;
     const midY = (startY + destY) / 2;
-    const arcDeviation = (Math.random() - 0.5) * Math.min(dist * 0.15, 30);
+    const arcDeviation = (Math.random() - 0.5) * Math.min(dist * 0.18, 32);
     const controlX = midX + arcDeviation;
     const controlY = midY - Math.abs(arcDeviation) * 0.5;
+
+    // Expressive flying swoop animation
+    this.cursorEl.classList.add('flying-swoop');
 
     const startTime = performance.now();
 
@@ -202,11 +210,9 @@ window.TrackyCursor = {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / durationMs, 1);
 
-        // Smooth ease-out cubic curve with organic deceleration
         const ease = 1 - Math.pow(1 - progress, 3);
         const inv = 1 - ease;
 
-        // Quadratic Bezier arc
         this.currentX = inv * inv * startX + 2 * inv * ease * controlX + ease * ease * destX;
         this.currentY = inv * inv * startY + 2 * inv * ease * controlY + ease * ease * destY;
 
@@ -229,12 +235,18 @@ window.TrackyCursor = {
       requestAnimationFrame(step);
     });
 
+    this.cursorEl.classList.remove('flying-swoop');
+
+    // Curious head-tilt on arrival as Tracky inspects the target
+    this.cursorEl.classList.add('curious-tilt');
+    setTimeout(() => this.cursorEl?.classList.remove('curious-tilt'), 300);
+
     // Human micro-pause upon landing (60ms - 110ms)
     await window.TrackyDOM.sleep(Math.floor(Math.random() * 50) + 60);
   },
 
   /**
-   * Human-Grade Click: Hover hesitation -> Press hold -> Click ripple -> Post-click pause.
+   * Expressive Click: Pre-click hover -> Click ripple + Floating paw -> Press hold -> Joyful puppy hop.
    */
   async click(element) {
     if (!element) return;
@@ -242,7 +254,7 @@ window.TrackyCursor = {
     if (this.enabled) {
       await this.moveTo(element);
 
-      // Human hover hesitation before pressing mouse button (70ms - 130ms)
+      // Pre-click hover hesitation (70ms - 130ms)
       await window.TrackyDOM.sleep(Math.floor(Math.random() * 60) + 70);
 
       // Amber click ripple
@@ -251,7 +263,16 @@ window.TrackyCursor = {
       ripple.style.left = `${this.currentX}px`;
       ripple.style.top = `${this.currentY}px`;
       document.body.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 450);
+      setTimeout(() => ripple.remove(), 500);
+
+      // Floating paw particle
+      const paw = document.createElement('div');
+      paw.className = 'tracky-paw-particle';
+      paw.textContent = '🐾';
+      paw.style.left = `${this.currentX}px`;
+      paw.style.top = `${this.currentY}px`;
+      document.body.appendChild(paw);
+      setTimeout(() => paw.remove(), 750);
 
       element.classList.add('tracky-highlight-field');
       setTimeout(() => element.classList.remove('tracky-highlight-field'), 350);
@@ -259,12 +280,19 @@ window.TrackyCursor = {
 
     await window.TrackyDOM.simulateClick(element);
 
-    // Human post-click observation pause (120ms - 200ms)
+    // Joyful puppy victory hop after clicking!
+    if (this.cursorEl) {
+      this.cursorEl.classList.remove('curious-tilt');
+      this.cursorEl.classList.add('playful-bounce');
+      setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
+    }
+
+    // Post-click observation pause (120ms - 200ms)
     await window.TrackyDOM.sleep(Math.floor(Math.random() * 80) + 120);
   },
 
   /**
-   * Human-Grade Typing: Focus -> Cognitive pause -> Realistic keystroke cadence with rhythm variations.
+   * Expressive Typing: Focus -> Alert inspection -> Keystroke cadence -> Joyful bounce on completion.
    */
   async type(element, text) {
     if (!element || text === undefined || text === null) return;
@@ -277,7 +305,7 @@ window.TrackyCursor = {
         element.focus();
       }
 
-      // Human cognitive pause before typing the first letter (120ms - 220ms)
+      // Cognitive pause before typing the first letter (120ms - 220ms)
       await window.TrackyDOM.sleep(Math.floor(Math.random() * 100) + 120);
 
       const textStr = text.toString();
@@ -288,24 +316,29 @@ window.TrackyCursor = {
         currentVal += char;
         window.TrackyDOM.simulateInput(element, currentVal);
 
-        // Calculate realistic per-keystroke cadence (55-90 WPM)
-        let delay = Math.floor(Math.random() * 35) + 45; // 45ms - 80ms base
+        // Realistic keystroke cadence (55-90 WPM)
+        let delay = Math.floor(Math.random() * 35) + 45;
 
-        // Longer hesitation for spaces, punctuation, or uppercase letters
         if (char === ' ') {
-          delay += Math.floor(Math.random() * 50) + 70; // 115ms - 165ms between words
+          delay += Math.floor(Math.random() * 50) + 70;
         } else if (char === ',' || char === '.' || char === '@' || char === '-') {
-          delay += Math.floor(Math.random() * 60) + 90; // 135ms - 185ms punctuation
+          delay += Math.floor(Math.random() * 60) + 90;
         } else if (char >= 'A' && char <= 'Z') {
-          delay += Math.floor(Math.random() * 30) + 40; // shift key reach
+          delay += Math.floor(Math.random() * 30) + 40;
         } else if (char >= '0' && char <= '9') {
-          delay += Math.floor(Math.random() * 40) + 50; // number row reach
+          delay += Math.floor(Math.random() * 40) + 50;
         }
 
         await window.TrackyDOM.sleep(delay);
       }
 
-      // Human post-typing review pause (140ms - 220ms)
+      // Happy little hop when done filling the answer!
+      if (this.cursorEl) {
+        this.cursorEl.classList.add('playful-bounce');
+        setTimeout(() => this.cursorEl?.classList.remove('playful-bounce'), 450);
+      }
+
+      // Post-typing review pause (140ms - 220ms)
       await window.TrackyDOM.sleep(Math.floor(Math.random() * 80) + 140);
       setTimeout(() => element.classList.remove('tracky-highlight-field'), 250);
     } else {

@@ -44,6 +44,17 @@
   animation: tracky-puppy-hop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.4) forwards;
 }
 
+#tracky-ghost-cursor.tracky-ambient-breathe .tracky-cursor-svg,
+#tracky-ghost-cursor.tracky-ambient-breathe .tracky-figma-arrow {
+  animation: tracky-ambient-breathe-anim 2.6s ease-in-out infinite;
+}
+
+@keyframes tracky-ambient-breathe-anim {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(2deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
 @keyframes orb-pulse-anim {
   0% { transform: scale(0.85); opacity: 0.6; }
   50% { transform: scale(1.15); opacity: 1; }
