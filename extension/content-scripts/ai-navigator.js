@@ -219,12 +219,13 @@ window.TrackyAINavigator = {
           }
 
           this.history.push(`filled: ${f.label}`);
-          await dom.sleep(200);
+          // Human inter-field cognitive transition delay (280ms - 450ms)
+          await dom.sleep(Math.floor(Math.random() * 170) + 280);
         }
       }
 
       // ── STRICT VERIFICATION: Ensure NO required questions remain unfilled ─
-      await dom.sleep(400);
+      await dom.sleep(350);
 
       // 1. Check for visible form validation errors on the page
       const errorEl = document.querySelector(
@@ -253,6 +254,9 @@ window.TrackyAINavigator = {
         const btnText = (nextBtn.innerText || nextBtn.value || nextBtn.getAttribute('aria-label') || '').toLowerCase();
         const isSubmit = btnText.includes('submit') || btnText.includes('review') || btnText.includes('apply now');
         const approvalMode = this.profile?.ai_settings?.application_mode || 'review_before_submit';
+
+        // Human scan delay before deciding to advance (380ms - 600ms)
+        await dom.sleep(Math.floor(Math.random() * 220) + 380);
 
         if (isSubmit && approvalMode === 'review_before_submit') {
           this.paused = true;

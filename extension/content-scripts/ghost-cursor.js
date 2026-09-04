@@ -1,10 +1,10 @@
 /**
- * Tracky Pure Figma Amber Orange Cursor & Navigation Co-Pilot.
+ * Tracky Pure Figma Amber Orange Cursor & Human-Grade Navigation Co-Pilot.
  *
  * 1. Shows a sleek Figma multiplayer cursor in vibrant Amber Orange.
- * 2. Purposeful, steady, and calm: only moves when actively executing AI actions.
- * 3. Never wanders randomly across DOM elements or hijacks user clicks.
- * 4. Stays locked in focused AI Navigation mode for the entire Auto-Apply session.
+ * 2. Simulates authentic human physics: Fitts' law distance-adaptive movement,
+ *    curved Bezier paths, micro-pauses, realistic click hold, and natural typing cadence.
+ * 3. Never wanders or jerks randomly; focused strictly on current form task.
  */
 window.TrackyCursor = {
   cursorEl: null,
@@ -20,7 +20,6 @@ window.TrackyCursor = {
   cursorColor: '#F59E0B',
   cursorStyle: 'figma_arrow',
   isAINavigating: false,
-  animFrameId: null,
 
   _getCursorSVG(styleType, color) {
     switch (styleType) {
@@ -56,10 +55,8 @@ window.TrackyCursor = {
   },
 
   _ensureCursorDOM() {
-    // Only mount cursor in the top-level browsing context, never in iframes
     if (window !== window.top) return;
 
-    // Clean up any stale or existing cursor elements
     const existing = document.querySelectorAll('#tracky-ghost-cursor');
     if (existing.length > 0) {
       this.cursorEl = existing[0];
@@ -79,7 +76,6 @@ window.TrackyCursor = {
 
     document.body.appendChild(this.cursorEl);
 
-    // Initial position parked smoothly on right side
     this.currentX = Math.max(40, window.innerWidth - 80);
     this.currentY = Math.max(40, window.innerHeight - 100);
     this.targetX = this.currentX;
@@ -97,10 +93,8 @@ window.TrackyCursor = {
   },
 
   init() {
-    // Sync settings from background worker and cache
     this.syncSettings();
 
-    // Listen to real-time settings changes across any tab
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === 'local' && changes.ai_settings) {
@@ -165,10 +159,9 @@ window.TrackyCursor = {
   },
 
   /**
-   * Focused AI Movement during Auto-Apply.
-   * Smooth, linear, and direct.
+   * Human-Grade Natural Movement (Fitts' Law + Organic Bezier Flight).
    */
-  async moveTo(element, durationMs = 320) {
+  async moveTo(element, customDuration = null) {
     if (!element) return;
     if (!this.enabled) {
       this.setEnabled(true);
@@ -177,29 +170,45 @@ window.TrackyCursor = {
     if (!this.cursorEl) return;
     this.cursorEl.style.display = 'block';
 
-    try {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } catch (e) {}
-
-    await new Promise((r) => setTimeout(r, 60));
+    // Smooth scroll if element is outside viewport
+    await window.TrackyDOM.smoothScrollTo(element);
 
     const rect = element.getBoundingClientRect();
-    const destX = rect.left + Math.min(Math.max(rect.width / 2, 10), 60);
-    const destY = rect.top + Math.min(Math.max(rect.height / 2, 8), 24);
+
+    // Natural human landing point (slight human variance of ±3-6px from ideal anchor)
+    const varianceX = (Math.random() - 0.5) * 6;
+    const varianceY = (Math.random() - 0.5) * 4;
+    const destX = rect.left + Math.min(Math.max(rect.width / 2, 10), 60) + varianceX;
+    const destY = rect.top + Math.min(Math.max(rect.height / 2, 8), 24) + varianceY;
 
     const startX = this.currentX;
     const startY = this.currentY;
+
+    // Fitts' Law distance model: further elements take proportionally longer
+    const dist = Math.hypot(destX - startX, destY - startY);
+    const durationMs = customDuration || Math.min(Math.max(260, dist * 0.45 + 160), 550) + (Math.random() * 40 - 20);
+
+    // Organic Bezier control point (human hand naturally arcs slightly)
+    const midX = (startX + destX) / 2;
+    const midY = (startY + destY) / 2;
+    const arcDeviation = (Math.random() - 0.5) * Math.min(dist * 0.15, 30);
+    const controlX = midX + arcDeviation;
+    const controlY = midY - Math.abs(arcDeviation) * 0.5;
+
     const startTime = performance.now();
 
-    return new Promise((resolve) => {
+    await new Promise((resolve) => {
       const step = (currentTime) => {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / durationMs, 1);
 
-        // Quintic ease-out curve for natural deceleration
+        // Smooth ease-out cubic curve with organic deceleration
         const ease = 1 - Math.pow(1 - progress, 3);
-        this.currentX = startX + (destX - startX) * ease;
-        this.currentY = startY + (destY - startY) * ease;
+        const inv = 1 - ease;
+
+        // Quadratic Bezier arc
+        this.currentX = inv * inv * startX + 2 * inv * ease * controlX + ease * ease * destX;
+        this.currentY = inv * inv * startY + 2 * inv * ease * controlY + ease * ease * destY;
 
         if (this.cursorEl) {
           this.cursorEl.style.left = `${this.currentX.toFixed(1)}px`;
@@ -219,16 +228,22 @@ window.TrackyCursor = {
 
       requestAnimationFrame(step);
     });
+
+    // Human micro-pause upon landing (60ms - 110ms)
+    await window.TrackyDOM.sleep(Math.floor(Math.random() * 50) + 60);
   },
 
   /**
-   * AI Click: Amber ripple on targeted button or field.
+   * Human-Grade Click: Hover hesitation -> Press hold -> Click ripple -> Post-click pause.
    */
   async click(element) {
     if (!element) return;
 
     if (this.enabled) {
-      await this.moveTo(element, 260);
+      await this.moveTo(element);
+
+      // Human hover hesitation before pressing mouse button (70ms - 130ms)
+      await window.TrackyDOM.sleep(Math.floor(Math.random() * 60) + 70);
 
       // Amber click ripple
       const ripple = document.createElement('div');
@@ -240,38 +255,58 @@ window.TrackyCursor = {
 
       element.classList.add('tracky-highlight-field');
       setTimeout(() => element.classList.remove('tracky-highlight-field'), 350);
-      await new Promise((r) => setTimeout(r, 80));
     }
 
     await window.TrackyDOM.simulateClick(element);
+
+    // Human post-click observation pause (120ms - 200ms)
+    await window.TrackyDOM.sleep(Math.floor(Math.random() * 80) + 120);
   },
 
   /**
-   * AI Type: Natural typing cadence into input.
+   * Human-Grade Typing: Focus -> Cognitive pause -> Realistic keystroke cadence with rhythm variations.
    */
   async type(element, text) {
     if (!element || text === undefined || text === null) return;
 
     if (this.enabled) {
-      await this.moveTo(element, 220);
+      await this.moveTo(element);
       element.classList.add('tracky-highlight-field');
-      element.focus();
+
+      if (typeof element.focus === 'function') {
+        element.focus();
+      }
+
+      // Human cognitive pause before typing the first letter (120ms - 220ms)
+      await window.TrackyDOM.sleep(Math.floor(Math.random() * 100) + 120);
 
       const textStr = text.toString();
-      const animatedLength = Math.min(textStr.length, 25);
       let currentVal = '';
 
-      for (let i = 0; i < animatedLength; i++) {
-        currentVal += textStr[i];
+      for (let i = 0; i < textStr.length; i++) {
+        const char = textStr[i];
+        currentVal += char;
         window.TrackyDOM.simulateInput(element, currentVal);
-        const delay = Math.floor(Math.random() * 15) + 10;
-        await new Promise((r) => setTimeout(r, delay));
+
+        // Calculate realistic per-keystroke cadence (55-90 WPM)
+        let delay = Math.floor(Math.random() * 35) + 45; // 45ms - 80ms base
+
+        // Longer hesitation for spaces, punctuation, or uppercase letters
+        if (char === ' ') {
+          delay += Math.floor(Math.random() * 50) + 70; // 115ms - 165ms between words
+        } else if (char === ',' || char === '.' || char === '@' || char === '-') {
+          delay += Math.floor(Math.random() * 60) + 90; // 135ms - 185ms punctuation
+        } else if (char >= 'A' && char <= 'Z') {
+          delay += Math.floor(Math.random() * 30) + 40; // shift key reach
+        } else if (char >= '0' && char <= '9') {
+          delay += Math.floor(Math.random() * 40) + 50; // number row reach
+        }
+
+        await window.TrackyDOM.sleep(delay);
       }
 
-      if (textStr.length > animatedLength) {
-        window.TrackyDOM.simulateInput(element, textStr);
-      }
-
+      // Human post-typing review pause (140ms - 220ms)
+      await window.TrackyDOM.sleep(Math.floor(Math.random() * 80) + 140);
       setTimeout(() => element.classList.remove('tracky-highlight-field'), 250);
     } else {
       window.TrackyDOM.simulateInput(element, text.toString());
@@ -284,23 +319,20 @@ window.TrackyCursor = {
     this.hideSpeechBubble();
 
     if (targetElement) {
-      this.moveTo(targetElement, 260);
+      this.moveTo(targetElement, 320);
     }
 
     const bubble = document.createElement('div');
     bubble.id = 'tracky-cursor-bubble';
 
-    // Calculate smart positioning (adaptive left vs right)
     const bubbleWidth = 280;
     const isNearLeftEdge = this.currentX < bubbleWidth + 30;
 
     if (isNearLeftEdge) {
-      // Position to the right of cursor
       bubble.className = 'tail-left';
       bubble.style.left = `${Math.min(window.innerWidth - bubbleWidth - 20, this.currentX + 28)}px`;
       bubble.style.top = `${Math.max(20, Math.min(window.innerHeight - 180, this.currentY - 20))}px`;
     } else {
-      // Position to the left of cursor
       bubble.className = 'tail-right';
       bubble.style.left = `${Math.max(15, this.currentX - bubbleWidth - 14)}px`;
       bubble.style.top = `${Math.max(20, Math.min(window.innerHeight - 180, this.currentY - 20))}px`;
