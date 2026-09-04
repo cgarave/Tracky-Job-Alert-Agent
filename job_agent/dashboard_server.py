@@ -6,12 +6,14 @@ import json
 import logging
 import os
 import signal
+import threading
 import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Optional
 
 import db
+import notifier
 
 logger = logging.getLogger("dashboard_server")
 
@@ -52,7 +54,7 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
@@ -93,21 +95,43 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
                 "location": config_data.get("location", "Philippines"),
                 "keywords": config_data.get("keywords", []),
                 "recipient": config_data.get("recipient", ""),
+                "recipients": config_data.get("recipients", []),
+                "telegram_bot_token": config_data.get("telegram_bot_token", ""),
             })
 
         elif path == "/api/jobs":
-            conn = db.get_connection()
-            limit = int(query.get("limit", [100])[0])
-            search = query.get("search", [None])[0]
-            source = query.get("source", [None])[0]
-            jobs = db.get_jobs(conn, limit=limit, search=search, source=source)
-            conn.close()
-            self._send_json({"jobs": jobs, "total": len(jobs)})
+            try:
+                conn = db.get_connection()
+                limit = int(query.get("limit", [100])[0])
+                search = query.get("search", [None])[0]
+                source = query.get("source", [None])[0]
+                alert_status = query.get("alert_status", [None])[0]
+                jobs = db.get_jobs(conn, limit=limit, search=search, source=source, alert_status=alert_status)
+                conn.close()
+                self._send_json({"jobs": jobs, "total": len(jobs)})
+            except Exception as exc:
+                logger.error(f"Error fetching jobs in /api/jobs: {exc}")
+                self._send_json({"jobs": [], "total": 0, "error": str(exc)}, 500)
 
         elif path == "/api/settings":
             if CONFIG_PATH.exists():
                 try:
-                    self._send_json(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
+                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                    # Auto-populate recipients array if absent but legacy recipient exists
+                    if "recipients" not in cfg:
+                        legacy = notifier.parse_recipients(cfg.get("recipient", ""))
+                        cfg["recipients"] = [
+                            {
+                                "id": f"rec_{i+1}",
+                                "name": f"Recipient {i+1}",
+                                "platform": "imessage",
+                                "destination": dest,
+                                "keywords": cfg.get("keywords", []),
+                                "enabled": True,
+                            }
+                            for i, dest in enumerate(legacy)
+                        ]
+                    self._send_json(cfg)
                 except Exception as e:
                     self._send_json({"error": str(e)}, 500)
             else:
@@ -162,12 +186,79 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
         elif path == "/api/settings":
             body = self._read_body_json()
             try:
+                # Keep legacy recipient string synced from iMessage recipients if present
+                if "recipients" in body and isinstance(body["recipients"], list):
+                    imsg_dests = [
+                        r.get("destination", "").strip()
+                        for r in body["recipients"]
+                        if isinstance(r, dict) and r.get("platform") == "imessage" and r.get("destination")
+                    ]
+                    if imsg_dests:
+                        body["recipient"] = ", ".join(imsg_dests)
+
                 with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                     json.dump(body, f, indent=2)
                 self._send_json({"status": "success", "settings": body})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
 
+        elif path == "/api/test-notification":
+            body = self._read_body_json()
+            platform = body.get("platform", "imessage")
+            destination = body.get("destination", "")
+            bot_token = body.get("bot_token", "")
+
+            # If bot_token not provided in payload, fall back to config
+            if not bot_token and CONFIG_PATH.exists():
+                try:
+                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                    bot_token = cfg.get("telegram_bot_token", "")
+                except Exception:
+                    pass
+
+            result = notifier.send_test_notification(
+                platform=platform,
+                destination=destination,
+                bot_token=bot_token,
+            )
+            self._send_json(result, status=200)
+
+        else:
+            self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
+
+    def do_DELETE(self) -> None:
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/api/jobs":
+            body = self._read_body_json()
+            job_ids = body.get("job_ids", [])
+            delete_all = body.get("all", False)
+            block_future = body.get("block_future", True)
+            source = body.get("source") or (query.get("source", [None])[0] if query.get("source") else None)
+            search = body.get("search") or (query.get("search", [None])[0] if query.get("search") else None)
+
+            conn = db.get_connection()
+            deleted_count = 0
+            try:
+                if delete_all:
+                    deleted_count = db.delete_all_jobs(
+                        conn, block_future=block_future, source=source, search=search
+                    )
+                elif job_ids:
+                    deleted_count = db.delete_jobs(conn, job_ids, block_future=block_future)
+                stats = db.get_stats(conn)
+                self._send_json({
+                    "status": "success",
+                    "deleted_count": deleted_count,
+                    "stats": stats,
+                })
+            except Exception as exc:
+                logger.error(f"Error in do_DELETE /api/jobs: {exc}")
+                self._send_json({"error": str(exc)}, 500)
+            finally:
+                conn.close()
         else:
             self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
 

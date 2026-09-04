@@ -3,27 +3,26 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-indigo-500/15 text-indigo-400 border border-indigo-500/30",
+          "bg-blue-50 text-blue-700 border border-blue-200/80",
         secondary:
-          "border-transparent bg-slate-800 text-slate-300 border border-white/5",
+          "bg-slate-100 text-slate-700 border border-slate-200",
         destructive:
-          "border-transparent bg-rose-500/15 text-rose-400 border border-rose-500/30",
+          "bg-rose-50 text-rose-700 border border-rose-200",
         success:
-          "border-transparent bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+          "bg-emerald-50 text-emerald-700 border border-emerald-200",
         warning:
-          "border-transparent bg-amber-500/15 text-amber-400 border border-amber-500/30",
-        outline: "text-gray-300 border border-white/10",
-        indeed: "bg-blue-500/15 text-blue-400 border border-blue-500/30",
-        jobstreet: "bg-pink-500/15 text-pink-400 border border-pink-500/30",
-        onlinejobs: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
-        linkedin: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
+          "bg-amber-50 text-amber-700 border border-amber-200",
+        outline: "bg-white text-slate-700 border border-slate-200 shadow-xs",
+        indeed: "bg-blue-50 text-blue-700 border border-blue-200",
+        jobstreet: "bg-purple-50 text-purple-700 border border-purple-200",
+        onlinejobs: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        linkedin: "bg-sky-50 text-sky-700 border border-sky-200",
       },
-
     },
     defaultVariants: {
       variant: "default",

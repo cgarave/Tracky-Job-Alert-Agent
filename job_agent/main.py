@@ -107,13 +107,82 @@ def _write_status(jobs_tracked: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Config
+# ---------------------------------------------------------------------------
+# Config & Recipient Helpers
 # ---------------------------------------------------------------------------
 
 def load_config() -> dict:
     """Read config.json from disk (called fresh on every loop iteration)."""
     with open(CONFIG_PATH) as f:
         return json.load(f)
+
+
+def get_active_recipients(config: dict) -> list[dict]:
+    """
+    Extract normalized list of recipient dicts from config.
+    Supports new `recipients` array as well as legacy `recipient` comma-separated string.
+    """
+    raw_recipients = config.get("recipients")
+    if isinstance(raw_recipients, list) and len(raw_recipients) > 0:
+        results = []
+        for idx, r in enumerate(raw_recipients):
+            if not isinstance(r, dict):
+                continue
+            r_id = str(r.get("id") or f"rec_{idx}_{r.get('destination', '')}")
+            results.append({
+                "id": r_id,
+                "name": str(r.get("name") or r.get("destination") or f"Recipient {idx+1}"),
+                "platform": str(r.get("platform", "imessage")).lower().strip(),
+                "destination": str(r.get("destination", "")).strip(),
+                "keywords": [str(k).strip() for k in r.get("keywords", []) if str(k).strip()],
+                "enabled": bool(r.get("enabled", True)),
+            })
+        return results
+
+    # Fallback to legacy single/comma-separated recipient string
+    from notifier import parse_recipients
+    legacy_rec = config.get("recipient", "")
+    parsed = parse_recipients(legacy_rec)
+    fallback_keywords = config.get("keywords", [])
+    results = []
+    for idx, dest in enumerate(parsed):
+        results.append({
+            "id": f"legacy_{idx}_{dest}",
+            "name": f"Recipient {idx+1}",
+            "platform": "imessage",
+            "destination": dest,
+            "keywords": fallback_keywords,
+            "enabled": True,
+        })
+    return results
+
+
+def get_all_scraping_keywords(config: dict) -> list[str]:
+    """
+    Collect the unified list of keywords to scrape across all enabled recipients
+    and global fallback keywords.
+    """
+    seen_lower = set()
+    unified: list[str] = []
+
+    # 1. Global keywords
+    for kw in config.get("keywords", []):
+        cleaned = str(kw).strip()
+        if cleaned and cleaned.lower() not in seen_lower:
+            seen_lower.add(cleaned.lower())
+            unified.append(cleaned)
+
+    # 2. Recipient keywords
+    for rec in get_active_recipients(config):
+        if not rec.get("enabled", True):
+            continue
+        for kw in rec.get("keywords", []):
+            cleaned = str(kw).strip()
+            if cleaned and cleaned.lower() not in seen_lower:
+                seen_lower.add(cleaned.lower())
+                unified.append(cleaned)
+
+    return unified
 
 
 # ---------------------------------------------------------------------------
@@ -129,16 +198,19 @@ def _run_scrape(config: dict, db_conn, dry_run: bool = False) -> list[dict]:
     from scrapers import indeed, jobstreet, onlinejobs, linkedin
     import db as db_module
 
-    keywords = config.get("keywords", [])
+    keywords = get_all_scraping_keywords(config)
     location = config.get("location", "Philippines")
     max_results = config.get("max_results_per_keyword", 10)
+
+    if not keywords:
+        logger.warning("No keywords configured for scraping.")
+        return []
 
     new_jobs: list[dict] = []
     seen_ids: set[str] = set()  # deduplicate within a single run
 
     for keyword in keywords:
         for scraper in (indeed, jobstreet, onlinejobs, linkedin):
-
             try:
                 jobs = scraper.scrape(keyword, location, max_results)
                 for job in jobs:
@@ -161,13 +233,14 @@ def scraper_loop(dry_run: bool = False) -> None:
     it executes exactly once and returns.
     """
     import db as db_module
-    from notifier import send_job_alerts, send_imessage
+    import notifier
 
     db_conn = db_module.get_connection()
 
     while True:
         config = load_config()
-        recipient = config.get("recipient", "")
+        recipients = get_active_recipients(config)
+        bot_token = config.get("telegram_bot_token", "")
 
         # Check for flag file written by menu bar "Run Now" button
         if RUN_NOW_FLAG.exists():
@@ -200,14 +273,35 @@ def scraper_loop(dry_run: bool = False) -> None:
                 print("\n[DRY RUN] No new jobs found (or all already seen).")
             return  # Exit after one pass in dry-run mode
 
-        if new_jobs and recipient:
-            send_job_alerts(recipient, new_jobs)
-        elif not recipient:
-            logger.warning("No recipient set in config.json — job alerts cannot be sent.")
+        if new_jobs and recipients:
+            for rec in recipients:
+                if not rec.get("enabled", True):
+                    continue
+                rec_id = rec.get("id") or rec.get("destination")
+                # Find matching jobs not yet alerted to this recipient
+                unalerted_jobs = [
+                    j for j in new_jobs
+                    if not db_module.is_alerted_for_recipient(db_conn, j["job_id"], rec_id)
+                ]
+                if not unalerted_jobs:
+                    continue
+
+                sent_ids = notifier.send_recipient_alerts(rec, unalerted_jobs, bot_token=bot_token)
+                if sent_ids:
+                    db_module.mark_batch_alerted_for_recipient(
+                        db_conn,
+                        sent_ids,
+                        recipient_id=rec_id,
+                        platform=rec.get("platform", "imessage"),
+                    )
+                    logger.info(
+                        f"Delivered and marked {len(sent_ids)} alert(s) for '{rec.get('name')}' ({rec.get('platform')})"
+                    )
+        elif not recipients:
+            logger.warning("No active recipients configured in settings — job alerts cannot be sent.")
 
         interval_minutes = config.get("check_interval_minutes", 60)
         logger.info(f"Next scan in {interval_minutes} minute(s).")
-
 
         # Sleep for the interval, but wake early if /run command or SIGUSR1 fires
         run_now_event.wait(timeout=interval_minutes * 60)
@@ -220,7 +314,7 @@ def scraper_loop(dry_run: bool = False) -> None:
 
 def listener_loop() -> None:
     """
-    Polls chat.db every 10 s for incoming messages from the configured recipient.
+    Polls chat.db every 10 s for incoming messages from any configured iMessage recipients.
     Passes any recognised commands to commander.execute().
     Also checks for run_now.flag written by the menu bar app.
     """
@@ -228,14 +322,7 @@ def listener_loop() -> None:
     import commander
     from notifier import send_imessage
 
-    config = load_config()
-    recipient = config.get("recipient", "")
-
-    if not recipient:
-        logger.error("No recipient in config.json — listener loop cannot start.")
-        return
-
-    logger.info(f"Command listener started (polling every 10 s for messages from {recipient})")
+    logger.info("Command listener started (polling chat.db every 10 s for incoming bot commands)")
 
     # Start from "now" so we don't re-process old messages on startup
     last_check = time.time()
@@ -243,26 +330,34 @@ def listener_loop() -> None:
     while True:
         time.sleep(10)
         try:
+            config = load_config()
+            recipients = [
+                r["destination"] for r in get_active_recipients(config)
+                if r.get("platform") == "imessage" and r.get("destination")
+            ]
+            if not recipients:
+                continue
+
             # Check for menu bar "Run Now" flag file
             if RUN_NOW_FLAG.exists():
                 RUN_NOW_FLAG.unlink(missing_ok=True)
                 logger.info("run_now.flag detected — triggering immediate scan.")
                 run_now_event.set()
 
-            messages = get_messages_since(recipient, last_check)
+            for target in recipients:
+                messages = get_messages_since(target, last_check)
+                for msg in messages:
+                    text = msg["text"]
+                    logger.info(f"Incoming message from {target}: {text!r}")
+
+                    def make_send_fn(dest: str):
+                        return lambda reply: send_imessage(dest, reply)
+
+                    handled = commander.execute(text, make_send_fn(target), run_now_event)
+                    if handled:
+                        logger.info(f"Command handled for {target}: {text!r}")
+
             last_check = time.time()
-
-            for msg in messages:
-                text = msg["text"]
-                logger.info(f"Incoming message: {text!r}")
-
-                def send_fn(reply: str, _recipient: str = recipient) -> None:
-                    send_imessage(_recipient, reply)
-
-                handled = commander.execute(text, send_fn, run_now_event)
-                if handled:
-                    logger.info(f"Command handled: {text!r}")
-
         except Exception as exc:
             logger.error(f"Listener loop error: {exc}")
 
@@ -280,15 +375,24 @@ def main() -> None:
         return
 
     config = load_config()
-    recipient = config.get("recipient", "")
+    recipients = get_active_recipients(config)
 
     logger.info("=== Tracky starting ===")
 
+    # Initialize app daemon in PAUSED state on startup
+    try:
+        if CONFIG_PATH.exists():
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            cfg["paused"] = True
+            CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+            logger.info("⏸ App daemon initialized in PAUSED state by default.")
+    except Exception as exc:
+        logger.warning(f"Could not set initial paused state: {exc}")
 
-    if not recipient:
+    if not recipients and not config.get("recipient"):
         logger.error(
             "No recipient configured in config.json. "
-            "Run install.sh again or manually set 'recipient' in job_agent/config.json."
+            "Run install.sh again or configure recipients in Tracky Dashboard."
         )
         sys.exit(1)
 

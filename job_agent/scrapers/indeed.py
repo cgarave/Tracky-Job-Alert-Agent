@@ -1,4 +1,4 @@
-"""indeed.ph scraper using python-jobspy with strict freshness limit and clean URLs."""
+"""indeed.ph scraper using python-jobspy with strict freshness limit, clean URLs, and description extraction."""
 import logging
 import urllib.parse
 from typing import Optional
@@ -21,7 +21,7 @@ def _clean_indeed_url(url: str) -> str:
 def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -> list[dict]:
     """
     Scrape indeed.ph for recently posted jobs (past 48 hours).
-    Returns a list of normalized job dicts: {title, company, url, source, location}.
+    Returns a list of normalized job dicts: {title, company, url, source, location, salary, description}.
     """
     try:
         from jobspy import scrape_jobs  # type: ignore
@@ -43,6 +43,23 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
             raw_url = str(row.get("job_url", "")).strip()
             url = _clean_indeed_url(raw_url)
             job_loc = str(row.get("location", location)).strip()
+            desc = str(row.get("description", "")).strip()
+            if desc == "nan":
+                desc = ""
+
+            min_sal = row.get("min_amount")
+            max_sal = row.get("max_amount")
+            interval = str(row.get("interval", "")).strip()
+            currency = str(row.get("currency", "PHP")).strip()
+
+            salary_str = "Negotiable"
+            if min_sal and str(min_sal) != "nan":
+                if max_sal and str(max_sal) != "nan" and max_sal != min_sal:
+                    salary_str = f"{currency} {min_sal:,.0f} - {max_sal:,.0f}"
+                else:
+                    salary_str = f"{currency} {min_sal:,.0f}"
+                if interval and interval != "nan":
+                    salary_str += f" /{interval}"
 
             if title and url and url != "nan":
                 results.append(
@@ -52,7 +69,9 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                         "url": url,
                         "source": "Indeed.ph",
                         "location": job_loc if job_loc != "nan" else location,
+                        "salary": salary_str,
                         "apply_type": "Indeed Easy Apply",
+                        "description": desc,
                     }
                 )
         logger.info(f"[Indeed] '{keyword}': {len(results)} fresh results")

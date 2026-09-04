@@ -79,11 +79,16 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
         stats = db.get_stats(conn)
         conn.close()
 
+        from notifier import parse_recipients
+        recipients = parse_recipients(config.get("recipient", ""))
+        rec_str = ", ".join(recipients) if recipients else "None configured"
+
         send_fn(
             f"📊 Tracky Status\n\n"
             f"Status: {state}\n"
             f"⏱ Interval: every {interval} min\n"
             f"📍 Location: {location}\n"
+            f"📱 Recipients ({len(recipients)}): {rec_str}\n"
             f"🔍 Keywords ({len(keywords)}):\n{kw_list}\n\n"
             f"📦 Total Jobs Tracked: {stats['total_jobs']}\n"
             f"✨ Discovered Today: {stats['today_new_jobs']}"

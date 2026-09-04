@@ -73,6 +73,12 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [loadStatus, loadJobs, loadSettings]);
 
+  useEffect(() => {
+    if (activeTab === "settings") {
+      loadSettings();
+    }
+  }, [activeTab, loadSettings]);
+
   // Actions
   const handleSaveSettings = async (updated: DaemonSettings) => {
     try {
@@ -113,7 +119,7 @@ export default function Home() {
   const stats = statusData?.stats || { total_jobs: 0, today_new_jobs: 0 };
 
   return (
-    <div className="flex min-h-screen bg-[#020617] text-slate-100 selection:bg-indigo-500 selection:text-white font-sans antialiased">
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 selection:bg-blue-600 selection:text-white font-sans antialiased">
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -140,7 +146,14 @@ export default function Home() {
         {/* Tab Switcher Body */}
         <div className="transition-all duration-200">
           {activeTab === "jobs" && (
-            <JobsTab jobs={jobs} />
+            <JobsTab
+              jobs={jobs}
+              totalTrackedCount={stats.total_jobs}
+              onRefresh={() => {
+                loadJobs();
+                loadStatus();
+              }}
+            />
           )}
 
           {activeTab === "settings" && (

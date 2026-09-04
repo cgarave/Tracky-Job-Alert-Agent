@@ -1,4 +1,4 @@
-"""jobstreet.com.ph scraper using Playwright (headless Chromium) sorted by newest listings."""
+"""jobstreet.com.ph scraper using Playwright (headless Chromium) sorted by newest listings with description and salary extraction."""
 import logging
 import urllib.parse
 
@@ -15,7 +15,7 @@ USER_AGENT = (
 def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -> list[dict]:
     """
     Scrape jobstreet.com.ph for freshly posted jobs (sorted by date, posted in the last 7 days).
-    Returns a list of normalized job dicts: {title, company, url, source, location, apply_type}.
+    Returns a list of normalized job dicts: {title, company, url, source, location, salary, apply_type, description}.
     """
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
@@ -57,7 +57,7 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                     # Clean query params from URL
                     clean_url = href.split("?")[0]
 
-                    # Walk up to find the job card container, then find company
+                    # Walk up to find the job card container, then find company and teaser
                     card = link.evaluate_handle(
                         "el => el.closest('article') || el.closest('[data-job-id]') || el.parentElement"
                     )
@@ -69,6 +69,14 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                     loc_el = card.query_selector('[data-automation="job-card-location"], [data-automation="jobLocation"]')
                     loc_text = loc_el.inner_text().strip() if loc_el else location
 
+                    sal_el = card.query_selector('[data-automation="jobSalary"], [data-automation="job-card-salary"]')
+                    salary_text = sal_el.inner_text().strip() if sal_el else "Negotiable"
+
+                    teaser_el = card.query_selector(
+                        '[data-automation="job-card-teaser"], [data-automation="job-card-bullet-points"], [data-automation="jobDescription"]'
+                    )
+                    desc_text = teaser_el.inner_text().strip() if teaser_el else ""
+
                     if title and clean_url:
                         results.append(
                             {
@@ -77,7 +85,9 @@ def scrape(keyword: str, location: str = "Philippines", max_results: int = 10) -
                                 "url": clean_url,
                                 "source": "JobStreet.ph",
                                 "location": loc_text,
+                                "salary": salary_text,
                                 "apply_type": "SEEK Quick Apply",
+                                "description": desc_text,
                             }
                         )
                 except Exception:

@@ -10,6 +10,8 @@ job_agent/run_now.flag
 
 # Personal config (contains your phone number / Apple ID)
 job_agent/config.json
+job_agent/profile.json
+*.env*
 
 # Job history database
 job_agent/seen_jobs.db

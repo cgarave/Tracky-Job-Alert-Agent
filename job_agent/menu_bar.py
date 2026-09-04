@@ -8,7 +8,7 @@ Lives as a 🐶 icon in the menu bar. Provides a GUI for:
   • Adding and removing job keywords
   • Changing interval, location, and iMessage recipient
   • Viewing logs
-  • Quitting the menu bar app or stopping everything cleanly
+  • Quitting the menu bar app with automatic scraper pause or stopping everything cleanly
 
 Communicates with the background daemon (main.py) via shared files in the
 same job_agent/ directory:
@@ -17,11 +17,13 @@ same job_agent/ directory:
   daemon.pid     — daemon's PID; used to send SIGUSR1 for instant wake-up
   run_now.flag   — created here as a fallback if SIGUSR1 fails
 """
+import atexit
 import json
 import logging
 import os
 import signal
 import subprocess
+import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -56,6 +58,19 @@ def _load_config() -> dict:
 def _save_config(config: dict) -> None:
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
+
+
+def _pause_agent_on_exit() -> None:
+    """Ensure the background scraper is set to paused state when menu bar app exits."""
+    try:
+        config = _load_config()
+        config["paused"] = True
+        _save_config(config)
+    except Exception:
+        pass
+
+
+atexit.register(_pause_agent_on_exit)
 
 
 def _load_status() -> dict:
@@ -99,11 +114,7 @@ def _trigger_run_now() -> None:
 
 def _build_kw_items(kw_menu: rumps.MenuItem, keywords: list[str],
                     add_cb, remove_cb) -> None:
-    """Populate `kw_menu` with keyword labels + Add/Remove actions.
-
-    Isolated so the same logic can be used during __init__ (no .clear())
-    and during _rebuild_keywords() (after .clear()).
-    """
+    """Populate `kw_menu` with keyword labels + Add/Remove actions."""
     for kw in keywords:
         item = rumps.MenuItem(f"   {kw}")
         item.set_callback(None)
@@ -118,8 +129,6 @@ def _build_kw_items(kw_menu: rumps.MenuItem, keywords: list[str],
 # Menu Bar App
 # ---------------------------------------------------------------------------
 
-import webbrowser
-
 class TrackyApp(rumps.App):
 
     def __init__(self):
@@ -129,6 +138,9 @@ class TrackyApp(rumps.App):
         keywords = config.get("keywords", [])
         interval = config.get("check_interval_minutes", 60)
         location = config.get("location", "Philippines")
+        recipient = config.get("recipient", "")
+
+        self._last_keywords = list(keywords)
 
         # ── Status rows (non-clickable) ──────────────────────────────────────
         self._status_item    = rumps.MenuItem("Loading…")
@@ -143,7 +155,7 @@ class TrackyApp(rumps.App):
         self._run_item   = rumps.MenuItem("▶  Run Now", callback=self._on_run_now)
         self._pause_item = rumps.MenuItem("⏸  Pause Scraper", callback=self._on_toggle_pause)
 
-        # ── Keywords submenu — built inline (no .clear() safe at this stage) ─
+        # ── Keywords submenu ─────────────────────────────────────────────────
         self._kw_menu = rumps.MenuItem(f"🔍  Keywords ({len(keywords)})")
         _build_kw_items(self._kw_menu, keywords,
                         self._on_add_keyword, self._on_remove_keyword)
@@ -155,8 +167,9 @@ class TrackyApp(rumps.App):
         self._location_item  = rumps.MenuItem(
             f"📍  Location: {location}…", callback=self._on_set_location
         )
+        rec_title = f"📱  Recipient: {recipient[:20]}…" if len(recipient) > 20 else f"📱  Recipient: {recipient}" if recipient else "📱  Set Recipient…"
         self._recipient_item = rumps.MenuItem(
-            "📱  Set Recipient…", callback=self._on_set_recipient
+            rec_title, callback=self._on_set_recipient
         )
 
         settings = rumps.MenuItem("⚙  Settings")
@@ -181,16 +194,15 @@ class TrackyApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("📄  View Logs", callback=self._on_view_logs),
             rumps.separator,
-            rumps.MenuItem("Quit Menu Bar", callback=self._on_quit_menubar),
-            rumps.MenuItem("🛑  Stop Agent & Quit All…", callback=self._on_stop_all),
+            rumps.MenuItem("Quit Tracky (Pause & Exit)", callback=self._on_quit_menubar),
+            rumps.MenuItem("🛑  Stop Agent Daemon & Quit All…", callback=self._on_stop_all),
         ]
 
-
-        # First status refresh (only updates titles, safe before run loop)
+        # First status refresh
         self._refresh_status()
 
-        # Auto-refresh every 30 seconds
-        self._timer = rumps.Timer(self._on_timer, 30)
+        # Auto-refresh every 10 seconds for real-time synchronization with Web GUI
+        self._timer = rumps.Timer(self._on_timer, 10)
         self._timer.start()
 
     # ------------------------------------------------------------------
@@ -201,7 +213,7 @@ class TrackyApp(rumps.App):
         self._refresh_status()
 
     # ------------------------------------------------------------------
-    # Status refresh (only mutates existing item titles — always safe)
+    # Status refresh (mutates existing item titles and keeps keywords synced)
     # ------------------------------------------------------------------
 
     def _refresh_status(self):
@@ -210,10 +222,23 @@ class TrackyApp(rumps.App):
         daemon_running = _is_daemon_running()
         paused         = config.get("paused", False)
 
-        interval = config.get("check_interval_minutes", 60)
-        location = config.get("location", "Philippines")
+        interval  = config.get("check_interval_minutes", 60)
+        location  = config.get("location", "Philippines")
+        recipient = config.get("recipient", "")
+        keywords  = config.get("keywords", [])
+
         self._interval_item.title = f"⏱  Interval: {interval} min…"
         self._location_item.title = f"📍  Location: {location}…"
+        if recipient:
+            rec_str = recipient[:20] + "…" if len(recipient) > 20 else recipient
+            self._recipient_item.title = f"📱  Recipient: {rec_str}…"
+        else:
+            self._recipient_item.title = "📱  Set Recipient…"
+
+        # Rebuild keywords submenu dynamically if updated externally (via GUI or iMessage)
+        if keywords != self._last_keywords:
+            self._rebuild_keywords()
+            self._last_keywords = list(keywords)
 
         jobs = status.get("jobs_tracked", 0)
 
@@ -251,7 +276,6 @@ class TrackyApp(rumps.App):
 
     # ------------------------------------------------------------------
     # Keywords submenu rebuild
-    # Called only after user actions (add/remove) — safe post-init.
     # ------------------------------------------------------------------
 
     def _rebuild_keywords(self):
@@ -263,7 +287,7 @@ class TrackyApp(rumps.App):
         try:
             self._kw_menu.clear()
         except Exception:
-            pass  # Defensive: should not happen post-init
+            pass
 
         _build_kw_items(self._kw_menu, keywords,
                         self._on_add_keyword, self._on_remove_keyword)
@@ -273,10 +297,8 @@ class TrackyApp(rumps.App):
     # ------------------------------------------------------------------
 
     def _on_open_dashboard(self, _):
-        """Open Tracky Web GUI Control Center in browser or app mode."""
-        url = "http://127.0.0.1:5050"
-        webbrowser.open(url)
-
+        """Open Tracky Web GUI Control Center in default browser."""
+        webbrowser.open("http://127.0.0.1:5050")
 
     def _on_run_now(self, _):
         if not _is_daemon_running():
@@ -328,6 +350,7 @@ class TrackyApp(rumps.App):
 
         kws.append(kw)
         _save_config(config)
+        self._last_keywords = list(kws)
         self._rebuild_keywords()
         rumps.notification("Tracky", "", f'Added: "{kw}"', sound=False)
 
@@ -361,6 +384,7 @@ class TrackyApp(rumps.App):
 
         config["keywords"] = updated
         _save_config(config)
+        self._last_keywords = list(updated)
         self._rebuild_keywords()
         rumps.notification("Tracky", "", f'Removed: "{term}"', sound=False)
 
@@ -413,18 +437,19 @@ class TrackyApp(rumps.App):
         config  = _load_config()
         current = config.get("recipient", "")
         w = rumps.Window(
-            message="Enter your phone number or Apple ID:\n(e.g. +639171234567 or you@icloud.com)",
+            message="Enter your phone number(s) or Apple ID(s):\n(e.g. +639171234567, you@icloud.com)",
             title="iMessage Recipient",
             default_text=current,
             ok="Save",
             cancel="Cancel",
-            dimensions=(300, 24),
+            dimensions=(320, 24),
         )
         r = w.run()
         if not r.clicked or not r.text.strip():
             return
         config["recipient"] = r.text.strip()
         _save_config(config)
+        self._refresh_status()
         rumps.notification("Tracky", "", "Recipient updated.", sound=False)
 
     def _on_view_logs(self, _):
@@ -434,11 +459,12 @@ class TrackyApp(rumps.App):
             rumps.alert("No log file found yet.")
 
     def _on_quit_menubar(self, _):
-        """Quit just the menu bar app. The background daemon continues running."""
+        """Pause scraper and quit menu bar app."""
+        _pause_agent_on_exit()
         rumps.quit_application()
 
     def _on_stop_all(self, _):
-        """Prompt user, stop the background daemon, and quit the menu bar app."""
+        """Prompt user, pause scraper, stop the background daemon, and quit the menu bar app."""
         response = rumps.alert(
             title="Stop Tracky?",
             message=(
@@ -450,6 +476,8 @@ class TrackyApp(rumps.App):
         )
         if response != 1:  # 1 is OK button in rumps
             return
+
+        _pause_agent_on_exit()
 
         if PLIST_DAEMON.exists():
             subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], check=False)

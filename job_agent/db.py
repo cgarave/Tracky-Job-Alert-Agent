@@ -1,4 +1,4 @@
-"""SQLite job deduplication and tracking layer."""
+"""SQLite job deduplication, tracking, dismissal, and alert delivery layer."""
 import hashlib
 import logging
 import sqlite3
@@ -15,7 +15,7 @@ def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    # Base seen_jobs table
+    # 1. Base seen_jobs table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS seen_jobs (
             job_id      TEXT PRIMARY KEY,
@@ -28,13 +28,47 @@ def get_connection() -> sqlite3.Connection:
             apply_type  TEXT DEFAULT 'unknown',
             description TEXT DEFAULT '',
             match_score INTEGER DEFAULT 0,
-            seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_alerted  INTEGER DEFAULT 0,
+            alerted_at  TIMESTAMP
+        )
+    """)
+
+    # Auto-migration for existing databases
+    for col_def in (
+        "is_alerted INTEGER DEFAULT 0",
+        "alerted_at TIMESTAMP",
+    ):
+        try:
+            conn.execute(f"ALTER TABLE seen_jobs ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    # 2. Dismissed / Ignored jobs table (prevents future re-scraping alerts)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dismissed_jobs (
+            job_id       TEXT PRIMARY KEY,
+            dismissed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 3. Per-recipient alert delivery tracking (multi-channel / multi-recipient)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS job_alerts_sent (
+            job_id       TEXT,
+            recipient_id TEXT,
+            platform     TEXT DEFAULT 'unknown',
+            sent_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (job_id, recipient_id)
         )
     """)
 
     # Performance Indexes
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_seen_at ON seen_jobs(seen_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_source ON seen_jobs(source)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_jobs_alerted ON seen_jobs(is_alerted)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dismissed_jobs_id ON dismissed_jobs(job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_sent_rec ON job_alerts_sent(recipient_id)")
 
     conn.commit()
     return conn
@@ -47,8 +81,12 @@ def make_job_id(title: str, company: str, url: str) -> str:
 
 
 def is_new(conn: sqlite3.Connection, job_id: str) -> bool:
-    """Return True if this job_id has never been seen before."""
-    cur = conn.execute("SELECT 1 FROM seen_jobs WHERE job_id = ?", (job_id,))
+    """Return True if this job_id has never been seen or dismissed before."""
+    cur = conn.execute("""
+        SELECT 1 FROM seen_jobs WHERE job_id = ?
+        UNION
+        SELECT 1 FROM dismissed_jobs WHERE job_id = ?
+    """, (job_id, job_id))
     return cur.fetchone() is None
 
 
@@ -85,6 +123,56 @@ def mark_seen(conn: sqlite3.Connection, job: dict) -> None:
     conn.commit()
 
 
+def mark_jobs_alerted(conn: sqlite3.Connection, job_ids: list[str]) -> int:
+    """Mark job listings as alerted with timestamp."""
+    if not job_ids:
+        return 0
+    placeholders = ",".join("?" for _ in job_ids)
+    cur = conn.execute(
+        f"UPDATE seen_jobs SET is_alerted = 1, alerted_at = CURRENT_TIMESTAMP WHERE job_id IN ({placeholders})",
+        job_ids,
+    )
+    conn.commit()
+    return cur.rowcount
+
+
+def is_alerted_for_recipient(conn: sqlite3.Connection, job_id: str, recipient_id: str) -> bool:
+    """Return True if this job has already been alerted to this specific recipient."""
+    cur = conn.execute(
+        "SELECT 1 FROM job_alerts_sent WHERE job_id = ? AND recipient_id = ?",
+        (job_id, recipient_id),
+    )
+    return cur.fetchone() is not None
+
+
+def mark_batch_alerted_for_recipient(
+    conn: sqlite3.Connection,
+    job_ids: list[str],
+    recipient_id: str,
+    platform: str = "imessage",
+) -> int:
+    """Record that a batch of job alerts was sent to a specific recipient and update seen_jobs."""
+    if not job_ids:
+        return 0
+
+    rows = [(jid, recipient_id, platform) for jid in job_ids]
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO job_alerts_sent (job_id, recipient_id, platform)
+        VALUES (?, ?, ?)
+        """,
+        rows,
+    )
+
+    placeholders = ",".join("?" for _ in job_ids)
+    conn.execute(
+        f"UPDATE seen_jobs SET is_alerted = 1, alerted_at = CURRENT_TIMESTAMP WHERE job_id IN ({placeholders})",
+        job_ids,
+    )
+    conn.commit()
+    return len(job_ids)
+
+
 def total_seen(conn: sqlite3.Connection) -> int:
     """Return the total number of jobs tracked so far."""
     cur = conn.execute("SELECT COUNT(*) FROM seen_jobs")
@@ -92,12 +180,13 @@ def total_seen(conn: sqlite3.Connection) -> int:
 
 
 def count_today_jobs(conn: sqlite3.Connection) -> int:
-    """Return count of new jobs discovered today."""
+    """Return count of new jobs discovered today in Philippine Standard Time (UTC+8)."""
     cur = conn.execute(
         """
         SELECT COUNT(*) FROM seen_jobs 
         WHERE (
-            date(seen_at, 'localtime') = date('now', 'localtime')
+            date(seen_at, '+8 hours') = date('now', '+8 hours')
+            OR date(seen_at, 'localtime') = date('now', 'localtime')
             OR date(seen_at) = date('now')
         )
         """
@@ -112,18 +201,24 @@ def get_jobs(
     offset: int = 0,
     source: Optional[str] = None,
     search: Optional[str] = None,
+    alert_status: Optional[str] = None,
 ) -> list[dict]:
-    """Retrieve tracked jobs ordered by discovery time."""
+    """Retrieve tracked jobs ordered by discovery time with optional alert status filtering."""
     query = "SELECT * FROM seen_jobs WHERE 1=1"
     params: list = []
 
     if source:
         query += " AND source = ?"
         params.append(source)
+    if alert_status == "alerted":
+        query += " AND is_alerted = 1"
+    elif alert_status == "unalerted":
+        query += " AND (is_alerted = 0 OR is_alerted IS NULL)"
+
     if search:
-        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ?)"
+        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)"
         term = f"%{search}%"
-        params.extend([term, term, term])
+        params.extend([term, term, term, term])
 
     query += " ORDER BY seen_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
@@ -139,10 +234,63 @@ def get_job_by_id(conn: sqlite3.Connection, job_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def delete_jobs(conn: sqlite3.Connection, job_ids: list[str], block_future: bool = True) -> int:
+    """
+    Delete jobs by ID list from seen_jobs.
+    If block_future is True, record IDs into dismissed_jobs to avoid future alerts.
+    Returns the count of deleted rows.
+    """
+    if not job_ids:
+        return 0
+
+    if block_future:
+        conn.executemany(
+            "INSERT OR IGNORE INTO dismissed_jobs (job_id) VALUES (?)",
+            [(jid,) for jid in job_ids],
+        )
+
+    placeholders = ",".join("?" for _ in job_ids)
+    cur = conn.execute(f"DELETE FROM seen_jobs WHERE job_id IN ({placeholders})", job_ids)
+    conn.commit()
+    return cur.rowcount
+
+
+def delete_all_jobs(
+    conn: sqlite3.Connection,
+    block_future: bool = True,
+    source: Optional[str] = None,
+    search: Optional[str] = None,
+) -> int:
+    """
+    Delete all jobs matching the optional filter criteria (or all jobs in database).
+    Returns count of deleted rows.
+    """
+    query = "SELECT job_id FROM seen_jobs WHERE 1=1"
+    params: list = []
+
+    if source:
+        query += " AND source = ?"
+        params.append(source)
+    if search:
+        query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR description LIKE ?)"
+        term = f"%{search}%"
+        params.extend([term, term, term, term])
+
+    cur = conn.execute(query, params)
+    matching_ids = [row["job_id"] for row in cur.fetchall()]
+    if not matching_ids:
+        return 0
+
+    return delete_jobs(conn, matching_ids, block_future=block_future)
+
+
 def get_stats(conn: sqlite3.Connection) -> dict:
     """Return dashboard summary stats."""
     total_jobs = total_seen(conn)
     today_new = count_today_jobs(conn)
+
+    cur = conn.execute("SELECT COUNT(*) FROM seen_jobs WHERE is_alerted = 1")
+    total_alerted = cur.fetchone()[0]
 
     # Breakdown by source
     cur = conn.execute("SELECT source, COUNT(*) FROM seen_jobs GROUP BY source")
@@ -151,5 +299,6 @@ def get_stats(conn: sqlite3.Connection) -> dict:
     return {
         "total_jobs": total_jobs,
         "today_new_jobs": today_new,
+        "total_alerted": total_alerted,
         "sources": source_counts,
     }
