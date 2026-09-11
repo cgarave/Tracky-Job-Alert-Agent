@@ -71,7 +71,13 @@ def _handle_sigusr1(signum, frame) -> None:
     logger.info("SIGUSR1 received — triggering immediate scan.")
     run_now_event.set()
 
+def _handle_sigterm(signum, frame) -> None:
+    logger.info("SIGTERM received — shutting down Tracky daemon.")
+    _delete_pid()
+    sys.exit(0)
+
 signal.signal(signal.SIGUSR1, _handle_sigusr1)
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 
 # ---------------------------------------------------------------------------
@@ -216,11 +222,25 @@ def _run_scrape(config: dict, db_conn, dry_run: bool = False) -> list[dict]:
                 for job in jobs:
                     job_id = db_module.make_job_id(job["title"], job["company"], job["url"])
                     job["job_id"] = job_id
+                    job["search_keyword"] = keyword
+                    if "search_keywords" not in job:
+                        job["search_keywords"] = []
+                    if keyword not in job["search_keywords"]:
+                        job["search_keywords"].append(keyword)
+
                     if job_id not in seen_ids and db_module.is_new(db_conn, job_id):
                         seen_ids.add(job_id)
                         new_jobs.append(job)
                         if not dry_run:
                             db_module.mark_seen(db_conn, job)
+                    elif job_id in seen_ids:
+                        # Append search keyword to the in-flight job object
+                        for existing_job in new_jobs:
+                            if existing_job.get("job_id") == job_id:
+                                if "search_keywords" not in existing_job:
+                                    existing_job["search_keywords"] = []
+                                if keyword not in existing_job["search_keywords"]:
+                                    existing_job["search_keywords"].append(keyword)
             except Exception as exc:
                 logger.error(f"Scraper error ({scraper.__name__}, '{keyword}'): {exc}")
 
@@ -390,20 +410,19 @@ def main() -> None:
         logger.warning(f"Could not set initial paused state: {exc}")
 
     if not recipients and not config.get("recipient"):
-        logger.error(
-            "No recipient configured in config.json. "
-            "Run install.sh again or configure recipients in Tracky Dashboard."
+        logger.info(
+            "No recipients configured yet in config.json — dashboard server is online at http://127.0.0.1:5050 to configure recipients."
         )
-        sys.exit(1)
 
     # Write PID file so the menu bar app can send SIGUSR1
     _write_pid()
 
     try:
         # Start GUI dashboard server on http://127.0.0.1:5050
+        http_server = None
         try:
             from dashboard_server import start_dashboard_server
-            start_dashboard_server(port=5050, background=True)
+            http_server = start_dashboard_server(port=5050, background=True)
             logger.info("🐶 Tracky Control Center Dashboard started at http://127.0.0.1:5050")
         except Exception as exc:
             logger.warning(f"Could not start dashboard server: {exc}")
@@ -418,9 +437,15 @@ def main() -> None:
 
         # Run the scraper in the main thread (keeps the process alive)
         scraper_loop(dry_run=False)
-    except KeyboardInterrupt:
-        logger.info("Tracky stopped by user.")
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Tracky stopped.")
     finally:
+        if 'http_server' in locals() and http_server:
+            try:
+                http_server.shutdown()
+                http_server.server_close()
+            except Exception:
+                pass
         _delete_pid()
         logger.info("Tracky exited.")
 

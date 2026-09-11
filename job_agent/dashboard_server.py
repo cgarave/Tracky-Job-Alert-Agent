@@ -102,7 +102,8 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
         elif path == "/api/jobs":
             try:
                 conn = db.get_connection()
-                limit = int(query.get("limit", [100])[0])
+                limit_raw = query.get("limit", [None])[0]
+                limit = int(limit_raw) if limit_raw and limit_raw.isdigit() else None
                 search = query.get("search", [None])[0]
                 source = query.get("source", [None])[0]
                 alert_status = query.get("alert_status", [None])[0]
@@ -263,10 +264,14 @@ class DashboardAPIHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
 
 
+class ReusableHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
+
 def start_dashboard_server(port: int = PORT, background: bool = False) -> Optional[HTTPServer]:
-    """Start the dashboard HTTP server."""
+    """Start the dashboard HTTP server with reusable socket address."""
     server_address = ("127.0.0.1", port)
-    httpd = HTTPServer(server_address, DashboardAPIHandler)
+    httpd = ReusableHTTPServer(server_address, DashboardAPIHandler)
     logger.info(f"🚀 Tracky Dashboard Server running at http://127.0.0.1:{port}")
 
     if background:

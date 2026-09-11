@@ -8,7 +8,7 @@ Lives as a 🐶 icon in the menu bar. Provides a GUI for:
   • Adding and removing job keywords
   • Changing interval, location, and iMessage recipient
   • Viewing logs
-  • Quitting the menu bar app with automatic scraper pause or stopping everything cleanly
+  • Quitting Tracky cleanly (stops scraper, web server, and menu bar)
 
 Communicates with the background daemon (main.py) via shared files in the
 same job_agent/ directory:
@@ -23,6 +23,8 @@ import logging
 import os
 import signal
 import subprocess
+import sys
+import time
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -32,13 +34,14 @@ import rumps
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-BASE_DIR      = Path(__file__).parent
-CONFIG_PATH   = BASE_DIR / "config.json"
-STATUS_PATH   = BASE_DIR / "status.json"
-PID_PATH      = BASE_DIR / "daemon.pid"
-RUN_NOW_FLAG  = BASE_DIR / "run_now.flag"
-LOG_PATH      = Path.home() / "Library" / "Logs" / "jobagent.log"
-PLIST_DAEMON  = Path.home() / "Library" / "LaunchAgents" / "com.jobagent.plist"
+BASE_DIR       = Path(__file__).parent
+CONFIG_PATH    = BASE_DIR / "config.json"
+STATUS_PATH    = BASE_DIR / "status.json"
+PID_PATH       = BASE_DIR / "daemon.pid"
+RUN_NOW_FLAG   = BASE_DIR / "run_now.flag"
+LOG_PATH       = Path.home() / "Library" / "Logs" / "jobagent.log"
+PLIST_DAEMON   = Path.home() / "Library" / "LaunchAgents" / "com.jobagent.plist"
+PLIST_MENUBAR  = Path.home() / "Library" / "LaunchAgents" / "com.jobagent.menubar.plist"
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -82,21 +85,122 @@ def _load_status() -> dict:
 
 
 def _daemon_pid() -> int | None:
-    try:
-        return int(PID_PATH.read_text().strip())
-    except Exception:
-        return None
+    pid_paths = [
+        BASE_DIR / "daemon.pid",
+        Path("/usr/local/share/jobagent/job_agent/daemon.pid"),
+    ]
+    seen = set()
+    for path in pid_paths:
+        if path in seen or not path.exists():
+            continue
+        seen.add(path)
+        try:
+            pid = int(path.read_text().strip())
+            os.kill(pid, 0)
+            check = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, check=False)
+            if "main.py" in check.stdout:
+                return pid
+            else:
+                path.unlink(missing_ok=True)
+        except Exception:
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
+    return None
 
 
 def _is_daemon_running() -> bool:
+    return _daemon_pid() is not None
+
+
+def _ensure_daemon_running() -> None:
+    """Ensure the background scraper daemon and dashboard server are online."""
+    if _is_daemon_running():
+        return
+
+    # Try launchctl load
+    if PLIST_DAEMON.exists():
+        try:
+            subprocess.run(["launchctl", "load", str(PLIST_DAEMON)], capture_output=True, check=False)
+            time.sleep(0.6)
+            if _is_daemon_running():
+                return
+        except Exception:
+            pass
+
+    # Fallback to direct background spawn if not managed by launchd
+    main_py = BASE_DIR / "main.py"
+    if main_py.exists():
+        try:
+            python_bin = sys.executable or "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+            subprocess.Popen(
+                [python_bin, str(main_py)],
+                cwd=str(BASE_DIR),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
+
+
+def _stop_daemon_and_server() -> None:
+    """Stop the background scraper daemon, launchd service, and web server."""
+    # 1. Launchctl unload & bootout
+    try:
+        uid = os.getuid()
+        subprocess.run(["launchctl", "bootout", f"gui/{uid}/com.jobagent"], capture_output=True, check=False)
+    except Exception:
+        pass
+
+    if PLIST_DAEMON.exists():
+        try:
+            subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], capture_output=True, check=False)
+        except Exception:
+            pass
+
+    # 2. Terminate PID from daemon.pid if still alive
     pid = _daemon_pid()
     if pid is not None:
         try:
-            os.kill(pid, 0)
-            return True
-        except (ProcessLookupError, PermissionError):
-            return False
-    return False
+            os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
+
+    # 3. Kill any other python main.py daemon processes
+    try:
+        subprocess.run(["pkill", "-f", "job_agent/main.py"], capture_output=True, check=False)
+    except Exception:
+        pass
+
+    # 4. Clean up any process listening on port 5050 (dashboard server)
+    try:
+        res = subprocess.run(["lsof", "-t", "-i", ":5050"], capture_output=True, text=True, check=False)
+        pids = [int(p.strip()) for p in res.stdout.strip().split("\n") if p.strip().isdigit()]
+        for p in pids:
+            if p != os.getpid():
+                try:
+                    os.kill(p, signal.SIGKILL)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _unload_menubar_service() -> None:
+    """Unload the menubar launchd agent so launchd does not respawn it upon exit."""
+    try:
+        uid = os.getuid()
+        subprocess.run(["launchctl", "bootout", f"gui/{uid}/com.jobagent.menubar"], capture_output=True, check=False)
+    except Exception:
+        pass
+
+    if PLIST_MENUBAR.exists():
+        try:
+            subprocess.run(["launchctl", "unload", str(PLIST_MENUBAR)], capture_output=True, check=False)
+        except Exception:
+            pass
 
 
 def _trigger_run_now() -> None:
@@ -130,14 +234,17 @@ def _build_kw_items(kw_menu: rumps.MenuItem, keywords: list[str],
 # ---------------------------------------------------------------------------
 
 class TrackyApp(rumps.App):
-
     def __init__(self):
-        super().__init__("🐶", quit_button=None)
+        super().__init__("Tracky", icon=None, template=False, quit_button=None)
 
-        config   = _load_config()
-        keywords = config.get("keywords", [])
-        interval = config.get("check_interval_minutes", 60)
-        location = config.get("location", "Philippines")
+        # Automatically ensure daemon is online when menu bar launches
+        _ensure_daemon_running()
+
+        # Cached config state for dynamic rebuilding
+        config    = _load_config()
+        keywords  = config.get("keywords", [])
+        interval  = config.get("check_interval_minutes", 60)
+        location  = config.get("location", "Philippines")
         recipient = config.get("recipient", "")
 
         self._last_keywords = list(keywords)
@@ -194,8 +301,7 @@ class TrackyApp(rumps.App):
             rumps.separator,
             rumps.MenuItem("📄  View Logs", callback=self._on_view_logs),
             rumps.separator,
-            rumps.MenuItem("Quit Tracky (Pause & Exit)", callback=self._on_quit_menubar),
-            rumps.MenuItem("🛑  Stop Agent Daemon & Quit All…", callback=self._on_stop_all),
+            rumps.MenuItem("Quit Tracky", callback=self._on_quit_tracky),
         ]
 
         # First status refresh
@@ -251,49 +357,46 @@ class TrackyApp(rumps.App):
 
         if paused:
             self.title = "⏸🐶"
-            self._status_item.title = f"⏸ Paused  ·  {jobs} jobs tracked"
-            self._next_scan_item.title = "Scraper paused"
+            self._status_item.title = f"⏸ Paused ({jobs} jobs tracked)"
+            self._next_scan_item.title = "Scraper is paused"
             self._pause_item.title = "▶  Resume Scraper"
         else:
             self.title = "🐶"
-            self._status_item.title = f"🟢 Active  ·  {jobs} jobs tracked"
+            self._status_item.title = f"● Active ({jobs} jobs tracked)"
             self._pause_item.title = "⏸  Pause Scraper"
 
-            last = status.get("last_scan_time")
-            if last:
+            last_time_str = status.get("last_scan_time")
+            if last_time_str:
                 try:
-                    last_dt = datetime.fromisoformat(last)
-                    next_dt = last_dt + timedelta(minutes=interval)
-                    secs    = (next_dt - datetime.now()).total_seconds()
-                    mins    = max(0, int(secs / 60))
-                    self._next_scan_item.title = (
-                        f"Next scan in {mins} min" if mins > 0 else "Scanning soon…"
-                    )
+                    last_time = datetime.fromisoformat(last_time_str)
+                    next_time = last_time + timedelta(minutes=interval)
+                    now       = datetime.now()
+                    diff_secs = int((next_time - now).total_seconds())
+
+                    if diff_secs <= 0:
+                        self._next_scan_item.title = "Next scan: any moment…"
+                    else:
+                        mins, secs = divmod(diff_secs, 60)
+                        self._next_scan_item.title = f"Next scan in {mins}m {secs}s"
                 except Exception:
-                    self._next_scan_item.title = f"Every {interval} min"
+                    self._next_scan_item.title = f"Scan interval: every {interval}m"
             else:
-                self._next_scan_item.title = f"Every {interval} min"
+                self._next_scan_item.title = "No scans run yet"
 
     # ------------------------------------------------------------------
-    # Keywords submenu rebuild
+    # Rebuild keywords submenu dynamically
     # ------------------------------------------------------------------
 
     def _rebuild_keywords(self):
         config   = _load_config()
         keywords = config.get("keywords", [])
-
+        self._kw_menu.clear()
         self._kw_menu.title = f"🔍  Keywords ({len(keywords)})"
-
-        try:
-            self._kw_menu.clear()
-        except Exception:
-            pass
-
         _build_kw_items(self._kw_menu, keywords,
                         self._on_add_keyword, self._on_remove_keyword)
 
     # ------------------------------------------------------------------
-    # Callbacks
+    # Action callbacks
     # ------------------------------------------------------------------
 
     def _on_open_dashboard(self, _):
@@ -302,23 +405,24 @@ class TrackyApp(rumps.App):
 
     def _on_run_now(self, _):
         if not _is_daemon_running():
-            rumps.alert("The background agent is stopped. Start it first before running a scan.")
-            return
+            _ensure_daemon_running()
+            time.sleep(0.5)
 
         _trigger_run_now()
         rumps.notification(
             title="Tracky",
             subtitle="",
-            message="Scan triggered — new jobs will arrive as iMessages.",
+            message="Scan triggered — fresh jobs will be alerted.",
             sound=False,
         )
 
     def _on_toggle_pause(self, _):
         if not _is_daemon_running():
-            # Start daemon via launchctl
-            if PLIST_DAEMON.exists():
-                subprocess.run(["launchctl", "load", str(PLIST_DAEMON)], check=False)
-                rumps.notification("Tracky", "", "Starting background daemon…", sound=False)
+            _ensure_daemon_running()
+            config = _load_config()
+            config["paused"] = False
+            _save_config(config)
+            rumps.notification("Tracky", "", "Started background daemon and resumed scraper.", sound=False)
             self._refresh_status()
             return
 
@@ -458,37 +562,11 @@ class TrackyApp(rumps.App):
         else:
             rumps.alert("No log file found yet.")
 
-    def _on_quit_menubar(self, _):
-        """Pause scraper and quit menu bar app."""
+    def _on_quit_tracky(self, _):
+        """Cleanly shutdown Tracky: pause scraper, stop daemon & web server, unload services, and quit."""
         _pause_agent_on_exit()
-        rumps.quit_application()
-
-    def _on_stop_all(self, _):
-        """Prompt user, pause scraper, stop the background daemon, and quit the menu bar app."""
-        response = rumps.alert(
-            title="Stop Tracky?",
-            message=(
-                "This will stop the background job scanner and close the menu bar app.\n\n"
-                "You will not receive any new job alerts until you start the agent again."
-            ),
-            ok="Stop & Quit",
-            cancel="Cancel",
-        )
-        if response != 1:  # 1 is OK button in rumps
-            return
-
-        _pause_agent_on_exit()
-
-        if PLIST_DAEMON.exists():
-            subprocess.run(["launchctl", "unload", str(PLIST_DAEMON)], check=False)
-        else:
-            pid = _daemon_pid()
-            if pid:
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except Exception:
-                    pass
-
+        _stop_daemon_and_server()
+        _unload_menubar_service()
         rumps.quit_application()
 
 

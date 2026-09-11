@@ -197,7 +197,7 @@ def count_today_jobs(conn: sqlite3.Connection) -> int:
 
 def get_jobs(
     conn: sqlite3.Connection,
-    limit: int = 100,
+    limit: Optional[int] = None,
     offset: int = 0,
     source: Optional[str] = None,
     search: Optional[str] = None,
@@ -220,8 +220,13 @@ def get_jobs(
         term = f"%{search}%"
         params.extend([term, term, term, term])
 
-    query += " ORDER BY seen_at DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
+    query += " ORDER BY seen_at DESC"
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+    elif offset > 0:
+        query += " LIMIT -1 OFFSET ?"
+        params.append(offset)
 
     cur = conn.execute(query, params)
     return [dict(row) for row in cur.fetchall()]

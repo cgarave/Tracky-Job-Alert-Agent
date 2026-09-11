@@ -18,13 +18,16 @@ export async function fetchStatus(): Promise<SystemStatus> {
 export async function fetchJobs(
   search?: string,
   source?: string,
-  alertStatus?: string
+  alertStatus?: string,
+  limit?: number
 ): Promise<{ jobs: Job[]; total: number }> {
-  const params = new URLSearchParams({ limit: "100" });
+  const params = new URLSearchParams();
+  if (limit) params.append("limit", limit.toString());
   if (search) params.append("search", search);
   if (source && source !== "all") params.append("source", source);
   if (alertStatus && alertStatus !== "all") params.append("alert_status", alertStatus);
-  const res = await fetch(`${API_BASE}/api/jobs?${params.toString()}`);
+  const queryString = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/api/jobs${queryString}`);
   return handleResponse<{ jobs: Job[]; total: number }>(res);
 }
 

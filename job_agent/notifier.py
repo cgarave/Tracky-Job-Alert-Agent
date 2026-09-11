@@ -6,6 +6,7 @@ Telegram alerts strictly adhere to zero-emoji formatting.
 import html
 import json
 import logging
+import re
 import subprocess
 import time
 import urllib.parse
@@ -274,24 +275,117 @@ def format_telegram_batch(
 # Keyword Matching & Per-Recipient Dispatch
 # ---------------------------------------------------------------------------
 
+SYNONYM_MAP = {
+    "developer": {"developer", "developers", "dev", "devs", "engineer", "engineers", "engineering", "programmer", "programmers", "specialist"},
+    "engineer": {"engineer", "engineers", "engineering", "developer", "developers", "dev", "devs", "architect"},
+    "frontend": {"frontend", "front-end", "front end", "ui"},
+    "backend": {"backend", "back-end", "back end"},
+    "fullstack": {"fullstack", "full-stack", "full stack"},
+    "nextjs": {"nextjs", "next.js", "next js", "next"},
+    "nodejs": {"nodejs", "node.js", "node js", "node"},
+    "react": {"react", "reactjs", "react.js", "react native"},
+    "vue": {"vue", "vuejs", "vue.js"},
+    "ai": {"ai", "a.i.", "artificial intelligence", "machine learning", "ml", "genai", "llm"},
+    "web": {"web", "website", "web-based"},
+    "designer": {"designer", "designers", "design", "ui/ux", "ui ux", "ui"},
+}
+
+
+def _clean_tokens(text: str) -> list[str]:
+    """Strip punctuation and extract lowercased word tokens."""
+    t = re.sub(r"[^\w\s]", " ", text.lower())
+    return [w for w in t.split() if w]
+
+
+def _token_has_synonym(target_tokens: set[str], token: str) -> bool:
+    """Check if token or any known tech synonym exists in the target tokens."""
+    if token in target_tokens:
+        return True
+    for canon, syn_set in SYNONYM_MAP.items():
+        if token == canon or token in syn_set:
+            if any(syn in target_tokens for syn in syn_set):
+                return True
+    return False
+
+
+def matches_single_keyword(target_text: str, keyword: str) -> bool:
+    """
+    Flexible matching for a single keyword against target text:
+    1. Exact case-insensitive substring
+    2. Punctuation-normalized substring (e.g. 'front-end' -> 'front end')
+    3. Punctuation-squashed substring (e.g. 'front-end' -> 'frontend')
+    4. Token set matching with technology synonym / suffix expansion
+    """
+    kw_lower = keyword.lower().strip()
+    if not kw_lower:
+        return True
+
+    target_lower = target_text.lower()
+
+    # 1. Exact raw substring
+    if kw_lower in target_lower:
+        return True
+
+    # 2. Punctuation-normalized substring
+    kw_clean = " ".join(_clean_tokens(keyword))
+    target_clean = " ".join(_clean_tokens(target_text))
+    if kw_clean and kw_clean in target_clean:
+        return True
+
+    # 3. Squashed alphanumeric substring (e.g. 'front-end' -> 'frontend')
+    kw_squash = re.sub(r"[\W_]+", "", kw_lower)
+    target_squash = re.sub(r"[\W_]+", "", target_lower)
+    if kw_squash and kw_squash in target_squash:
+        return True
+
+    # 4. Token-level set matching with synonyms
+    kw_tokens = _clean_tokens(keyword)
+    if not kw_tokens:
+        return True
+
+    target_token_set = set(_clean_tokens(target_text))
+    all_tokens_matched = True
+    for t in kw_tokens:
+        if not _token_has_synonym(target_token_set, t):
+            all_tokens_matched = False
+            break
+
+    return all_tokens_matched
+
+
 def matches_recipient_keywords(job: dict, recipient_keywords: list[str]) -> bool:
     """
     Check if a job listing matches a recipient's specific keywords.
-    If recipient_keywords is empty, matches ALL jobs.
-    Otherwise, matches if any keyword is a substring in title, company, or description.
+    If recipient_keywords is empty or None, matches ALL jobs.
+    Otherwise, matches if any keyword matches title, company, description, or search_keyword.
     """
     if not recipient_keywords:
         return True
 
-    title = job.get("title", "").lower()
-    company = job.get("company", "").lower()
-    description = job.get("description", "").lower()
+    # Check search query that discovered the job
+    search_kws = job.get("search_keywords", [])
+    if isinstance(search_kws, str):
+        search_kws = [search_kws]
+    if "search_keyword" in job and job["search_keyword"] not in search_kws:
+        search_kws.append(job["search_keyword"])
+
+    title = job.get("title", "")
+    company = job.get("company", "")
+    description = job.get("description", "")
+    full_target_text = f"{title} {company} {description}"
 
     for kw in recipient_keywords:
-        cleaned_kw = kw.strip().lower()
+        cleaned_kw = kw.strip()
         if not cleaned_kw:
             continue
-        if cleaned_kw in title or cleaned_kw in company or cleaned_kw in description:
+
+        # Check search query tags
+        for skw in search_kws:
+            if matches_single_keyword(skw, cleaned_kw) or matches_single_keyword(cleaned_kw, skw):
+                return True
+
+        # Check full job text
+        if matches_single_keyword(full_target_text, cleaned_kw):
             return True
 
     return False
@@ -331,7 +425,7 @@ def send_recipient_alerts(
 
     recipient_name = recipient_config.get("name", destination)
     logger.info(
-        f"Dispatching {len(to_send)} alert(s) across {total_batches} batch(es) to '{recipient_name}' via {platform.upper()}"
+        f"Dispatching {len(to_send)} alert(s) (out of {len(matching_jobs)} matching, {len(jobs)} unalerted) across {total_batches} batch(es) to '{recipient_name}' via {platform.upper()}"
     )
 
     sent_ids: list[str] = []
