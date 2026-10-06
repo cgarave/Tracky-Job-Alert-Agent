@@ -45,9 +45,9 @@ The command listener reads `~/Library/Messages/chat.db` to detect your `/command
 3. In the file picker, press **⌘ Cmd + Shift + G**
 4. Paste this path and press Enter:
    ```
-   /Library/Frameworks/Python.framework/Versions/3.11/bin
+   The directory containing the Python version Tracky selected, for example `/Library/Frameworks/Python.framework/Versions/3.14/bin`
    ```
-5. Select **`python3`** → click **Open** → toggle **ON**
+5. Select the Python binary Tracky reports → click **Open** → toggle **ON**
 6. Restart the daemon (or reboot) for the change to take effect
 
 > **Why Python, not Terminal?** The daemon runs as an independent `python3` process launched by macOS `launchd` — it has no connection to Terminal and needs its own permission grant.

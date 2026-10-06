@@ -1,12 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { 
   Search, 
   Settings, 
   Zap, 
-  Radio
+  Radio,
+  Bell,
+  Menu,
+  X,
+  RotateCcw,
+  FileUser
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +23,7 @@ interface SidebarProps {
   totalJobs: number;
   isPaused: boolean;
   onScanNow: () => void;
+  onDryRun: () => void;
   isScanning: boolean;
   location?: string;
   interval?: number;
@@ -29,17 +35,25 @@ export function Sidebar({
   totalJobs,
   isPaused,
   onScanNow,
+  onDryRun,
   isScanning,
   location,
   interval,
 }: SidebarProps) {
+  const [open, setOpen] = useState(false);
   const navItems = [
     { id: "jobs", label: "Jobs Feed", icon: Search, badge: totalJobs },
     { id: "settings", label: "Alert Settings", icon: Settings },
+    { id: "deliveries", label: "Delivery History", icon: Bell },
+    { id: "dismissed", label: "Dismissed Jobs", icon: RotateCcw },
+    { id: "cv", label: "CV Match", icon: FileUser },
   ];
 
   return (
-    <aside className="w-64 border-r border-slate-200 bg-white flex flex-col p-5 h-screen sticky top-0 z-30 shadow-xs">
+    <>
+    <button className="fixed left-3 top-3 z-50 rounded-lg border border-slate-200 bg-white p-2 text-slate-700 shadow-sm md:hidden" onClick={() => setOpen(!open)} aria-label={open ? "Close navigation" : "Open navigation"}>{open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}</button>
+    {open && <button className="fixed inset-0 z-30 bg-slate-900/20 md:hidden" aria-label="Close navigation" onClick={() => setOpen(false)} />}
+    <aside className={cn("fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white p-5 shadow-xs transition-transform md:sticky md:top-0 md:z-30 md:translate-x-0", open ? "translate-x-0" : "-translate-x-full")}>
       {/* Brand Header */}
       <div className="flex items-center gap-3.5 pb-5 border-b border-slate-100 mb-5">
         <div className="relative w-10 h-10 rounded-xl overflow-hidden shadow-xs border border-slate-200 bg-slate-50">
@@ -73,7 +87,7 @@ export function Sidebar({
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => { setActiveTab(item.id); setOpen(false); }}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all text-left cursor-pointer group",
                 isActive
@@ -114,7 +128,16 @@ export function Sidebar({
           <Zap className={cn("w-3.5 h-3.5 fill-current", isScanning && "animate-spin")} />
           <span>{isScanning ? "Scanning..." : "Run Scan Now"}</span>
         </Button>
+        <Button
+          onClick={onDryRun}
+          disabled={isScanning}
+          variant="outline"
+          className="w-full gap-2 font-medium text-xs h-8"
+        >
+          <span>Test scan</span>
+        </Button>
       </div>
     </aside>
+    </>
   );
 }

@@ -8,6 +8,7 @@ import threading
 from pathlib import Path
 
 import db
+import config_store
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,11 @@ HELP_TEXT = (
 
 
 def _load() -> dict:
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
+    return config_store.load(CONFIG_PATH)
 
 
-def _save(config: dict) -> None:
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
+def _save(patch: dict) -> None:
+    config_store.update(patch, path=CONFIG_PATH)
 
 
 def parse(text: str) -> tuple[str | None, str]:
@@ -112,8 +111,7 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
             if arg.lower() in existing:
                 send_fn(f"ℹ️ “{arg}” is already in your keyword list.")
             else:
-                config.setdefault("keywords", []).append(arg)
-                _save(config)
+                config_store.update(mutate=lambda c: c.update(keywords=list(dict.fromkeys(c['keywords'] + [arg]))), path=CONFIG_PATH)
                 send_fn(f"✅ Added “{arg}” to your keyword list.")
 
     # ── /remove ───────────────────────────────────────────────────────────────
@@ -126,8 +124,7 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
             if len(updated) == len(original):
                 send_fn(f"❌ “{arg}” not found. Use /keywords to see your list.")
             else:
-                config["keywords"] = updated
-                _save(config)
+                config_store.update(mutate=lambda c: c.update(keywords=[k for k in c['keywords'] if k.lower() != arg.lower()]), path=CONFIG_PATH)
                 send_fn(f"✅ Removed “{arg}” from your keyword list.")
 
     # ── /interval ─────────────────────────────────────────────────────────────
@@ -137,8 +134,7 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
             if minutes < 5:
                 send_fn("❌ Minimum interval is 5 minutes.")
             else:
-                config["check_interval_minutes"] = minutes
-                _save(config)
+                _save({"check_interval_minutes": minutes})
                 send_fn(f"✅ Check interval set to every {minutes} minute{'s' if minutes != 1 else ''}.")
         except (ValueError, TypeError):
             send_fn("❌ Usage: /interval <minutes>\nExample: /interval 30")
@@ -148,27 +144,24 @@ def execute(text: str, send_fn, run_now_event: threading.Event | None = None) ->
         if not arg:
             send_fn("❌ Usage: /location <place>\nExample: /location Remote")
         else:
-            config["location"] = arg
-            _save(config)
+            _save({"location": arg})
             send_fn(f"✅ Location set to “{arg}”.")
 
     # ── /pause ────────────────────────────────────────────────────────────────
     elif cmd == "/pause":
-        config["paused"] = True
-        _save(config)
+        _save({"paused": True})
         send_fn("⏸ Scraper paused. Text /resume to restart job scanning.")
 
     # ── /resume ───────────────────────────────────────────────────────────────
     elif cmd == "/resume":
-        config["paused"] = False
-        _save(config)
+        _save({"paused": False})
         send_fn("▶️ Scraper resumed! Next scan coming up.")
 
     # ── /run ──────────────────────────────────────────────────────────────────
     elif cmd == "/run":
         send_fn("🔄 Triggering job scan now… I’ll message you with any new listings.")
         if run_now_event is not None:
-            run_now_event.set()
+            run_now_event.request()
 
     # ── Unknown ───────────────────────────────────────────────────────────────
     else:

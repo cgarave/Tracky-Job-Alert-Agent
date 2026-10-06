@@ -33,9 +33,6 @@ import {
   Edit3,
   Bot,
   Info,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
   Users,
 } from "lucide-react";
 import { testNotification } from "@/lib/api";
@@ -94,7 +91,7 @@ export function SettingsTab({
     }
   }, [settings]);
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: string, value: unknown) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -205,7 +202,7 @@ export function SettingsTab({
     }
 
     // Flush any pending text in modalKeywordInput
-    let finalKeywords = [...(modalRecipient.keywords || [])];
+    const finalKeywords = [...(modalRecipient.keywords || [])];
     if (modalKeywordInput.trim()) {
       const tokens = modalKeywordInput
         .split(/[,;\n]/)
@@ -306,8 +303,8 @@ export function SettingsTab({
       } else {
         toast.error(res.message || "Failed to deliver test notification.");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Test delivery failed. Check network or credentials.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Test delivery failed. Check network or credentials.");
     } finally {
       setTestingRecipientId(null);
     }
@@ -320,7 +317,7 @@ export function SettingsTab({
     e.preventDefault();
     setIsSaving(true);
 
-    let finalKeywords = [...(formData.keywords || [])];
+    const finalKeywords = [...(formData.keywords || [])];
     if (globalKeywordInput.trim()) {
       const tokens = globalKeywordInput
         .split(/[,;\n]/)

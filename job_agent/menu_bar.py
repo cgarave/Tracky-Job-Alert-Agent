@@ -19,9 +19,11 @@ same job_agent/ directory:
 """
 import atexit
 import json
+import config_store
 import logging
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -51,29 +53,19 @@ logging.basicConfig(level=logging.WARNING)
 # ---------------------------------------------------------------------------
 
 def _load_config() -> dict:
-    try:
-        with open(CONFIG_PATH) as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    return config_store.load(CONFIG_PATH)
 
 
-def _save_config(config: dict) -> None:
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=2)
+def _save_config(patch: dict) -> None:
+    config_store.update(patch, path=CONFIG_PATH)
 
 
 def _pause_agent_on_exit() -> None:
-    """Ensure the background scraper is set to paused state when menu bar app exits."""
+    """Persist a paused state before quitting so a later launch cannot scan unexpectedly."""
     try:
-        config = _load_config()
-        config["paused"] = True
-        _save_config(config)
+        _save_config({"paused": True})
     except Exception:
-        pass
-
-
-atexit.register(_pause_agent_on_exit)
+        logging.getLogger(__name__).exception("Could not persist paused state while quitting")
 
 
 def _load_status() -> dict:
@@ -133,7 +125,7 @@ def _ensure_daemon_running() -> None:
     main_py = BASE_DIR / "main.py"
     if main_py.exists():
         try:
-            python_bin = sys.executable or "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+            python_bin = sys.executable or shutil.which("python3") or "python3"
             subprocess.Popen(
                 [python_bin, str(main_py)],
                 cwd=str(BASE_DIR),
@@ -420,15 +412,13 @@ class TrackyApp(rumps.App):
         if not _is_daemon_running():
             _ensure_daemon_running()
             config = _load_config()
-            config["paused"] = False
-            _save_config(config)
+            _save_config({"paused": False})
             rumps.notification("Tracky", "", "Started background daemon and resumed scraper.", sound=False)
             self._refresh_status()
             return
 
         config = _load_config()
-        config["paused"] = not config.get("paused", False)
-        _save_config(config)
+        config_store.update(mutate=lambda c: c.update(paused=not c['paused']), path=CONFIG_PATH)
         self._refresh_status()
 
     def _on_add_keyword(self, _):
@@ -452,8 +442,8 @@ class TrackyApp(rumps.App):
             rumps.alert(f'"{kw}" is already in your keyword list.')
             return
 
+        config_store.update(mutate=lambda c: c.update(keywords=list(dict.fromkeys(c['keywords'] + [kw]))), path=CONFIG_PATH)
         kws.append(kw)
-        _save_config(config)
         self._last_keywords = list(kws)
         self._rebuild_keywords()
         rumps.notification("Tracky", "", f'Added: "{kw}"', sound=False)
@@ -486,8 +476,7 @@ class TrackyApp(rumps.App):
             rumps.alert(f'"{term}" not found in your keyword list.')
             return
 
-        config["keywords"] = updated
-        _save_config(config)
+        config_store.update(mutate=lambda c: c.update(keywords=[k for k in c['keywords'] if k.lower() != term.lower()]), path=CONFIG_PATH)
         self._last_keywords = list(updated)
         self._rebuild_keywords()
         rumps.notification("Tracky", "", f'Removed: "{term}"', sound=False)
@@ -511,11 +500,10 @@ class TrackyApp(rumps.App):
         except ValueError:
             rumps.alert("Please enter a whole number.")
             return
-        if mins < 5:
-            rumps.alert("Minimum interval is 5 minutes.")
+        if not 5 <= mins <= 1440:
+            rumps.alert("Interval must be between 5 and 1440 minutes.")
             return
-        config["check_interval_minutes"] = mins
-        _save_config(config)
+        _save_config({"check_interval_minutes": mins})
         self._refresh_status()
         rumps.notification("Tracky", "", f"Interval: every {mins} min.", sound=False)
 
@@ -533,8 +521,7 @@ class TrackyApp(rumps.App):
         r = w.run()
         if not r.clicked or not r.text.strip():
             return
-        config["location"] = r.text.strip()
-        _save_config(config)
+        _save_config({"location": r.text.strip()})
         self._refresh_status()
 
     def _on_set_recipient(self, _):
@@ -551,8 +538,7 @@ class TrackyApp(rumps.App):
         r = w.run()
         if not r.clicked or not r.text.strip():
             return
-        config["recipient"] = r.text.strip()
-        _save_config(config)
+        _save_config({"recipient": r.text.strip()})
         self._refresh_status()
         rumps.notification("Tracky", "", "Recipient updated.", sound=False)
 
@@ -564,10 +550,13 @@ class TrackyApp(rumps.App):
 
     def _on_quit_tracky(self, _):
         """Cleanly shutdown Tracky: pause scraper, stop daemon & web server, unload services, and quit."""
-        _pause_agent_on_exit()
-        _stop_daemon_and_server()
-        _unload_menubar_service()
-        rumps.quit_application()
+        try:
+            _pause_agent_on_exit()
+            _stop_daemon_and_server()
+            _unload_menubar_service()
+        finally:
+            # Always exit the menu-bar process even if launchctl or cleanup is unavailable.
+            rumps.quit_application()
 
 
 # ---------------------------------------------------------------------------

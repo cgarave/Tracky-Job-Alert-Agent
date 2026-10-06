@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DeleteConfirmModal } from "@/components/modals/delete-confirm-modal";
 import { JobDetailsModal } from "@/components/modals/job-details-modal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   ExternalLink,
   Search,
@@ -34,13 +35,22 @@ interface JobsTabProps {
   jobs: Job[];
   totalTrackedCount: number;
   onRefresh: () => void;
+  isLoading?: boolean;
+  error?: string | null;
+  page?: number;
+  hasNextPage?: boolean;
+  onPageChange?: (page: number) => void;
+  availableSources?: string[];
+  onQueryChange?: (query: { search: string; source: string; alertStatus: string; saved: boolean; applicationStatus?: string; sort?: string }) => void;
 }
 
-export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
+export function JobsTab({ jobs, totalTrackedCount, onRefresh, isLoading = false, error = null, page = 1, hasNextPage = false, onPageChange, availableSources = [], onQueryChange }: JobsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSource, setSelectedSource] = useState("all");
   const [selectedAlertFilter, setSelectedAlertFilter] = useState<"all" | "alerted" | "unalerted">("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
+  const [feedMode, setFeedMode] = useState<"all" | "saved" | "applied">("all");
+  const [sort, setSort] = useState<"newest" | "cv_fit">("newest");
 
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -57,8 +67,18 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
 
   // Job Details modal state
   const [activeDetailJob, setActiveDetailJob] = useState<Job | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pendingApply, setPendingApply] = useState<Job | null>(null);
 
-  const sources = useMemo(() => ["all", ...Array.from(new Set(jobs.map((j) => j.source)))], [jobs]);
+  const sources = useMemo(() => ["all", ...Array.from(new Set([...availableSources, ...jobs.map((j) => j.source)]))], [availableSources, jobs]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      onQueryChange?.({ search: searchTerm, source: selectedSource, alertStatus: selectedAlertFilter,
+        saved: feedMode === "saved", applicationStatus: feedMode === "applied" ? "applied" : undefined, sort });
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm, selectedSource, selectedAlertFilter, feedMode, sort, onQueryChange]);
 
   // Counts for Alert status filter pills
   const alertedCount = useMemo(() => jobs.filter((j) => Boolean(j.is_alerted)).length, [jobs]);
@@ -154,13 +174,23 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
   // Keyboard shortcut: Escape to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      const current = activeDetailJob ? filteredJobs.findIndex((job) => job.job_id === activeDetailJob.job_id) : -1;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = Math.max(0, Math.min(filteredJobs.length - 1, current + (e.key === "ArrowDown" ? 1 : -1)));
+        if (filteredJobs[next]) setActiveDetailJob(filteredJobs[next]);
+      } else if (e.key === "Enter" && filteredJobs[0] && !activeDetailJob) {
+        setActiveDetailJob(filteredJobs[0]);
+      }
       if (e.key === "Escape" && selectedIds.size > 0 && !isDeleteModalOpen && !activeDetailJob) {
         handleClearSelection();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIds, isDeleteModalOpen, activeDetailJob, handleClearSelection]);
+  }, [selectedIds, isDeleteModalOpen, activeDetailJob, filteredJobs, handleClearSelection]);
 
   // Open delete modal for single item
   const handlePromptSingleDelete = (job: Job, e?: React.MouseEvent) => {
@@ -210,9 +240,67 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
     }
   };
 
+  const handleSave = useCallback(async (job: Job) => {
+    setActionLoading(job.job_id);
+    try { await api.saveJobs([job.job_id], !Boolean(job.is_saved)); toast.success(job.is_saved ? "Removed from saved jobs" : "Job saved"); onRefresh(); }
+    catch (err) { toast.error(err instanceof Error ? err.message : "Could not update saved job"); }
+    finally { setActionLoading(null); }
+  }, [onRefresh]);
+
+  const confirmApplied = useCallback(async (job: Job, status: string) => {
+    setActionLoading(job.job_id);
+    try { await api.markJobsApplied([job.job_id], status); toast.success(status === "applied" ? "Marked as applied" : "Application mark removed"); onRefresh(); }
+    catch (err) { toast.error(err instanceof Error ? err.message : "Could not update application status"); }
+    finally { setActionLoading(null); }
+  }, [onRefresh]);
+
+  const handleApplied = useCallback(async (job: Job) => {
+    if (job.application_status === "applied") {
+      await confirmApplied(job, "");
+      return;
+    }
+    setPendingApply(job);
+  }, [confirmApplied]);
+
+  useEffect(() => {
+    const handleActionShortcut = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || !activeDetailJob) return;
+      if (e.key.toLowerCase() === "s") void handleSave(activeDetailJob);
+      if (e.key.toLowerCase() === "a") void handleApplied(activeDetailJob);
+    };
+    window.addEventListener("keydown", handleActionShortcut);
+    return () => window.removeEventListener("keydown", handleActionShortcut);
+  }, [activeDetailJob, handleSave, handleApplied]);
+
   return (
     <div className="flex flex-col gap-5 relative pb-16">
+      <Dialog open={Boolean(pendingApply)} onOpenChange={(open) => !open && setPendingApply(null)}>
+        <DialogContent className="max-w-md bg-white text-slate-900">
+          <DialogHeader>
+            <DialogTitle>Mark this job as applied?</DialogTitle>
+            <DialogDescription>
+              This changes the job’s status to Applied. You can undo it later by clicking Applied again.
+            </DialogDescription>
+          </DialogHeader>
+          {pendingApply && <p className="rounded-lg bg-slate-50 p-3 text-sm font-medium text-slate-800">{pendingApply.title} at {pendingApply.company}</p>}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingApply(null)}>Cancel</Button>
+            <Button onClick={async () => { if (pendingApply) { const job = pendingApply; setPendingApply(null); await confirmApplied(job, "applied"); } }}>Mark as applied</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {isLoading && <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500" role="status">Loading your job feed…</div>}
+      {error && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert"><span>{error}</span><button className="font-semibold underline" onClick={onRefresh}>Retry</button></div>}
       {/* Controls & Filter Bar */}
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Job feed view">
+        {([['all', 'All jobs'], ['saved', 'Saved'], ['applied', 'Applied']] as const).map(([mode, label]) => (
+          <button key={mode} role="tab" aria-selected={feedMode === mode} onClick={() => setFeedMode(mode)}
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold ${feedMode === mode ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex flex-1 items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />
@@ -234,6 +322,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-600">Sort <select aria-label="Sort jobs" value={sort} onChange={(event) => setSort(event.target.value as "newest" | "cv_fit")} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-slate-800"><option value="newest">Newest</option><option value="cv_fit">Best CV fit</option></select></label>
           {/* iMessage Alert Sent Filter */}
           <div className="flex items-center rounded-lg bg-slate-100 p-1 border border-slate-200/80 text-xs">
             <button
@@ -314,6 +403,13 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
           </div>
         </div>
       </div>
+      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+        <span>Page {page} · {totalTrackedCount} tracked listings</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange?.(page - 1)}>Previous</Button>
+          <Button variant="outline" size="sm" disabled={!hasNextPage} onClick={() => onPageChange?.(page + 1)}>Next</Button>
+        </div>
+      </div>
 
       {/* Results Header, Selection Status & Select All Checkbox */}
       <div className="flex items-center justify-between text-xs text-slate-500 px-1">
@@ -370,6 +466,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                     />
                   </th>
                   <th className="py-3 px-3 min-w-[280px]">Title & Company</th>
+                  <th className="py-3 px-3 min-w-[105px]">CV fit</th>
                   <th className="py-3 px-3 min-w-[170px]">Platform & Delivery</th>
                   <th className="py-3 px-3 min-w-[140px]">Location</th>
                   <th className="py-3 px-3 min-w-[130px]">Salary</th>
@@ -418,6 +515,8 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                           <span className="truncate">{job.company}</span>
                         </span>
                       </td>
+
+                      <td className="py-3 px-3 text-xs font-semibold text-blue-700">{job.cv_score == null ? "—" : `${job.cv_score}%`}</td>
 
                       <td className="py-3 px-3 min-w-[170px] whitespace-nowrap">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -473,6 +572,12 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Details</span>
+                          </Button>
+                          <Button variant="ghost" size="sm" disabled={actionLoading === job.job_id} onClick={() => handleSave(job)} className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50" title={job.is_saved ? "Unsave job" : "Save job"}>
+                            {job.is_saved ? "Saved" : "Save"}
+                          </Button>
+                          <Button variant="ghost" size="sm" disabled={actionLoading === job.job_id} onClick={() => handleApplied(job)} className="h-7 px-2 text-xs text-emerald-700 hover:bg-emerald-50" title="Mark as applied">
+                            {job.application_status === "applied" ? "Applied" : "Apply"}
                           </Button>
 
                           <Button
@@ -537,6 +642,7 @@ export function JobsTab({ jobs, totalTrackedCount, onRefresh }: JobsTabProps) {
                       <Badge variant="outline" className="text-[10px] bg-white border-slate-200 text-slate-700">
                         {job.source}
                       </Badge>
+                      {job.cv_score != null && <Badge variant="outline" className="border-blue-200 bg-blue-50 text-[10px] text-blue-800">{job.cv_score}% CV fit</Badge>}
 
                       {isAlerted ? (
                         <Badge variant="default" className="text-[10px] gap-1 flex items-center">

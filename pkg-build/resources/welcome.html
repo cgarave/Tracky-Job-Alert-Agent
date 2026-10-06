@@ -1,52 +1,35 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8">
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-      font-size: 13px;
-      color: #1d1d1f;
-      padding: 20px 24px;
-      line-height: 1.6;
-    }
-    h2 { font-size: 17px; margin-top: 0; color: #1d1d1f; }
-    .feature { margin: 6px 0; }
-    .feature span { margin-right: 8px; }
-    code {
-      background: #f2f2f7;
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-family: "SF Mono", Menlo, monospace;
-    }
-    .note {
-      background: #fff3cd;
-      border-left: 3px solid #ff9500;
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin-top: 16px;
-      font-size: 12px;
-    }
+    body { margin: 0; padding: 24px 26px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #202124; text-align: center; }
+    .mark { width: 46px; height: 46px; margin: 0 auto 7px; border-radius: 12px; background: #102f54; color: #f7d58e; font-size: 24px; font-weight: 700; line-height: 46px; }
+    .name { margin: 0; color: #102f54; font-size: 19px; font-weight: 700; }
+    .tagline { margin: 1px 0 16px; color: #747982; font-size: 11px; }
+    .progress { margin: 0 auto 18px; color: #2463eb; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .progress span { display: inline-block; padding: 5px 11px; border-radius: 20px; background: #edf3ff; }
+    .progress i { display: inline-block; width: 22px; height: 1px; margin: 0 4px 3px; background: #d9dfe8; }
+    h1 { margin: 0 0 7px; font-size: 20px; line-height: 1.2; }
+    .intro { margin: 0 auto 15px; color: #68717b; }
+    .panel { margin: 0 auto; padding: 12px 15px; border: 1px solid #dfe3e8; border-radius: 10px; background: #f8fafc; text-align: left; }
+    .panel-title { margin: 0 0 8px; color: #31363d; font-size: 11px; font-weight: 700; text-align: center; }
+    .item { margin: 6px 0 0; color: #68717b; font-size: 11px; }
+    .item b { color: #343a42; }
+    .item em { color: #2463eb; font-style: normal; font-weight: 700; }
+    .action { margin: 16px auto 0; padding: 9px 14px; border-radius: 8px; background: #2463eb; color: #fff; font-size: 12px; font-weight: 700; }
+    .hint { margin: 6px 0 0; color: #858b93; font-size: 10px; }
   </style>
 </head>
 <body>
-  <h2>🐶 Tracky — PH Job Alert Agent</h2>
-  <p>This installer will set up Tracky, a background job hunter agent that monitors Philippine job boards and sends iMessage alerts directly to your iPhone.</p>
-
-  <p><strong>What gets installed:</strong></p>
-  <div class="feature"><span>🔍</span> Job scraper for Indeed.ph, JobStreet.ph, and OnlineJobs.ph</div>
-  <div class="feature"><span>📱</span> iMessage notification system</div>
-  <div class="feature"><span>💬</span> Two-way bot — control via iMessage commands from iPhone</div>
-  <div class="feature"><span>🔁</span> Background daemon that runs automatically at login</div>
-
-  <p><strong>Default keywords searched:</strong><br/>
-  software engineer · frontend engineer · web developer · ai engineer · full stack developer · react developer</p>
-
-  <p>You can add or remove keywords anytime by texting <code>/add</code> or <code>/remove</code> to yourself.</p>
-
-  <div class="note">
-    <strong>⚠️ After installation:</strong> Go to <strong>System Settings → Privacy &amp; Security → Full Disk Access</strong> and add Python to enable the iMessage command interface.
-  </div>
+  <div class="mark" aria-hidden="true">T</div>
+  <p class="name">Tracky</p>
+  <p class="tagline">Local job discovery for macOS</p>
+  <div class="progress"><span>1&nbsp; Welcome</span><i></i><span>2&nbsp; Setup</span><i></i><span>3&nbsp; Ready</span></div>
+  <h1>Find better jobs faster.</h1>
+  <p class="intro">Tracky brings job discovery, matching keywords, and alerts into one quiet background service.</p>
+  <div class="panel"><p class="panel-title">Included with Tracky</p><p class="item"><em>✓</em> <b>Private dashboard</b> for reviewing listings on this Mac.</p><p class="item"><em>✓</em> <b>Scheduled discovery</b> across supported job boards.</p><p class="item"><em>✓</em> <b>Optional notifications</b> through Messages or Telegram.</p></div>
+  <div class="action">Continue to setup</div>
+  <p class="hint">Use the Installer Continue button to move forward.</p>
 </body>
 </html>

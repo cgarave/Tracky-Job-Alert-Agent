@@ -2,11 +2,13 @@
 <installer-gui-script minSpecVersion="2">
 
     <!-- Package identity -->
-    <title>Tracky — PH Job Alert Agent</title>
+    <title>Tracky</title>
     <organization>com.jobagent</organization>
 
     <!-- Welcome screen -->
     <welcome file="welcome.html" mime-type="text/html"/>
+    <readme file="readme.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
 
     <!-- Require the user to be an admin -->
     <allowed-os-versions>
@@ -29,7 +31,7 @@
         <line choice="default"/>
     </choices-outline>
 
-    <choice id="default" title="Tracky — PH Job Alert Agent" description="Installs the Tracky job alert agent and background daemon.">
+    <choice id="default" title="Tracky" description="Installs the Tracky dashboard, background scanner, and menu bar app.">
         <pkg-ref id="com.jobagent.pkg"/>
     </choice>
 

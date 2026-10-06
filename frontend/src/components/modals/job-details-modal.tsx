@@ -134,6 +134,7 @@ export function JobDetailsModal({ job, isOpen, onClose, onDelete }: JobDetailsMo
             <FileText className="w-4 h-4 text-blue-600" />
             <span>Job Description & Requirements</span>
           </div>
+          {job.cv_score != null && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3"><p className="font-semibold text-blue-900">{job.cv_score}% CV fit</p><p className="mt-1 text-blue-800">Matched skills: {job.cv_reasons?.matched_skills?.join(", ") || "No explicit skill overlap found"}</p>{Boolean(job.cv_reasons?.missing_skills?.length) && <p className="mt-1 text-blue-800">Skills mentioned in listing but not detected in CV: {job.cv_reasons?.missing_skills?.join(", ")}</p>}{job.cv_reasons?.limited_description && <p className="mt-1 text-blue-700">Limited description available; treat this score as provisional.</p>}</div>}
 
           {hasDescription ? (
             <div className="whitespace-pre-line font-sans text-slate-800 text-[13px] leading-relaxed select-text space-y-2">
