@@ -23,6 +23,7 @@ import signal
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from pathlib import Path
 
@@ -33,18 +34,16 @@ from pathlib import Path
 # cause every line to be written twice.  Only attach StreamHandler when
 # running interactively in a terminal.
 # ---------------------------------------------------------------------------
-LOG_PATH = Path.home() / "Library" / "Logs" / "jobagent.log"
-LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+def configure_logging():
+    path = Path.home() / "Library" / "Logs" / "jobagent.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                        handlers=[logging.FileHandler(path), logging.StreamHandler()])
 
-_handlers: list[logging.Handler] = [logging.FileHandler(LOG_PATH)]
-if sys.stdout.isatty():
-    _handlers.append(logging.StreamHandler(sys.stdout))
+import config_store
+from scan_state import ScanState, now
+scan_state = ScanState()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=_handlers,
-)
 logger = logging.getLogger("job_agent")
 
 # ---------------------------------------------------------------------------
@@ -60,7 +59,7 @@ RUN_NOW_FLAG = BASE_DIR / "run_now.flag"  # Written by menu bar app
 # Shared event — set by the /run iMessage command OR by SIGUSR1 from the
 # menu bar app to trigger an immediate scrape without waiting for the interval.
 # ---------------------------------------------------------------------------
-run_now_event = threading.Event()
+run_now_event = scan_state.event
 
 
 # ---------------------------------------------------------------------------
@@ -69,15 +68,14 @@ run_now_event = threading.Event()
 
 def _handle_sigusr1(signum, frame) -> None:
     logger.info("SIGUSR1 received — triggering immediate scan.")
-    run_now_event.set()
+    scan_state.request()
 
 def _handle_sigterm(signum, frame) -> None:
     logger.info("SIGTERM received — shutting down Tracky daemon.")
     _delete_pid()
     sys.exit(0)
 
-signal.signal(signal.SIGUSR1, _handle_sigusr1)
-signal.signal(signal.SIGTERM, _handle_sigterm)
+
 
 
 # ---------------------------------------------------------------------------
@@ -99,17 +97,12 @@ def _delete_pid() -> None:
 
 def _write_status(jobs_tracked: int) -> None:
     try:
-        STATUS_PATH.write_text(
-            json.dumps(
-                {
-                    "last_scan_time": datetime.now().isoformat(timespec="seconds"),
-                    "jobs_tracked": jobs_tracked,
-                },
-                indent=2,
-            )
-        )
-    except Exception as exc:
-        logger.warning(f"Could not write status.json: {exc}")
+        config_store.atomic_json(STATUS_PATH, {
+            "last_scan_time": scan_state.snapshot().get('completed_at'),
+            "jobs_tracked": jobs_tracked, "scan": scan_state.snapshot(),
+        })
+    except OSError:
+        logger.warning("Could not persist scan status")
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +112,7 @@ def _write_status(jobs_tracked: int) -> None:
 
 def load_config() -> dict:
     """Read config.json from disk (called fresh on every loop iteration)."""
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
+    return config_store.load(CONFIG_PATH)
 
 
 def get_active_recipients(config: dict) -> list[dict]:
@@ -129,7 +121,7 @@ def get_active_recipients(config: dict) -> list[dict]:
     Supports new `recipients` array as well as legacy `recipient` comma-separated string.
     """
     raw_recipients = config.get("recipients")
-    if isinstance(raw_recipients, list) and len(raw_recipients) > 0:
+    if isinstance(raw_recipients, list):
         results = []
         for idx, r in enumerate(raw_recipients):
             if not isinstance(r, dict):
@@ -214,11 +206,27 @@ def _run_scrape(config: dict, db_conn, dry_run: bool = False) -> list[dict]:
 
     new_jobs: list[dict] = []
     seen_ids: set[str] = set()  # deduplicate within a single run
+    sources = (indeed, jobstreet, onlinejobs, linkedin)
+    workers = max(1, min(8, int(config.get('scan_workers', 4))))
+    timeout_seconds = max(5, min(300, int(config.get('source_timeout_seconds', 45))))
+    tasks = [(keyword, scraper) for keyword in keywords for scraper in sources]
 
-    for keyword in keywords:
-        for scraper in (indeed, jobstreet, onlinejobs, linkedin):
+    def scrape_one(keyword, scraper):
+        return scraper.scrape(keyword, location, max_results)
+
+    scan_state.update(total_tasks=len(tasks))
+    executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix='tracky-scraper')
+    futures = {executor.submit(scrape_one, keyword, scraper): (keyword, scraper) for keyword, scraper in tasks}
+    try:
+        for future in as_completed(futures):
+            keyword, scraper = futures[future]
+            source = scraper.__name__.split('.')[-1]
+            error = None
+            source_started = time.monotonic()
+            result_count = 0
             try:
-                jobs = scraper.scrape(keyword, location, max_results)
+                jobs = future.result(timeout=timeout_seconds)
+                result_count = len(jobs)
                 for job in jobs:
                     job_id = db_module.make_job_id(job["title"], job["company"], job["url"])
                     job["job_id"] = job_id
@@ -241,91 +249,93 @@ def _run_scrape(config: dict, db_conn, dry_run: bool = False) -> list[dict]:
                                     existing_job["search_keywords"] = []
                                 if keyword not in existing_job["search_keywords"]:
                                     existing_job["search_keywords"].append(keyword)
+            except FuturesTimeoutError:
+                future.cancel()
+                error = f'Source exceeded {timeout_seconds}s deadline'
+                logger.error("Scraper timed out: %s", source)
             except Exception as exc:
-                logger.error(f"Scraper error ({scraper.__name__}, '{keyword}'): {exc}")
+                error = str(exc)
+                logger.error("Scraper failed: %s", source)
+            finally:
+                duration_ms = round((time.monotonic() - source_started) * 1000)
+                category = ('timeout' if error and 'deadline' in error else
+                            'rate_limited' if error and any(word in error.lower() for word in ('429', 'rate')) else
+                            'blocked' if error and any(word in error.lower() for word in ('captcha', 'blocked', 'forbidden')) else
+                            'parser' if error and any(word in error.lower() for word in ('parse', 'selector')) else
+                            'unavailable' if error and any(word in error.lower() for word in ('connect', 'unavailable', 'timeout')) else None)
+                scan_state.task_done(source, keyword, error, duration_ms, result_count)
+                db_module.record_source_health(db_conn, source, duration_ms=duration_ms,
+                                               result_count=result_count, error=error,
+                                               error_category=category)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
+    if not dry_run:
+        # Persist all discovery keywords after duplicate results have been merged.
+        for job in new_jobs:
+            db_module.mark_seen(db_conn, job)
     return new_jobs
 
 
-def scraper_loop(dry_run: bool = False) -> None:
-    """
-    Main scraper loop.  In normal mode this runs forever; in --dry-run mode
-    it executes exactly once and returns.
-    """
-    import db as db_module
-    import notifier
-
-    db_conn = db_module.get_connection()
-
-    while True:
-        config = load_config()
-        recipients = get_active_recipients(config)
-        bot_token = config.get("telegram_bot_token", "")
-
-        # Check for flag file written by menu bar "Run Now" button
-        if RUN_NOW_FLAG.exists():
-            RUN_NOW_FLAG.unlink(missing_ok=True)
-            run_now_event.set()
-
-        if config.get("paused", False):
-            logger.info("Scraper is paused. Sleeping 60 s...")
-            if dry_run:
-                return
-            run_now_event.wait(timeout=60)
-            run_now_event.clear()
-            continue
-
-        logger.info("=== Job scan starting ===")
-        new_jobs = _run_scrape(config, db_conn, dry_run=dry_run)
-        logger.info(f"=== Scan complete — {len(new_jobs)} new job(s) found ===")
-
-        # Update status.json for the menu bar
+def run_scan(config, conn, dry_run=False):
+    import db
+    import delivery
+    scan_state.begin(0)
+    scan_state.update(dry_run=bool(dry_run))
+    try:
+        jobs = _run_scrape(config, conn, dry_run=dry_run)
         if not dry_run:
-            _write_status(db_module.total_seen(db_conn))
+            counts = delivery.dispatch(conn, get_active_recipients(config), config.get('telegram_bot_token', ''))
+            scan_state.update(deliveries=counts)
+        scan_state.finish(len(jobs))
+        return jobs
+    except Exception as exc:
+        scan_state.finish(error=str(exc))
+        logger.exception('Scan failed')
+        return []
+    finally:
+        if not dry_run:
+            _write_status(db.total_seen(conn))
 
+
+def scraper_loop(dry_run: bool = False) -> None:
+    """Poll settings promptly, schedule scans, and drain pending deliveries."""
+    import db
+    import delivery
+    conn = db.get_connection()
+    last_scan = None
+    last_delivery = 0
+    was_paused = True
+    try:
         if dry_run:
-            if new_jobs:
-                print(f"\n[DRY RUN] {len(new_jobs)} new job(s) would be sent:\n")
-                for job in new_jobs[:10]:
-                    print(f"  • {job['title']} @ {job['company']} ({job['source']})")
-                    print(f"    {job['url']}\n")
-            else:
-                print("\n[DRY RUN] No new jobs found (or all already seen).")
-            return  # Exit after one pass in dry-run mode
-
-        if new_jobs and recipients:
-            for rec in recipients:
-                if not rec.get("enabled", True):
-                    continue
-                rec_id = rec.get("id") or rec.get("destination")
-                # Find matching jobs not yet alerted to this recipient
-                unalerted_jobs = [
-                    j for j in new_jobs
-                    if not db_module.is_alerted_for_recipient(db_conn, j["job_id"], rec_id)
-                ]
-                if not unalerted_jobs:
-                    continue
-
-                sent_ids = notifier.send_recipient_alerts(rec, unalerted_jobs, bot_token=bot_token)
-                if sent_ids:
-                    db_module.mark_batch_alerted_for_recipient(
-                        db_conn,
-                        sent_ids,
-                        recipient_id=rec_id,
-                        platform=rec.get("platform", "imessage"),
-                    )
-                    logger.info(
-                        f"Delivered and marked {len(sent_ids)} alert(s) for '{rec.get('name')}' ({rec.get('platform')})"
-                    )
-        elif not recipients:
-            logger.warning("No active recipients configured in settings — job alerts cannot be sent.")
-
-        interval_minutes = config.get("check_interval_minutes", 60)
-        logger.info(f"Next scan in {interval_minutes} minute(s).")
-
-        # Sleep for the interval, but wake early if /run command or SIGUSR1 fires
-        run_now_event.wait(timeout=interval_minutes * 60)
-        run_now_event.clear()
+            jobs = run_scan(load_config(), conn, dry_run=True)
+            print(f"[DRY RUN] {len(jobs)} new listings; no notifications sent.")
+            return
+        while True:
+            try:
+                config = load_config()
+                if RUN_NOW_FLAG.exists():
+                    RUN_NOW_FLAG.unlink(missing_ok=True)
+                    scan_state.request()
+                paused = config.get('paused', True)
+                manual = run_now_event.is_set()
+                manual_dry_run = scan_state.consume_request_mode() if manual else False
+                due = not paused and (was_paused or last_scan is None or
+                      time.monotonic() - last_scan >= config['check_interval_minutes'] * 60)
+                was_paused = paused
+                if manual or due:
+                    run_scan(config, conn, dry_run=manual_dry_run)
+                    last_scan = time.monotonic()
+                    last_delivery = last_scan
+                elif not paused and time.monotonic() - last_delivery >= 60:
+                    counts = delivery.dispatch(conn, get_active_recipients(config), config.get('telegram_bot_token', ''))
+                    scan_state.update(deliveries=counts)
+                    last_delivery = time.monotonic()
+            except Exception:
+                logger.exception('Daemon cycle failed; retrying on next tick')
+            run_now_event.wait(timeout=1)
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -352,32 +362,14 @@ def listener_loop() -> None:
         try:
             config = load_config()
             recipients = [
-                r["destination"] for r in get_active_recipients(config)
-                if r.get("platform") == "imessage" and r.get("destination")
+                r['destination'] for r in get_active_recipients(config)
+                if r.get('enabled', True) and r['platform'] == 'imessage' and r['destination']
             ]
-            if not recipients:
-                continue
-
-            # Check for menu bar "Run Now" flag file
-            if RUN_NOW_FLAG.exists():
-                RUN_NOW_FLAG.unlink(missing_ok=True)
-                logger.info("run_now.flag detected — triggering immediate scan.")
-                run_now_event.set()
-
-            for target in recipients:
-                messages = get_messages_since(target, last_check)
-                for msg in messages:
-                    text = msg["text"]
-                    logger.info(f"Incoming message from {target}: {text!r}")
-
-                    def make_send_fn(dest: str):
-                        return lambda reply: send_imessage(dest, reply)
-
-                    handled = commander.execute(text, make_send_fn(target), run_now_event)
-                    if handled:
-                        logger.info(f"Command handled for {target}: {text!r}")
-
-            last_check = time.time()
+            # Use the poll start as the next boundary so arrivals during processing aren't lost.
+            poll_started = time.time()
+            for msg in get_messages_since(recipients, last_check):
+                commander.execute(msg['text'], lambda reply, dest=msg['reply_to']: send_imessage(dest, reply), scan_state)
+            last_check = poll_started
         except Exception as exc:
             logger.error(f"Listener loop error: {exc}")
 
@@ -387,6 +379,9 @@ def listener_loop() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    configure_logging()
+    signal.signal(signal.SIGUSR1, _handle_sigusr1)
+    signal.signal(signal.SIGTERM, _handle_sigterm)
     dry_run = "--dry-run" in sys.argv
 
     if dry_run:
@@ -398,16 +393,6 @@ def main() -> None:
     recipients = get_active_recipients(config)
 
     logger.info("=== Tracky starting ===")
-
-    # Initialize app daemon in PAUSED state on startup
-    try:
-        if CONFIG_PATH.exists():
-            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            cfg["paused"] = True
-            CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-            logger.info("⏸ App daemon initialized in PAUSED state by default.")
-    except Exception as exc:
-        logger.warning(f"Could not set initial paused state: {exc}")
 
     if not recipients and not config.get("recipient"):
         logger.info(
@@ -422,7 +407,7 @@ def main() -> None:
         http_server = None
         try:
             from dashboard_server import start_dashboard_server
-            http_server = start_dashboard_server(port=5050, background=True)
+            http_server = start_dashboard_server(port=5050, background=True, scan_controller=scan_state)
             logger.info("🐶 Tracky Control Center Dashboard started at http://127.0.0.1:5050")
         except Exception as exc:
             logger.warning(f"Could not start dashboard server: {exc}")

@@ -44,14 +44,22 @@ cp "$SCRIPT_DIR/job_agent/commander.py"        "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/listener.py"         "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/notifier.py"         "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/db.py"               "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/profile_manager.py"  "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/config_store.py"     "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/delivery.py"         "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/scan_state.py"       "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/python_runtime.py"   "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/cv_match.py"          "$INSTALL_DIR/job_agent/"
+cp "$SCRIPT_DIR/job_agent/bootstrap_runtime.sh" "$INSTALL_DIR/"
+[ ! -f "$SCRIPT_DIR/job_agent/profile_manager.py" ] || cp "$SCRIPT_DIR/job_agent/profile_manager.py"  "$INSTALL_DIR/job_agent/"
 cp "$SCRIPT_DIR/job_agent/dashboard_server.py" "$INSTALL_DIR/job_agent/"
-cp "$SCRIPT_DIR/job_agent/ai_parser.py"       "$INSTALL_DIR/job_agent/"
+[ ! -f "$SCRIPT_DIR/job_agent/ai_parser.py" ] || cp "$SCRIPT_DIR/job_agent/ai_parser.py"       "$INSTALL_DIR/job_agent/"
 
 
 # Applier module
-mkdir -p "$INSTALL_DIR/job_agent/applier"
-cp -r "$SCRIPT_DIR/job_agent/applier/"* "$INSTALL_DIR/job_agent/applier/"
+if [ -d "$SCRIPT_DIR/job_agent/applier" ]; then
+  mkdir -p "$INSTALL_DIR/job_agent/applier"
+  cp -r "$SCRIPT_DIR/job_agent/applier/"* "$INSTALL_DIR/job_agent/applier/"
+fi
 
 # Static Web GUI bundle (compiled Next.js + shadcn UI)
 mkdir -p "$INSTALL_DIR/job_agent/static"
@@ -78,6 +86,7 @@ fi
 info "Setting permissions..."
 find "$PAYLOAD_DIR" -type d -exec chmod 755 {} \;
 find "$PAYLOAD_DIR" -type f -exec chmod 644 {} \;
+chmod +x "$INSTALL_DIR/bootstrap_runtime.sh"
 # job_agent dir must be writable by the user (config.json, seen_jobs.db, status.json, etc.)
 chmod 777 "$INSTALL_DIR/job_agent"
 
@@ -85,6 +94,7 @@ chmod 777 "$INSTALL_DIR/job_agent"
 info "Making installer scripts executable..."
 chmod +x "$BUILD_DIR/scripts/preinstall"
 chmod +x "$BUILD_DIR/scripts/postinstall"
+cp "$SCRIPT_DIR/job_agent/python_runtime.py" "$BUILD_DIR/scripts/python_runtime.py"
 
 # ── 5. Build the component package ──────────────────────────────────────────
 info "Running pkgbuild..."
@@ -109,7 +119,7 @@ rm -f "$DIST_DIR/JobAgent.pkg"
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 echo ""
-echo "  ✅  Done! Installer created at:"
+echo "  Done. Installer created at:"
 echo ""
 echo "      $DIST_DIR/JobAlertAgent.pkg"
 echo ""

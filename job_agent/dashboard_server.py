@@ -1,297 +1,305 @@
-"""
-Tracky GUI Dashboard Server.
-Ultra-lightweight, zero-dependency local HTTP API and frontend server on http://127.0.0.1:5050.
-"""
+"""Loopback dashboard API with same-origin access and CSRF-protected mutations."""
+import hmac
+import base64
+import binascii
 import json
 import logging
-import os
-import signal
+import secrets
 import threading
 import urllib.parse
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from typing import Optional
 
+import config_store
 import db
+import cv_match
 import notifier
 
-logger = logging.getLogger("dashboard_server")
-
 BASE_DIR = Path(__file__).parent
-STATIC_DIR = BASE_DIR / "static"
-CONFIG_PATH = BASE_DIR / "config.json"
-STATUS_PATH = BASE_DIR / "status.json"
-RUN_NOW_FLAG = BASE_DIR / "run_now.flag"
+STATIC_DIR = BASE_DIR / 'static'
+CONFIG_PATH = BASE_DIR / 'config.json'
 PORT = 5050
+logger = logging.getLogger(__name__)
+MAX_BODY = 128 * 1024
 
 
 class DashboardAPIHandler(SimpleHTTPRequestHandler):
-    """Handles REST API requests and static assets for the Tracky GUI."""
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
-    def _send_json(self, data: dict | list, status: int = 200) -> None:
-        payload = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
+    def _send_json(self, data, status=200):
+        payload = json.dumps(data, ensure_ascii=False).encode()
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        origin = self.headers.get('Origin')
+        if origin in ('http://localhost:3000', 'http://127.0.0.1:3000'):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Tracky-Token')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
         self.end_headers()
         self.wfile.write(payload)
 
-    def _read_body_json(self) -> dict:
-        content_len = int(self.headers.get("Content-Length", 0))
-        if content_len == 0:
-            return {}
-        body = self.rfile.read(content_len)
-        try:
-            return json.loads(body.decode("utf-8"))
-        except Exception:
-            return {}
+    def _authorized(self, mutation=False):
+        host = self.headers.get('Host', '')
+        hosts = {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
+        if host not in hosts:
+            self._send_json({'error': 'Invalid Host'}, 403)
+            return False
+        origin = self.headers.get('Origin')
+        allowed_origins = {f'http://{host}', 'http://localhost:3000', 'http://127.0.0.1:3000'}
+        if origin is not None and origin not in allowed_origins:
+            self._send_json({'error': 'Cross-origin requests are not allowed'}, 403)
+            return False
+        if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+            self._send_json({'error': 'Cross-site requests are not allowed'}, 403)
+            return False
+        if mutation and not hmac.compare_digest(self.headers.get('X-Tracky-Token', ''), self.server.csrf_token):
+            self._send_json({'error': 'Refresh the dashboard session and retry'}, 403)
+            return False
+        return True
 
-    def do_OPTIONS(self) -> None:
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+    def _read_body_json(self, max_body=MAX_BODY):
+        if self.headers.get('Transfer-Encoding'):
+            raise ValueError('Transfer-Encoding is not supported')
+        length = int(self.headers.get('Content-Length', '0'))
+        if not 0 <= length <= max_body:
+            raise ValueError('Request body is too large')
+        if not length:
+            return {}
+        if self.headers.get_content_type() != 'application/json':
+            raise ValueError('Content-Type must be application/json')
+        body = json.loads(self.rfile.read(length))
+        if not isinstance(body, dict):
+            raise ValueError('Request body must be an object')
+        return body
 
-    def do_GET(self) -> None:
+    def do_OPTIONS(self):
+        origin = self.headers.get('Origin')
+        if origin in ('http://localhost:3000', 'http://127.0.0.1:3000'):
+            self.send_response(204)
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Tracky-Token')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+            self.end_headers()
+            return
+        if self._authorized():
+            self._send_json({'error': 'Cross-origin access is not supported'}, 403)
+
+    def do_HEAD(self):
+        if self._authorized():
+            super().do_HEAD()
+
+    def do_GET(self):
+        if not self._authorized():
+            return
         parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
-
-        # ── API Routes ──────────────────────────────────────────────────────
-        if path == "/api/status":
-            stats = {"total_jobs": 0, "today_new_jobs": 0, "sources": {}}
-            try:
+        try:
+            if parsed.path == '/api/session':
+                self._send_json({'token': self.server.csrf_token})
+            elif parsed.path == '/api/status':
+                cfg = config_store.load(CONFIG_PATH)
                 conn = db.get_connection()
-                stats = db.get_stats(conn)
-                conn.close()
-            except Exception as exc:
-                logger.error(f"Error fetching stats in /api/status: {exc}")
-
-            status_data = {}
-            if STATUS_PATH.exists():
                 try:
-                    status_data = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
-                except Exception:
-                    pass
-            config_data = {}
-            if CONFIG_PATH.exists():
-                try:
-                    config_data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                except Exception:
-                    pass
-
-            self._send_json({
-                "status": "online",
-                "last_scan_time": status_data.get("last_scan_time", "Never"),
-                "stats": stats,
-                "paused": config_data.get("paused", False),
-                "interval": config_data.get("check_interval_minutes", 60),
-                "location": config_data.get("location", "Philippines"),
-                "keywords": config_data.get("keywords", []),
-                "recipient": config_data.get("recipient", ""),
-                "recipients": config_data.get("recipients", []),
-                "telegram_bot_token": config_data.get("telegram_bot_token", ""),
-            })
-
-        elif path == "/api/jobs":
-            try:
+                    stats = db.get_stats(conn)
+                    deliveries = db.delivery_stats(conn)
+                    source_health = db.get_source_health(conn)
+                finally:
+                    conn.close()
+                controller = self.server.scan_controller
+                scan = controller.snapshot() if controller else {'state': 'unavailable'}
+                scan['deliveries'] = deliveries
+                scan['source_health_history'] = source_health
+                self._send_json({'status': 'online', 'last_scan_time': scan.get('completed_at') or 'Never',
+                                 'stats': stats, 'paused': cfg['paused'], 'interval': cfg['check_interval_minutes'],
+                                 'location': cfg['location'], 'keywords': cfg['keywords'],
+                                 'source_health': source_health, 'scan': scan})
+            elif parsed.path == '/api/settings':
+                self._send_json(config_store.public_settings(config_store.load(CONFIG_PATH)))
+            elif parsed.path == '/api/cv':
+                self._send_json(cv_match.summary(cv_match.load()))
+            elif parsed.path == '/api/jobs':
+                page = max(1, int(query.get('page', ['1'])[0]))
+                page_size = int(query.get('page_size', query.get('limit', ['25']))[0])
+                if not 1 <= page_size <= 100:
+                    raise ValueError('page_size must be between 1 and 100')
+                filters = {'search': query.get('search', [None])[0], 'source': query.get('source', [None])[0],
+                           'alert_status': query.get('alert_status', [None])[0],
+                           'saved': query.get('saved', ['false'])[0].lower() == 'true',
+                           'application_status': query.get('application_status', [None])[0],
+                           'since': query.get('since', [None])[0]}
                 conn = db.get_connection()
-                limit_raw = query.get("limit", [None])[0]
-                limit = int(limit_raw) if limit_raw and limit_raw.isdigit() else None
-                search = query.get("search", [None])[0]
-                source = query.get("source", [None])[0]
-                alert_status = query.get("alert_status", [None])[0]
-                jobs = db.get_jobs(conn, limit=limit, search=search, source=source, alert_status=alert_status)
-                conn.close()
-                self._send_json({"jobs": jobs, "total": len(jobs)})
-            except Exception as exc:
-                logger.error(f"Error fetching jobs in /api/jobs: {exc}")
-                self._send_json({"jobs": [], "total": 0, "error": str(exc)}, 500)
-
-        elif path == "/api/settings":
-            if CONFIG_PATH.exists():
                 try:
-                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                    # Auto-populate recipients array if absent but legacy recipient exists
-                    if "recipients" not in cfg:
-                        legacy = notifier.parse_recipients(cfg.get("recipient", ""))
-                        cfg["recipients"] = [
-                            {
-                                "id": f"rec_{i+1}",
-                                "name": f"Recipient {i+1}",
-                                "platform": "imessage",
-                                "destination": dest,
-                                "keywords": cfg.get("keywords", []),
-                                "enabled": True,
-                            }
-                            for i, dest in enumerate(legacy)
-                        ]
-                    self._send_json(cfg)
-                except Exception as e:
-                    self._send_json({"error": str(e)}, 500)
+                    total = db.count_jobs(conn, **filters)
+                    jobs = db.get_jobs(conn, limit=page_size, offset=(page - 1) * page_size,
+                                       sort=query.get('sort', ['newest'])[0], **filters)
+                finally:
+                    conn.close()
+                self._send_json({'jobs': jobs, 'total': total, 'page': page, 'page_size': page_size,
+                                 'has_next': page * page_size < total})
+            elif parsed.path == '/api/dismissed':
+                conn = db.get_connection()
+                try:
+                    self._send_json({'jobs': db.get_dismissed(conn)})
+                finally: conn.close()
+            elif parsed.path == '/api/delivery-history':
+                conn = db.get_connection()
+                try:
+                    rows = conn.execute('SELECT * FROM delivery_queue ORDER BY updated_at DESC LIMIT 100').fetchall()
+                    self._send_json({'deliveries': [dict(row) for row in rows]})
+                finally: conn.close()
+            elif parsed.path.startswith('/api/'):
+                self._send_json({'error': 'Unknown endpoint'}, 404)
             else:
-                self._send_json({})
+                super().do_GET()
+        except ValueError as exc:
+            self._send_json({'error': str(exc)}, 400)
+        except Exception:
+            logger.exception('Dashboard read failed')
+            self._send_json({'error': 'Unable to read dashboard data'}, 500)
 
-        else:
-            # Serve Static Assets (HTML/CSS/JS/Images)
-            super().do_GET()
+    def do_POST(self):
+        self._mutate()
 
-    def do_POST(self) -> None:
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
+    def do_DELETE(self):
+        self._mutate()
 
-        if path == "/api/scan-now":
-            RUN_NOW_FLAG.touch()
-            # Also try SIGUSR1 to daemon if PID exists
-            pid_file = BASE_DIR / "daemon.pid"
-            if pid_file.exists():
-                try:
-                    pid = int(pid_file.read_text().strip())
-                    os.kill(pid, signal.SIGUSR1)
-                except Exception:
-                    pass
-            self._send_json({"status": "triggered", "message": "Scan triggered successfully!"})
-
-        elif path == "/api/pause":
-            if CONFIG_PATH.exists():
-                try:
-                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                    cfg["paused"] = True
-                    CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-                    self._send_json({"status": "success", "paused": True})
-                    return
-                except Exception as e:
-                    self._send_json({"error": str(e)}, 500)
-                    return
-            self._send_json({"error": "config not found"}, 404)
-
-        elif path == "/api/resume":
-            if CONFIG_PATH.exists():
-                try:
-                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                    cfg["paused"] = False
-                    CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-                    self._send_json({"status": "success", "paused": False})
-                    return
-                except Exception as e:
-                    self._send_json({"error": str(e)}, 500)
-                    return
-            self._send_json({"error": "config not found"}, 404)
-
-        elif path == "/api/settings":
-            body = self._read_body_json()
-            try:
-                # Keep legacy recipient string synced from iMessage recipients if present
-                if "recipients" in body and isinstance(body["recipients"], list):
-                    imsg_dests = [
-                        r.get("destination", "").strip()
-                        for r in body["recipients"]
-                        if isinstance(r, dict) and r.get("platform") == "imessage" and r.get("destination")
-                    ]
-                    if imsg_dests:
-                        body["recipient"] = ", ".join(imsg_dests)
-
-                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                    json.dump(body, f, indent=2)
-                self._send_json({"status": "success", "settings": body})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-
-        elif path == "/api/test-notification":
-            body = self._read_body_json()
-            platform = body.get("platform", "imessage")
-            destination = body.get("destination", "")
-            bot_token = body.get("bot_token", "")
-
-            # If bot_token not provided in payload, fall back to config
-            if not bot_token and CONFIG_PATH.exists():
-                try:
-                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                    bot_token = cfg.get("telegram_bot_token", "")
-                except Exception:
-                    pass
-
-            result = notifier.send_test_notification(
-                platform=platform,
-                destination=destination,
-                bot_token=bot_token,
-            )
-            self._send_json(result, status=200)
-
-        else:
-            self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
-
-    def do_DELETE(self) -> None:
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        query = urllib.parse.parse_qs(parsed.query)
-
-        if path == "/api/jobs":
-            body = self._read_body_json()
-            job_ids = body.get("job_ids", [])
-            delete_all = body.get("all", False)
-            block_future = body.get("block_future", True)
-            source = body.get("source") or (query.get("source", [None])[0] if query.get("source") else None)
-            search = body.get("search") or (query.get("search", [None])[0] if query.get("search") else None)
-
-            conn = db.get_connection()
-            deleted_count = 0
-            try:
-                if delete_all:
-                    deleted_count = db.delete_all_jobs(
-                        conn, block_future=block_future, source=source, search=search
-                    )
-                elif job_ids:
-                    deleted_count = db.delete_jobs(conn, job_ids, block_future=block_future)
-                stats = db.get_stats(conn)
-                self._send_json({
-                    "status": "success",
-                    "deleted_count": deleted_count,
-                    "stats": stats,
-                })
-            except Exception as exc:
-                logger.error(f"Error in do_DELETE /api/jobs: {exc}")
-                self._send_json({"error": str(exc)}, 500)
-            finally:
-                conn.close()
-        else:
-            self._send_json({"error": f"Unknown endpoint: {path}"}, 404)
-
-
-class ReusableHTTPServer(HTTPServer):
-    allow_reuse_address = True
-
-
-def start_dashboard_server(port: int = PORT, background: bool = False) -> Optional[HTTPServer]:
-    """Start the dashboard HTTP server with reusable socket address."""
-    server_address = ("127.0.0.1", port)
-    httpd = ReusableHTTPServer(server_address, DashboardAPIHandler)
-    logger.info(f"🚀 Tracky Dashboard Server running at http://127.0.0.1:{port}")
-
-    if background:
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True, name="dashboard_server")
-        thread.start()
-        return httpd
-    else:
+    def _mutate(self):
+        if not self._authorized(mutation=True):
+            return
         try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            logger.info("Dashboard server shutting down...")
-        finally:
-            httpd.server_close()
-        return None
+            path = urllib.parse.urlparse(self.path).path
+            body = self._read_body_json(6 * 1024 * 1024 if path == '/api/cv' else MAX_BODY)
+            if self.command == 'DELETE' and path == '/api/jobs':
+                ids = body.get('job_ids', [])
+                if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids):
+                    raise ValueError('job_ids must be an array of strings')
+                if type(body.get('all', False)) is not bool or type(body.get('block_future', True)) is not bool:
+                    raise ValueError('all and block_future must be booleans')
+                conn = db.get_connection()
+                try:
+                    count = db.delete_all_jobs(conn, body.get('block_future', True), body.get('source'), body.get('search')) if body.get('all') else db.delete_jobs(conn, ids, body.get('block_future', True))
+                    self._send_json({'status': 'success', 'deleted_count': count, 'stats': db.get_stats(conn)})
+                finally:
+                    conn.close()
+            elif self.command != 'POST':
+                self._send_json({'error': 'Unknown endpoint'}, 404)
+            elif path == '/api/scan-now':
+                controller = self.server.scan_controller
+                if controller is None:
+                    self._send_json({'error': 'Scanner is unavailable. Start the Tracky daemon.'}, 503)
+                else:
+                    queued = controller.request()
+                    self._send_json({'status': controller.snapshot()['state'],
+                                     'message': 'Scan queued.' if queued else 'A scan is already queued or running.'}, 202)
+            elif path == '/api/scan-dry-run':
+                controller = self.server.scan_controller
+                if controller is None:
+                    self._send_json({'error': 'Scanner is unavailable. Start the Tracky daemon.'}, 503)
+                else:
+                    queued = controller.request(dry_run=True)
+                    self._send_json({'status': controller.snapshot()['state'],
+                                     'message': 'Safe test scan queued; notifications are disabled.' if queued else 'A scan is already queued or running.'}, 202)
+            elif path in ('/api/pause', '/api/resume'):
+                cfg = config_store.update({'paused': path == '/api/pause'}, path=CONFIG_PATH)
+                self._send_json({'status': 'success', 'paused': cfg['paused']})
+            elif path == '/api/settings':
+                if type(body.get('_revision')) is not int:
+                    raise ValueError('A settings revision is required; reload settings')
+                cfg = config_store.update(body, path=CONFIG_PATH, expected_revision=body['_revision'])
+                self._send_json({'status': 'success', 'settings': config_store.public_settings(cfg)})
+            elif path == '/api/cv':
+                filename = body.get('filename')
+                encoded = body.get('data')
+                if not isinstance(filename, str) or not isinstance(encoded, str):
+                    raise ValueError('A CV filename and file data are required')
+                try:
+                    content = base64.b64decode(encoded, validate=True)
+                except (binascii.Error, ValueError):
+                    raise ValueError('CV file data is invalid')
+                profile = cv_match.analyze(cv_match.extract_text(content, filename), filename)
+                cv_match.save(profile)
+                conn = db.get_connection()
+                try: count = db.rescore_jobs(conn, profile)
+                finally: conn.close()
+                self._send_json({**cv_match.summary(profile), 'scored_jobs': count})
+            elif path == '/api/cv/remove':
+                cv_match.PROFILE_PATH.unlink(missing_ok=True)
+                conn = db.get_connection()
+                try: count = db.rescore_jobs(conn, None)
+                finally: conn.close()
+                self._send_json({'uploaded': False, 'scored_jobs': count})
+            elif path == '/api/cv/analyze':
+                profile = cv_match.load()
+                if not profile:
+                    raise ValueError('Upload a CV before using Gemini analysis')
+                analyzed = cv_match.analyze_with_gemini(profile, body.get('api_key', ''))
+                cv_match.save(analyzed)
+                conn = db.get_connection()
+                try: count = db.rescore_jobs(conn, analyzed)
+                finally: conn.close()
+                self._send_json({**cv_match.summary(analyzed), 'scored_jobs': count})
+            elif path == '/api/test-notification':
+                for key in ('platform', 'destination', 'bot_token'):
+                    if key in body and not isinstance(body[key], str):
+                        raise ValueError(f'{key} must be a string')
+                token = body.get('bot_token') or config_store.load(CONFIG_PATH).get('telegram_bot_token', '')
+                result = notifier.send_test_notification(body.get('platform', 'imessage'), body.get('destination', ''), token)
+                self._send_json(result)
+            elif path in ('/api/jobs/save', '/api/jobs/apply', '/api/jobs/restore'):
+                ids = body.get('job_ids', [])
+                if not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids):
+                    raise ValueError('job_ids must be a non-empty array of strings')
+                conn = db.get_connection()
+                try:
+                    if path.endswith('/save'):
+                        count = db.update_job_state(conn, ids, saved=bool(body.get('saved', True)))
+                    elif path.endswith('/apply'):
+                        status = body.get('status', 'applied')
+                        if status not in ('applied', ''):
+                            raise ValueError('Application status must be applied or empty')
+                        count = db.update_job_state(conn, ids, application_status=status)
+                    else:
+                        count = db.restore_jobs(conn, ids)
+                    self._send_json({'status': 'success', 'updated_count': count})
+                finally: conn.close()
+            else:
+                self._send_json({'error': 'Unknown endpoint'}, 404)
+        except config_store.ConflictError as exc:
+            self._send_json({'error': str(exc)}, 409)
+        except (ValueError, TypeError) as exc:
+            self._send_json({'error': str(exc)}, 400)
+        except Exception as exc:
+            logger.exception('Dashboard update failed')
+            msg = str(exc).strip()
+            self._send_json({'error': msg if msg else 'Unable to update dashboard data'}, 500)
 
 
-def start_server(port: int = PORT) -> None:
-    start_dashboard_server(port=port, background=False)
+class ReusableHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def get_request(self):
+        sock, address = super().get_request()
+        sock.settimeout(10)
+        return sock, address
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    start_server()
+def start_dashboard_server(port=PORT, background=False, scan_controller=None):
+    httpd = ReusableHTTPServer(('127.0.0.1', port), DashboardAPIHandler)
+    httpd.csrf_token = secrets.token_urlsafe(32)
+    httpd.scan_controller = scan_controller
+    if background:
+        threading.Thread(target=httpd.serve_forever, daemon=True, name='dashboard_server').start()
+        return httpd
+    try:
+        httpd.serve_forever()
+    finally:
+        httpd.server_close()
+
+
+if __name__ == '__main__':
+    start_dashboard_server()

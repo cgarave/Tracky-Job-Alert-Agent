@@ -12,10 +12,6 @@ import time
 import urllib.parse
 from typing import Optional, Union
 import requests
-import urllib3
-
-# Suppress insecure request warnings if fallback SSL context is needed
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -183,16 +179,10 @@ def send_telegram_message(
     resp = None
     try:
         resp = requests.post(url, json=payload, timeout=15)
-    except (requests.exceptions.SSLError, requests.exceptions.ConnectionError):
-        # Fallback to unverified SSL if system certificate chain fails on macOS
-        try:
-            resp = requests.post(url, json=payload, timeout=15, verify=False)
-        except Exception as exc:
-            logger.error(f"Telegram network connection error for {chat_id}: {exc}")
-            return False, f"Network error connecting to Telegram API: {exc}"
-    except Exception as exc:
-        logger.error(f"Unexpected error sending Telegram message to {chat_id}: {exc}")
-        return False, f"Connection error: {exc}"
+    except requests.exceptions.RequestException:
+        # Never include the request URL in errors: it contains the bot token.
+        logger.error("Telegram delivery failed due to a network or certificate error")
+        return False, "Network or certificate error connecting to Telegram. Check your connection and trusted certificates."
 
     if resp is None:
         return False, "No response from Telegram API."

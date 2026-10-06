@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:static": "next build && rm -rf ../job_agent/static/* && cp -r out/* ../job_agent/static/",
+    "build:static": "next build --webpack && rm -rf ../job_agent/static/* && cp -r out/* ../job_agent/static/",
     "start": "next start",
     "lint": "eslint"
   },
