@@ -193,7 +193,7 @@ def summary(profile: dict | None) -> dict:
     if not profile:
         return {'uploaded': False}
     return {'uploaded': True, 'filename': profile['filename'], 'skills': profile['skills'],
-            'keyword_count': len(profile['keywords']), 'hash': profile['hash'],
+            'keywords': profile['keywords'], 'keyword_count': len(profile['keywords']), 'hash': profile['hash'],
             'analysis': profile.get('analysis', 'local'), 'summary': profile.get('summary', '')}
 
 

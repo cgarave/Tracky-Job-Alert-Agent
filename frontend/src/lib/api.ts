@@ -28,7 +28,7 @@ export async function fetchStatus(): Promise<SystemStatus> {
   return handleResponse<SystemStatus>(res);
 }
 
-export type CVSummary = { uploaded: boolean; filename?: string; skills?: string[]; keyword_count?: number; scored_jobs?: number; analysis?: "local" | "gemini"; summary?: string };
+export type CVSummary = { uploaded: boolean; filename?: string; skills?: string[]; keywords?: string[]; keyword_count?: number; scored_jobs?: number; analysis?: "local" | "gemini"; summary?: string };
 export async function fetchCV(): Promise<CVSummary> {
   return handleResponse<CVSummary>(await fetch(`${API_BASE}/api/cv`));
 }

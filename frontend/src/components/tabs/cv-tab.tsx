@@ -16,7 +16,10 @@ export function CVTab({ onScoresChanged }: CVTabProps) {
 
   const [geminiError, setGeminiError] = useState<string | null>(null);
 
-  useEffect(() => { api.fetchCV().then(setProfile).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    api.fetchCV().then(setProfile).catch((e) => setError(e.message));
+    setApiKey(localStorage.getItem('gemini_api_key') || '');
+  }, []);
 
   const upload = async (file?: File) => {
     if (!file) return;
@@ -40,7 +43,7 @@ export function CVTab({ onScoresChanged }: CVTabProps) {
     setBusy(true); setGeminiError(null);
     try {
       const result = await api.analyzeCVWithGemini(apiKey.trim());
-      setProfile(result); setApiKey(""); onScoresChanged();
+      setProfile(result); onScoresChanged();
       toast.success("Gemini analyzed your CV and updated job fit scores");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Gemini analysis failed";
@@ -59,6 +62,32 @@ export function CVTab({ onScoresChanged }: CVTabProps) {
       {busy && <p className="mt-3 flex items-center gap-2 text-sm text-blue-700"><Upload className="h-4 w-4" />Analyzing CV and scoring jobs…</p>}
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     </div>
-    {profile?.uploaded && <div className="mt-6"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{profile.filename}</p><p className="text-xs text-slate-500">{profile.skills?.length || 0} recognized skills · {profile.keyword_count || 0} profile terms · {profile.analysis === "gemini" ? "Gemini analyzed" : "Local analysis"}</p></div><Button variant="outline" size="sm" disabled={busy} onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Remove CV</Button></div>{profile.summary && <p className="mt-3 text-sm text-slate-700">{profile.summary}</p>}<div className="mt-4 flex flex-wrap gap-2">{profile.skills?.map((skill) => <span key={skill} className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-800">{skill}</span>)}</div><div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4"><label htmlFor="gemini-key" className="text-sm font-semibold text-slate-900">Analyze CV with Gemini</label><p className="mt-1 text-xs text-slate-600">This sends your extracted CV text to Google Gemini once. Your API key is used for this request and is not saved. Job descriptions remain on your Mac; job fit scores are calculated locally.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><input id="gemini-key" type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Gemini API key" className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-blue-600" /><Button disabled={busy || !apiKey.trim()} onClick={() => void analyzeWithGemini()}>Analyze with Gemini</Button></div>{geminiError && <p role="alert" className="mt-2 text-xs text-red-600">{geminiError}</p>}</div></div>}
+    {profile?.uploaded && <div className="mt-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">{profile.filename}</p>
+          <p className="text-xs text-slate-500">{profile.skills?.length || 0} recognized skills · {profile.keyword_count || 0} profile terms · {profile.analysis === "gemini" ? "Gemini analyzed" : "Local analysis"}</p>
+        </div>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Remove CV</Button>
+      </div>
+      {profile.summary && <p className="mt-3 text-sm text-slate-700">{profile.summary}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {profile.skills?.map((skill) => <span key={skill} className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-800">{skill}</span>)}
+      </div>
+      {profile.keywords && profile.keywords.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {profile.keywords.map((kw) => <span key={kw} className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{kw}</span>)}
+        </div>
+      )}
+      <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <label htmlFor="gemini-key" className="text-sm font-semibold text-slate-900">Analyze CV with Gemini</label>
+        <p className="mt-1 text-xs text-slate-600">This sends your extracted CV text to Google Gemini once. Your API key is saved locally on your Mac. Job descriptions remain on your Mac; job fit scores are calculated locally.</p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input id="gemini-key" type="password" autoComplete="off" value={apiKey} onChange={(event) => { const val = event.target.value; setApiKey(val); localStorage.setItem('gemini_api_key', val); }} placeholder="Gemini API key" className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-blue-600" />
+          <Button disabled={busy || !apiKey.trim()} onClick={() => void analyzeWithGemini()}>Analyze with Gemini</Button>
+        </div>
+        {geminiError && <p role="alert" className="mt-2 text-xs text-red-600">{geminiError}</p>}
+      </div>
+    </div>}
   </section>;
 }
